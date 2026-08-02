@@ -13,6 +13,7 @@ export interface NavItem {
   href: string;
   /** Permission code gating visibility; omit for items visible to any authenticated user. */
   permission?: string;
+  children?: NavItem[];
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -24,4 +25,26 @@ export const NAV_ITEMS: NavItem[] = [
   // endpoint (docs/06-tasks/task-048.md..053.md never add one) -- a Visit
   // is only ever reached via Queue's "Open Visit" action on a CALLED entry.
   { label: "Billing", href: "/billing", permission: "billing.invoice.read" },
+  {
+    label: "Master Data",
+    href: "/master-data/clinics",
+    permission: "masterdata.clinic.read",
+    children: [
+      { label: "Clinics", href: "/master-data/clinics", permission: "masterdata.clinic.read" },
+      { label: "Branches", href: "/master-data/branches", permission: "masterdata.branch.read" },
+      { label: "Doctors", href: "/master-data/doctors", permission: "masterdata.doctor.read" },
+      { label: "Treatment Categories", href: "/master-data/treatment-categories", permission: "masterdata.treatment-category.read" },
+      { label: "Treatments", href: "/master-data/treatments", permission: "masterdata.treatment.read" },
+      { label: "Payment Methods", href: "/master-data/payment-methods", permission: "masterdata.payment-method.read" },
+    ],
+  },
+  {
+    label: "System",
+    href: "/system/users",
+    permission: "system.user.read",
+    children: [
+      { label: "Users", href: "/system/users", permission: "system.user.read" },
+      { label: "Roles", href: "/system/roles", permission: "system.role.read" },
+    ],
+  },
 ];
