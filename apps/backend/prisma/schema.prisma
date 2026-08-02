@@ -1,0 +1,898 @@
+// Parakita - Phase 1 (Foundation/MVP) database schema
+// Source: docs/06-tasks/task-003.md, docs/03-sad/06-database-design.md,
+//         docs/03-sad/07-data-dictionary.md, docs/03-sad/08-erd.md
+// Table plurality and users/role shape resolved via document priority
+// (task-003.md over SAD) -- see Epic J implementation report for detail.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Authentication & Authorization (docs/03-sad/06-database-design.md Section 19-20)
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id                    String     @id @default(uuid()) @db.Char(36)
+  username              String     @unique @db.VarChar(50)
+  email                 String     @unique @db.VarChar(100)
+  passwordHash          String     @map("password_hash") @db.VarChar(255)
+  status                UserStatus @default(ACTIVE)
+  lastLoginAt           DateTime?  @map("last_login_at")
+  failedLoginCount      Int        @default(0) @map("failed_login_count")
+  lockedUntil           DateTime?  @map("locked_until")
+  requirePasswordReset  Boolean    @default(false) @map("require_password_reset")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  userRoles           UserRole[]
+  userSessions        UserSession[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  doctor              Doctor?
+
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @default(uuid()) @db.Char(36)
+  roleCode    String  @unique @map("role_code") @db.VarChar(30)
+  roleName    String  @map("role_name") @db.VarChar(100)
+  description String? @db.Text
+  isSystem    Boolean @default(false) @map("is_system")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id               String  @id @default(uuid()) @db.Char(36)
+  module           String  @db.VarChar(50)
+  permissionKey    String  @unique @map("permission_key") @db.VarChar(100)
+  permissionName   String  @map("permission_name") @db.VarChar(150)
+  description      String? @db.Text
+
+  rolePermissions RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(uuid()) @db.Char(36)
+  roleId       String @map("role_id") @db.Char(36)
+  permissionId String @map("permission_id") @db.Char(36)
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id     String @id @default(uuid()) @db.Char(36)
+  userId String @map("user_id") @db.Char(36)
+  roleId String @map("role_id") @db.Char(36)
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model UserSession {
+  id               String    @id @default(uuid()) @db.Char(36)
+  userId           String    @map("user_id") @db.Char(36)
+  deviceId         String?   @map("device_id") @db.VarChar(100)
+  deviceName       String?   @map("device_name") @db.VarChar(100)
+  deviceType       String?   @map("device_type") @db.VarChar(30)
+  browser          String?   @db.VarChar(50)
+  ipAddress        String?   @map("ip_address") @db.VarChar(45)
+  refreshTokenHash String?   @map("refresh_token") @db.VarChar(64)
+  /// Previous rotated-out hash, retained only to detect refresh-token reuse
+  /// per docs/04-ai-contract/05-auth-contract.md AUTH-034..AUTH-037. Exact
+  /// reuse-detection storage mechanism is NOT DEFINED IN SAD beyond the
+  /// requirement itself; this is the minimal structure that satisfies it.
+  previousRefreshTokenHash String? @map("previous_refresh_token") @db.VarChar(64)
+  expiredAt        DateTime  @map("expired_at")
+  lastUsedAt       DateTime? @map("last_used_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([refreshTokenHash])
+  @@index([previousRefreshTokenHash])
+  @@map("user_sessions")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  token     String    @db.Text
+  expiredAt DateTime  @map("expired_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// docs/06-tasks/task-011.md Database Impact: "New password_reset_tokens
+/// table ... storing token hash, expiry, used flag."
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  tokenHash String    @map("token_hash") @db.VarChar(64)
+  expiredAt DateTime  @map("expired_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Master Data (docs/03-sad/06-database-design.md Section 23-28)
+// ---------------------------------------------------------------------------
+
+/// docs/03-sad/11-module-master-data.md Section 11.1 Main Attributes: Code,
+/// Name, Legal Name, Tax Number, Email, Phone, Address are required; Logo is
+/// optional and not implemented in Phase 1 (no attachment/storage
+/// integration exists yet -- deferred until a task actually needs it).
+model Clinic {
+  id          String   @id @default(uuid()) @db.Char(36)
+  clinicCode  String   @unique @map("clinic_code") @db.VarChar(20)
+  clinicName  String   @map("clinic_name") @db.VarChar(150)
+  legalName   String   @map("legal_name") @db.VarChar(200)
+  taxNumber   String   @map("tax_number") @db.VarChar(50)
+  ownerName   String?  @map("owner_name") @db.VarChar(150)
+  phone       String   @db.VarChar(30)
+  email       String   @db.VarChar(100)
+  address     String   @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  branches Branch[]
+
+  @@map("clinics")
+}
+
+model Branch {
+  id         String  @id @default(uuid()) @db.Char(36)
+  clinicId   String  @map("clinic_id") @db.Char(36)
+  branchCode String  @unique @map("branch_code") @db.VarChar(20)
+  branchName String  @map("branch_name") @db.VarChar(150)
+  phone      String  @db.VarChar(30)
+  email      String  @db.VarChar(100)
+  address    String  @db.Text
+  timezone   String  @default("Asia/Jakarta") @db.VarChar(50)
+  isActive   Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id])
+  doctors      Doctor[]
+  reservations Reservation[]
+  invoices     Invoice[]
+  queues       Queue[]
+  visits       Visit[]
+
+  @@map("branches")
+}
+
+model TreatmentCategory {
+  id           String  @id @default(uuid()) @db.Char(36)
+  categoryCode String  @unique @map("category_code") @db.VarChar(30)
+  categoryName String  @map("category_name") @db.VarChar(100)
+  isActive     Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  treatments Treatment[]
+
+  @@map("treatment_categories")
+}
+
+model Treatment {
+  id                   String   @id @default(uuid()) @db.Char(36)
+  treatmentCode        String   @unique @map("treatment_code") @db.VarChar(30)
+  treatmentName        String   @map("treatment_name") @db.VarChar(200)
+  treatmentCategoryId  String   @map("treatment_category_id") @db.Char(36)
+  durationMinute       Int?     @map("duration_minute")
+  defaultPrice         Decimal  @map("default_price") @db.Decimal(18, 2)
+  doctorFee            Decimal? @map("doctor_fee") @db.Decimal(18, 2)
+  isActive             Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  treatmentCategory TreatmentCategory @relation(fields: [treatmentCategoryId], references: [id])
+  visitTreatments   VisitTreatment[]
+
+  @@index([treatmentCategoryId])
+  @@map("treatments")
+}
+
+model PaymentMethod {
+  id         String  @id @default(uuid()) @db.Char(36)
+  methodCode String  @unique @map("method_code") @db.VarChar(30)
+  methodName String  @map("method_name") @db.VarChar(100)
+  isCash     Boolean @default(false) @map("is_cash")
+  isActive   Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  payments Payment[]
+
+  @@map("payment_methods")
+}
+
+/// docs/06-tasks/task-023.md Required Existing Code: "a Doctor is also
+/// typically a User -- this task should link to an existing user_id rather
+/// than duplicating identity" -- resolved via document priority over
+/// docs/03-sad/11-module-master-data.md Section 11.6, which links Doctor to
+/// Employee (no `employees` table exists in the Phase 1 schema, task-003).
+/// `specialization` stays a plain string: no Specialty master table
+/// (SAD Section 11.8) is in the Phase 1 table list either.
+model Doctor {
+  id               String    @id @default(uuid()) @db.Char(36)
+  doctorCode       String    @unique @map("doctor_code") @db.VarChar(30)
+  userId           String    @unique @map("user_id") @db.Char(36)
+  branchId         String    @map("branch_id") @db.Char(36)
+  fullName         String    @map("full_name") @db.VarChar(150)
+  sipNumber        String?   @map("sip_number") @db.VarChar(50)
+  strNumber        String?   @map("str_number") @db.VarChar(50)
+  specialization   String?   @db.VarChar(100)
+  consultationFee  Decimal?  @map("consultation_fee") @db.Decimal(18, 2)
+  joinDate         DateTime? @map("join_date") @db.Date
+  phone            String?   @db.VarChar(30)
+  email            String?   @db.VarChar(100)
+  isActive         Boolean   @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  user         User             @relation(fields: [userId], references: [id])
+  branch       Branch           @relation(fields: [branchId], references: [id])
+  reservations Reservation[]
+  queues       Queue[]
+  visits       Visit[]
+  schedules    DoctorSchedule[]
+
+  @@index([branchId])
+  @@map("doctors")
+}
+
+// ---------------------------------------------------------------------------
+// Patient (docs/03-sad/06-database-design.md Section 30)
+// ---------------------------------------------------------------------------
+
+enum PatientIdentityType {
+  KTP
+  PASSPORT
+  SIM
+}
+
+enum PatientGender {
+  MALE
+  FEMALE
+}
+
+/// docs/03-sad/12-module-patient.md Section 16.1 Required Fields: Full
+/// Name/Gender/Date of Birth/Phone Number/Address are required; Identity
+/// Type/Number are optional (conflicts with the earlier Epic J schema,
+/// which had made identity required and phone/address absent -- corrected
+/// here per this module's own required-fields table, which outranks the
+/// generic 06-database-design.md table it was first drafted from).
+/// `address` is a flat field rather than a separate patient_addresses table:
+/// task-003's Backend Scope only authorizes a single `patients` table for
+/// Phase 1, and the documented address shape (province/city/district/village
+/// ids) requires a Geographic master hierarchy that doesn't exist in Phase 1.
+model Patient {
+  id                String               @id @default(uuid()) @db.Char(36)
+  medicalRecordNo   String               @unique @map("medical_record_no") @db.VarChar(30)
+  patientName       String               @map("patient_name") @db.VarChar(150)
+  identityType      PatientIdentityType? @map("identity_type")
+  identityNumber    String?              @map("identity_number") @db.VarChar(50)
+  birthPlace        String?              @map("birth_place") @db.VarChar(100)
+  birthDate         DateTime             @map("birth_date") @db.Date
+  gender            PatientGender
+  phone             String               @db.VarChar(30)
+  email             String?              @db.VarChar(100)
+  address           String               @db.Text
+  registrationDate  DateTime             @default(now()) @map("registration_date")
+  active            Boolean              @default(true)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  reservations Reservation[]
+  visits       Visit[]
+  invoices     Invoice[]
+  queues       Queue[]
+
+  @@unique([identityType, identityNumber])
+  @@index([patientName])
+  @@index([phone])
+  @@index([active])
+  @@map("patients")
+}
+
+// ---------------------------------------------------------------------------
+// Reservation (docs/03-sad/06-database-design.md Section 32)
+// ---------------------------------------------------------------------------
+
+/// Status values per docs/03-sad/01-system-overview.md Section 21.2, cited
+/// literally by task-002.md's Acceptance Criteria (initial status BOOKED)
+/// and task-032.md (rejects updates in IN_SERVICE); this list conflicts
+/// with two other SAD sources (06-database-design.md's original
+/// CONFIRMED/SERVING naming and 13-module-reservation.md's Draft/Confirmed/
+/// InTreatment state machine) -- resolved via document priority (Task
+/// Specification over SAD) in favor of the terms the tasks actually cite.
+enum ReservationStatus {
+  BOOKED
+  CONFIRMED
+  CHECK_IN
+  IN_QUEUE
+  IN_SERVICE
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ReservationSource {
+  WALK_IN
+  PHONE
+  WHATSAPP
+  WEBSITE
+  MOBILE_APP
+}
+
+/// docs/03-sad/13-module-reservation.md Section 19.3 Reservation Entity,
+/// reconciled with the Phase 1 table set already established: scheduleId
+/// is nullable because Walk-in reservations (Section 17) have no schedule
+/// slot to reference.
+model Reservation {
+  id               String            @id @default(uuid()) @db.Char(36)
+  reservationNo    String            @unique @map("reservation_no") @db.VarChar(30)
+  patientId        String            @map("patient_id") @db.Char(36)
+  doctorId         String            @map("doctor_id") @db.Char(36)
+  branchId         String            @map("branch_id") @db.Char(36)
+  scheduleId       String?           @map("schedule_id") @db.Char(36)
+  reservationDate  DateTime          @map("reservation_date") @db.Date
+  reservationTime  DateTime          @map("reservation_time") @db.Time()
+  reservationType  String            @map("reservation_type") @db.VarChar(30)
+  complaint        String?           @db.Text
+  notes            String?           @db.Text
+  status           ReservationStatus @default(BOOKED)
+  source           ReservationSource
+  checkedInAt      DateTime?         @map("checked_in_at")
+  cancelledReason  String?           @map("cancelled_reason") @db.Text
+  cancelledAt      DateTime?         @map("cancelled_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  patient   Patient               @relation(fields: [patientId], references: [id])
+  doctor    Doctor                @relation(fields: [doctorId], references: [id])
+  branch    Branch                @relation(fields: [branchId], references: [id])
+  schedule  DoctorSchedule?       @relation(fields: [scheduleId], references: [id])
+  queue     Queue?
+  visits    Visit[]
+  timelines ReservationTimeline[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([reservationDate])
+  @@index([status])
+  @@map("reservations")
+}
+
+/// docs/06-tasks/task-036.md explicitly authorizes introducing this table
+/// if Doctor Schedule Validation (Section 15) / Time Slot Management
+/// (Section 16) require a distinct schedule entity; fields match the
+/// `doctor_schedules` table already documented in
+/// docs/03-sad/06-database-design.md Section 25.
+model DoctorSchedule {
+  id            String   @id @default(uuid()) @db.Char(36)
+  doctorId      String   @map("doctor_id") @db.Char(36)
+  dayOfWeek     Int      @map("day_of_week")
+  startTime     DateTime @map("start_time") @db.Time()
+  endTime       DateTime @map("end_time") @db.Time()
+  slotDuration  Int      @map("slot_duration")
+  maxPatient    Int      @map("max_patient")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+  reservations Reservation[]
+
+  @@index([doctorId])
+  @@index([dayOfWeek])
+  @@map("doctor_schedules")
+}
+
+/// docs/06-tasks/task-033.md/task-034.md require appending a "Reservation
+/// Timeline" entry on reschedule/cancel. Fields per the only concrete
+/// definition given anywhere in the SAD, docs/03-sad/01-system-overview.md
+/// Section 21.3: Tanggal & Waktu, User, Status Lama, Status Baru, Catatan.
+model ReservationTimeline {
+  id              String   @id @default(uuid()) @db.Char(36)
+  reservationId   String   @map("reservation_id") @db.Char(36)
+  previousStatus  String?  @map("previous_status") @db.VarChar(30)
+  newStatus       String   @map("new_status") @db.VarChar(30)
+  note            String?  @db.Text
+  occurredAt      DateTime @default(now()) @map("occurred_at")
+  userId          String?  @map("user_id") @db.Char(36)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([reservationId])
+  @@map("reservation_timelines")
+}
+
+// ---------------------------------------------------------------------------
+// Queue (docs/03-sad/06-database-design.md Section 34)
+// ---------------------------------------------------------------------------
+
+/// docs/03-sad/14-module-queue.md Section 19 Available Status / Section 23
+/// Queue State Transition (the authoritative transition table; any
+/// transition not shown there is invalid). Renamed SERVING -> IN_SERVICE
+/// and added NO_SHOW to match this module-specific doc over the earlier,
+/// less detailed docs/03-sad/06-database-design.md Section 34 enum used
+/// when this table was first drafted in Epic J.
+enum QueueStatus {
+  WAITING
+  CALLED
+  IN_SERVICE
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  SKIPPED
+}
+
+enum QueuePriority {
+  NORMAL
+  ELDERLY
+  PREGNANT
+  EMERGENCY
+  VIP
+}
+
+/// docs/03-sad/14-module-queue.md Section 9/10 Queue Types.
+enum QueueType {
+  WALK_IN
+  RESERVATION
+  EMERGENCY
+}
+
+/// Fields per docs/03-sad/14-module-queue.md Section 52 Queue Entity
+/// (`queue_tickets`). `clinicId` (Poli/department) and `chairId` (Dental
+/// Chair) are omitted: no Poli/Department or Dental Chair master table
+/// exists in the Phase 1 schema (Epic C did not build one) -- `room`
+/// (already present from Epic J) stands in as the lightweight equivalent.
+/// `reservationId` is nullable: task-037 explicitly supports walk-in queue
+/// creation with no prior reservation.
+model Queue {
+  id                 String        @id @default(uuid()) @db.Char(36)
+  reservationId      String?       @unique @map("reservation_id") @db.Char(36)
+  branchId           String        @map("branch_id") @db.Char(36)
+  patientId          String        @map("patient_id") @db.Char(36)
+  queueNumber        String        @map("queue_number") @db.VarChar(20)
+  queuePrefix        String        @map("queue_prefix") @db.VarChar(10)
+  queueDate          DateTime      @map("queue_date") @db.Date
+  queueType          QueueType     @map("queue_type")
+  doctorId           String        @map("doctor_id") @db.Char(36)
+  room               String?       @db.VarChar(50)
+  priority           QueuePriority @default(NORMAL)
+  status             QueueStatus   @default(WAITING)
+  currentPosition    Int?          @map("current_position")
+  estimatedCallTime  DateTime?     @map("estimated_call_time")
+  checkedInAt        DateTime      @default(now()) @map("checked_in_at")
+  calledAt           DateTime?     @map("called_at")
+  startedAt          DateTime?     @map("started_at")
+  completedAt        DateTime?     @map("completed_at")
+  cancelledAt        DateTime?     @map("cancelled_at")
+  notes              String?       @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  reservation Reservation?  @relation(fields: [reservationId], references: [id])
+  patient     Patient       @relation(fields: [patientId], references: [id])
+  branch      Branch        @relation(fields: [branchId], references: [id])
+  doctor      Doctor        @relation(fields: [doctorId], references: [id])
+  visit       Visit?
+  histories   QueueHistory[]
+  calls       QueueCall[]
+
+  @@unique([queueNumber, queueDate, branchId])
+  @@index([queueDate])
+  @@index([status])
+  @@index([doctorId])
+  @@index([patientId])
+  @@map("queues")
+}
+
+/// docs/03-sad/14-module-queue.md Section 53 Queue History Entity
+/// (`queue_histories`): records every status transition.
+model QueueHistory {
+  id              String   @id @default(uuid()) @db.Char(36)
+  queueId         String   @map("queue_id") @db.Char(36)
+  previousStatus  String?  @map("previous_status") @db.VarChar(30)
+  currentStatus   String   @map("current_status") @db.VarChar(30)
+  reason          String?  @db.VarChar(255)
+  changedBy       String?  @map("changed_by") @db.Char(36)
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  queue Queue @relation(fields: [queueId], references: [id])
+
+  @@index([queueId])
+  @@map("queue_histories")
+}
+
+/// docs/03-sad/14-module-queue.md Section 54 Queue Call Entity
+/// (`queue_calls`): records every call/recall.
+model QueueCall {
+  id            String   @id @default(uuid()) @db.Char(36)
+  queueId       String   @map("queue_id") @db.Char(36)
+  recallNumber  Int      @map("recall_number")
+  calledBy      String?  @map("called_by") @db.Char(36)
+  calledAt      DateTime @default(now()) @map("called_at")
+
+  queue Queue @relation(fields: [queueId], references: [id])
+
+  @@index([queueId])
+  @@map("queue_calls")
+}
+
+// ---------------------------------------------------------------------------
+// EMR Basic - Visit (docs/03-sad/06-database-design.md Section 39)
+// ---------------------------------------------------------------------------
+
+/// docs/03-sad/15-module-emr.md Section 15 Visit Status (this module-specific
+/// doc's own status list, replacing the earlier WAITING/IN_PROGRESS/ON_HOLD/
+/// COMPLETED/CANCELLED enum drafted in Epic J from the generic
+/// 06-database-design.md before this module's own doc had been read).
+enum VisitStatus {
+  DRAFT
+  WAITING_EXAMINATION
+  IN_PROGRESS
+  COMPLETED
+  LOCKED
+  ARCHIVED
+}
+
+/// docs/03-sad/15-module-emr.md Section 15 Business Rules: Visit only from
+/// a Called Queue, one Queue = one Visit, must have Doctor+Patient+Branch.
+/// `reservationId` is nullable (a walk-in Queue, per Epic F, may have none);
+/// `branchId` added (was missing) and derived from the doctor at open time.
+model Visit {
+  id              String      @id @default(uuid()) @db.Char(36)
+  visitNo         String      @unique @map("visit_no") @db.VarChar(30)
+  reservationId   String?     @map("reservation_id") @db.Char(36)
+  patientId       String      @map("patient_id") @db.Char(36)
+  doctorId        String      @map("doctor_id") @db.Char(36)
+  branchId        String      @map("branch_id") @db.Char(36)
+  queueId         String      @unique @map("queue_id") @db.Char(36)
+  visitDate       DateTime    @map("visit_date")
+  chiefComplaint  String?     @map("chief_complaint") @db.Text
+  status          VisitStatus @default(DRAFT)
+  startedAt       DateTime?   @map("started_at")
+  finishedAt      DateTime?   @map("finished_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+  patient     Patient      @relation(fields: [patientId], references: [id])
+  doctor      Doctor       @relation(fields: [doctorId], references: [id])
+  branch      Branch       @relation(fields: [branchId], references: [id])
+  queue       Queue        @relation(fields: [queueId], references: [id])
+  invoice     Invoice?
+  vitalSigns      VitalSign[]
+  soapNote        SoapNote?
+  diagnoses       VisitDiagnosis[]
+  treatmentEntries VisitTreatment[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([visitDate])
+  @@index([status])
+  @@map("visits")
+}
+
+/// docs/03-sad/15-module-emr.md Section 17 Vital Sign Data.
+model VitalSign {
+  id                String   @id @default(uuid()) @db.Char(36)
+  visitId           String   @map("visit_id") @db.Char(36)
+  bloodPressure     String?  @map("blood_pressure") @db.VarChar(20)
+  heartRate         Int?     @map("heart_rate")
+  respiratoryRate   Int?     @map("respiratory_rate")
+  temperature       Decimal? @db.Decimal(4, 1)
+  weight            Decimal? @db.Decimal(5, 2)
+  height            Decimal? @db.Decimal(5, 2)
+  oxygenSaturation  Int?     @map("oxygen_saturation")
+  recordedAt        DateTime @default(now()) @map("recorded_at")
+  recordedBy        String?  @map("recorded_by") @db.Char(36)
+
+  visit Visit @relation(fields: [visitId], references: [id])
+
+  @@index([visitId])
+  @@map("vital_signs")
+}
+
+/// docs/03-sad/15-module-emr.md Section 16 SOAP Note. One SOAP Note per
+/// Visit (docs/03-sad/06-database-design.md Section 40: "Satu Visit
+/// memiliki satu SOAP Note").
+model SoapNote {
+  id          String   @id @default(uuid()) @db.Char(36)
+  visitId     String   @unique @map("visit_id") @db.Char(36)
+  subjective  String?  @db.Text
+  objective   String?  @db.Text
+  assessment  String?  @db.Text
+  plan        String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by") @db.Char(36)
+
+  visit Visit @relation(fields: [visitId], references: [id])
+
+  @@map("soap_notes")
+}
+
+enum DiagnosisType {
+  PRIMARY
+  SECONDARY
+  DIFFERENTIAL
+}
+
+/// docs/03-sad/15-module-emr.md Section 21: diagnoses normally reference a
+/// Master Diagnosis catalog, but no Diagnosis Reference master data task
+/// exists in Phase 1 (flagged as a scope gap by task-051.md itself). Uses
+/// the free-text `diagnosisName` shape from docs/03-sad/06-database-design.md
+/// Section 43's `diagnoses` table instead of Section 43.2's
+/// `visit_diagnoses.diagnosis_code_id` FK, since that FK's target table
+/// does not exist -- this sidesteps inventing an undocumented master table.
+model VisitDiagnosis {
+  id             String        @id @default(uuid()) @db.Char(36)
+  visitId        String        @map("visit_id") @db.Char(36)
+  diagnosisType  DiagnosisType @map("diagnosis_type")
+  diagnosisName  String        @map("diagnosis_name") @db.VarChar(255)
+  notes          String?       @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at")
+  createdBy      String?       @map("created_by") @db.Char(36)
+
+  visit Visit @relation(fields: [visitId], references: [id])
+
+  @@index([visitId])
+  @@map("visit_diagnoses")
+}
+
+/// docs/06-tasks/task-053.md: EMR-008/009 combined into one basic entry;
+/// `unitPrice`/`subtotal` are a price snapshot taken from Treatment at
+/// entry time so later catalog price changes don't retroactively alter
+/// historical visits.
+model VisitTreatment {
+  id             String   @id @default(uuid()) @db.Char(36)
+  visitId        String   @map("visit_id") @db.Char(36)
+  treatmentId    String   @map("treatment_id") @db.Char(36)
+  toothReference String?  @map("tooth_reference") @db.VarChar(50)
+  quantity       Int      @default(1)
+  unitPrice      Decimal  @map("unit_price") @db.Decimal(18, 2)
+  subtotal       Decimal  @db.Decimal(18, 2)
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  createdBy      String?  @map("created_by") @db.Char(36)
+
+  visit     Visit     @relation(fields: [visitId], references: [id])
+  treatment Treatment @relation(fields: [treatmentId], references: [id])
+
+  @@index([visitId])
+  @@map("visit_treatments")
+}
+
+// ---------------------------------------------------------------------------
+// Billing Basic (docs/06-tasks/task-054.md..task-058.md,
+// docs/03-sad/16-module-billing.md Sections 6/9/10/12)
+//
+// Epic J originally scaffolded a DRAFT/ISSUED/CANCELLED/CLOSED status enum
+// plus a separate paymentStatus field before Epic H's task docs had been
+// read. task-054/057/058 (priority 2, outranking the SAD) describe a single
+// status progression -- "Unpaid/Open" on generation, "Partially Paid /
+// Paid" as payments are applied, then "Closed" -- which is the SAD's own
+// InvoicePaymentStatus-shaped list (Section 12 "Invoice Status" adds
+// Pending Payment/Cancelled/Void, which no Phase 1 task exercises; those
+// remain a documented gap for a later phase). Collapsed to one enum/field
+// matching the literal task language instead of carrying two half-matching
+// status representations.
+// ---------------------------------------------------------------------------
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CLOSED
+}
+
+model Invoice {
+  id          String        @id @default(uuid()) @db.Char(36)
+  invoiceNo   String        @unique @map("invoice_no") @db.VarChar(30)
+  visitId     String        @unique @map("visit_id") @db.Char(36)
+  patientId   String        @map("patient_id") @db.Char(36)
+  branchId    String        @map("branch_id") @db.Char(36)
+  invoiceDate DateTime      @default(now()) @map("invoice_date")
+  subtotal    Decimal       @db.Decimal(18, 2)
+  discount    Decimal       @default(0) @db.Decimal(18, 2)
+  tax         Decimal       @default(0) @db.Decimal(18, 2)
+  grandTotal  Decimal       @map("grand_total") @db.Decimal(18, 2)
+  paidAmount  Decimal       @default(0) @map("paid_amount") @db.Decimal(18, 2)
+  status      InvoiceStatus @default(UNPAID)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  visit   Visit     @relation(fields: [visitId], references: [id])
+  patient Patient   @relation(fields: [patientId], references: [id])
+  branch  Branch    @relation(fields: [branchId], references: [id])
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@index([patientId])
+  @@index([branchId])
+  @@index([status])
+  @@map("invoices")
+}
+
+// docs/03-sad/16-module-billing.md `billing_invoice_items`. Phase 1 only
+// produces line items from Visit Treatment entries (task-054), so
+// `referenceType` is always "Treatment" for now; the column is kept
+// String-typed (not enum-restricted) because the SAD documents five other
+// reference types (Medicine/Consumable/Laboratory/Radiology/Manual Charge)
+// that belong to later phases.
+model InvoiceItem {
+  id            String   @id @default(uuid()) @db.Char(36)
+  invoiceId     String   @map("invoice_id") @db.Char(36)
+  referenceType String   @map("reference_type") @db.VarChar(30)
+  referenceId   String   @map("reference_id") @db.Char(36)
+  itemName      String   @map("item_name") @db.VarChar(255)
+  quantity      Decimal  @db.Decimal(10, 2)
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(18, 2)
+  discount      Decimal  @default(0) @db.Decimal(18, 2)
+  tax           Decimal  @default(0) @db.Decimal(18, 2)
+  total         Decimal  @db.Decimal(18, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model Payment {
+  id              String   @id @default(uuid()) @db.Char(36)
+  invoiceId       String   @map("invoice_id") @db.Char(36)
+  paymentMethodId String   @map("payment_method_id") @db.Char(36)
+  paymentDate     DateTime @default(now()) @map("payment_date")
+  amount          Decimal  @db.Decimal(18, 2)
+  referenceNo     String?  @map("reference_no") @db.VarChar(100)
+  receivedBy      String?  @map("received_by") @db.Char(36)
+  note            String?  @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
+  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+// ---------------------------------------------------------------------------
+// Cross-Cutting: Audit Trail (docs/06-tasks/task-006.md, docs/03-sad/02-system-architecture.md Section 20.4)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Char(36)
+  entity         String   @db.VarChar(100)
+  entityId       String   @map("entity_id") @db.Char(36)
+  action         String   @db.VarChar(20)
+  oldValue       String?  @map("old_value") @db.LongText
+  newValue       String?  @map("new_value") @db.LongText
+  userId         String?  @map("user_id") @db.Char(36)
+  ipAddress      String?  @map("ip_address") @db.VarChar(45)
+  correlationId  String?  @map("correlation_id") @db.Char(36)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

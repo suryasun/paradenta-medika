@@ -1,0 +1,10 @@
+{
+  "name": "parakita",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Parakita - Dental Clinic Management System (monorepo)",
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": [
+    "apps/*"
+  ]
+}

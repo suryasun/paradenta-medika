@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+.env
+.env.local
+.env.*.local
+*.log
+coverage/
+.DS_Store
+*.tsbuildinfo
+.vscode/
+.idea/
+
+# Claude Code local tooling/config (machine-specific, not project source)
+.claude/
+.agents/
+skills-lock.json

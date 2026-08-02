@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. docs/02-design/design-system.md documents that no visual
+ * design system (colors/typography/spacing) exists in the source docs --
+ * flagged as a Missing Documentation gap. Per the user's explicit decision
+ * to proceed without a design pass, these are a pragmatic, reasonable
+ * default (a clinical teal/blue palette + standard semantic status colors)
+ * chosen by the implementer, not derived from any design spec. Replace here
+ * if a real design system is authored later.
+ */
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --muted: #64748b;
+
+  --color-primary: #0f766e;
+  --color-primary-foreground: #ffffff;
+  --color-primary-hover: #115e59;
+
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-error: #dc2626;
+  --color-error-bg: #fef2f2;
+  --color-info: #2563eb;
+  --color-info-bg: #eff6ff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-primary: var(--color-primary);
+  --color-primary-foreground: var(--color-primary-foreground);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-success: var(--color-success);
+  --color-success-bg: var(--color-success-bg);
+  --color-warning: var(--color-warning);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-error: var(--color-error);
+  --color-error-bg: var(--color-error-bg);
+  --color-info: var(--color-info);
+  --color-info-bg: var(--color-info-bg);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
