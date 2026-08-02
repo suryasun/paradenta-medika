@@ -2,12 +2,19 @@ openapi: 3.0.3
 info:
   title: Parakita API
   description: >
-    Dental Clinic Management System — Phase 1 (Foundation/MVP). Generated from
-    the actual implemented routes/DTOs under src/modules/*/presentation, not
-    hand-invented — every path, permission code, and status code here mirrors
-    the corresponding *.routes.ts file. See docs/06-tasks/phase-1-documentation/
-    for the per-epic build record this spec documents.
-  version: 1.0.0
+    Dental Clinic Management System — Phase 1 (Foundation/MVP) + Phase 2
+    (Core Clinical Operations). Generated from the actual implemented
+    routes/DTOs under src/modules/*/presentation, not hand-invented — every
+    path, permission code, and status code here mirrors the corresponding
+    *.routes.ts file. See docs/06-tasks/phase-1-documentation/ for the
+    Phase 1 per-epic build record; Phase 2 covers Epic K-U (task-060-094):
+    Appointment Analytics, Medical History/Allergy, Odontogram, Treatment
+    Planning, Prescription, Periodontal Assessment, Clinical Attachment,
+    Consent, Referral/Follow Up, Medical Certificate, and Clinical Timeline.
+  # Minor bump only: Phase 2 is purely additive (new endpoints/optional
+  # fields), no breaking change per API-006 -- the API route version stays
+  # /api/v1 (API-004).
+  version: 1.1.0
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development
@@ -25,6 +32,8 @@ tags:
   - name: Master Data - Treatment Categories
   - name: Master Data - Treatments
   - name: Master Data - Payment Methods
+  - name: Master Data - Tooth Conditions
+  - name: Master Data - Consent Templates
   - name: Patient
   - name: Reservation
   - name: Queue
@@ -583,6 +592,127 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ---------------------------------------------------------------------
+  # Master Data - Tooth Conditions (docs/06-tasks/task-067.md, Epic O)
+  # ---------------------------------------------------------------------
+  /tooth-conditions:
+    get:
+      tags: [Master Data - Tooth Conditions]
+      summary: List tooth conditions
+      x-permission: masterdata.tooth-condition.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Tooth Conditions]
+      summary: Create tooth condition
+      x-permission: masterdata.tooth-condition.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [conditionCode, conditionName, category]
+              properties:
+                conditionCode: { type: string, minLength: 2, maxLength: 30 }
+                conditionName: { type: string, minLength: 2, maxLength: 100 }
+                category: { type: string, enum: [HEALTHY, DISEASE, RESTORATION, PROSTHODONTIC, ENDODONTIC, SURGICAL, ORTHODONTIC, IMPLANTOLOGY] }
+                colorCode: { type: string, maxLength: 20 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /tooth-conditions/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Tooth Conditions]
+      summary: Tooth condition detail
+      x-permission: masterdata.tooth-condition.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Tooth Conditions]
+      summary: Update tooth condition (e.g. deactivate via isActive)
+      x-permission: masterdata.tooth-condition.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conditionName: { type: string, minLength: 2, maxLength: 100 }
+                category: { type: string, enum: [HEALTHY, DISEASE, RESTORATION, PROSTHODONTIC, ENDODONTIC, SURGICAL, ORTHODONTIC, IMPLANTOLOGY] }
+                colorCode: { type: string, maxLength: 20 }
+                isActive: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
+  # Master Data - Consent Templates (docs/06-tasks/task-085.md, Epic R)
+  # Registered inside emr.routes.ts (permission codes are emr.* since
+  # Consent is an EMR-owned catalog), tagged as Master Data here to match
+  # this spec's per-resource tag granularity for other catalog CRUD.
+  # ---------------------------------------------------------------------
+  /consent-templates:
+    get:
+      tags: [Master Data - Consent Templates]
+      summary: List consent templates
+      x-permission: emr.consent-template.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Consent Templates]
+      summary: Create consent template
+      x-permission: emr.consent-template.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, title, body]
+              properties:
+                category: { type: string, enum: [GENERAL, CLINICAL, SURGICAL] }
+                title: { type: string, minLength: 1, maxLength: 200 }
+                body: { type: string, minLength: 1 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /consent-templates/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Consent Templates]
+      summary: Consent template detail
+      x-permission: emr.consent-template.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Consent Templates]
+      summary: Update consent template (e.g. deactivate via isActive)
+      x-permission: emr.consent-template.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category: { type: string, enum: [GENERAL, CLINICAL, SURGICAL] }
+                title: { type: string, minLength: 1, maxLength: 200 }
+                body: { type: string, minLength: 1 }
+                isActive: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
   # Patient (docs/06-tasks/task-001.md, task-027.md..task-030.md)
   # ---------------------------------------------------------------------
   /patients:
@@ -705,6 +835,69 @@ paths:
         '201': { $ref: '#/components/responses/Created' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '409': { description: "Double-booking or same-patient-same-day conflict", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # docs/06-tasks/task-060.md (Epic K). Registered before /reservations/{id}
+  # so Express doesn't match "analytics" as the :id param.
+  /reservations/analytics:
+    get:
+      tags: [Reservation]
+      summary: Reservation analytics dashboard (trend, peak hours, doctor utilization, conversion, walk-in ratio, cancellation/no-show trend, KPIs)
+      x-permission: reservation.analytics.read
+      parameters:
+        - name: dateFrom
+          in: query
+          description: Defaults to 30 days before dateTo when omitted (not a literal SAD default).
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          description: Defaults to today when omitted (not a literal SAD default).
+          schema: { type: string, format: date }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Analytics computed for the requested date range
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          dateRange:
+                            type: object
+                            properties: { from: { type: string, format: date }, to: { type: string, format: date } }
+                          reservationTrend: { type: array, items: { $ref: '#/components/schemas/DateCountPoint' } }
+                          peakHourAnalysis:
+                            type: array
+                            items:
+                              type: object
+                              properties: { hour: { type: integer }, count: { type: integer } }
+                          doctorUtilization:
+                            type: array
+                            items:
+                              type: object
+                              properties: { doctorId: { type: string, format: uuid }, count: { type: integer } }
+                          appointmentConversion:
+                            type: object
+                            properties: { totalCount: { type: integer }, completedCount: { type: integer }, conversionRate: { type: number } }
+                          walkinRatio:
+                            type: object
+                            properties: { walkinCount: { type: integer }, totalCount: { type: integer }, ratio: { type: number } }
+                          cancellationTrend: { type: array, items: { $ref: '#/components/schemas/DateCountPoint' } }
+                          noShowTrend: { type: array, items: { $ref: '#/components/schemas/DateCountPoint' } }
+                          kpi:
+                            type: object
+                            properties:
+                              totalReservations: { type: integer }
+                              dailyReservations: { type: integer }
+                              weeklyReservations: { type: integer }
+                              monthlyReservations: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
 
   /reservations/{id}:
     parameters: [{ $ref: '#/components/parameters/Id' }]
@@ -1074,6 +1267,739 @@ paths:
         '422': { $ref: '#/components/responses/BusinessRuleViolation' }
 
   # ---------------------------------------------------------------------
+  # EMR - Medical History & Allergy (docs/06-tasks/task-061.md/task-062.md, Epic L)
+  # Patient-scoped, not Visit-scoped. GET reuses emr.visit.read (neither
+  # task names a dedicated read permission).
+  # ---------------------------------------------------------------------
+  /patients/{patientId}/medical-history:
+    parameters: [{ $ref: '#/components/parameters/PatientId' }]
+    post:
+      tags: [EMR]
+      summary: Record a medical history entry (append-only; a new entry of the same category deactivates the prior one)
+      x-permission: emr.medical-history.record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, description]
+              properties:
+                category: { type: string, enum: [SYSTEMIC_DISEASE, HEART_DISEASE, DIABETES, HYPERTENSION, HEPATITIS, HIV, BLEEDING_DISORDER, SURGERY_HISTORY, PREGNANCY, HOSPITALIZATION_HISTORY] }
+                description: { type: string, minLength: 1, maxLength: 2000 }
+                visitId: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+    get:
+      tags: [EMR]
+      summary: List a patient's medical history (active and inactive)
+      x-permission: emr.visit.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /patients/{patientId}/allergies:
+    parameters: [{ $ref: '#/components/parameters/PatientId' }]
+    post:
+      tags: [EMR]
+      summary: Record an allergy entry
+      x-permission: emr.allergy.record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, allergen, severity]
+              properties:
+                type: { type: string, enum: [DRUG, FOOD, LATEX, MATERIAL, LOCAL_ANESTHETIC, OTHER] }
+                allergen: { type: string, minLength: 1, maxLength: 150 }
+                severity: { type: string, enum: [MILD, MODERATE, SEVERE] }
+                reaction: { type: string, maxLength: 1000 }
+                notes: { type: string, maxLength: 1000 }
+                visitId: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+    get:
+      tags: [EMR]
+      summary: List a patient's allergies
+      x-permission: emr.visit.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Interactive Odontogram (docs/06-tasks/task-067.md..task-070.md, Epic O)
+  # ---------------------------------------------------------------------
+  /emr/visits/{id}/odontogram:
+    post:
+      tags: [EMR]
+      summary: Record a tooth condition entry against an open Visit (append-only history)
+      x-permission: emr.odontogram.record
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toothNumber, toothConditionId]
+              properties:
+                toothNumber: { type: integer, minimum: 11, maximum: 85, description: "FDI notation" }
+                surface: { type: string, maxLength: 10 }
+                toothConditionId: { type: string, format: uuid }
+                note: { type: string, maxLength: 1000 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /patients/{patientId}/odontogram:
+    get:
+      tags: [EMR]
+      summary: Current odontogram (latest entry per tooth) for a patient
+      x-permission: emr.odontogram.read
+      parameters: [{ $ref: '#/components/parameters/PatientId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /patients/{patientId}/odontogram/{toothNumber}/history:
+    get:
+      tags: [EMR]
+      summary: Full condition history for a single tooth
+      x-permission: emr.odontogram.read
+      parameters:
+        - { $ref: '#/components/parameters/PatientId' }
+        - name: toothNumber
+          in: path
+          required: true
+          schema: { type: integer, minimum: 11, maximum: 85 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Treatment Planning (docs/06-tasks/task-063.md/task-064.md, Epic M)
+  # ---------------------------------------------------------------------
+  /emr/visits/{id}/treatment-plan:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [EMR]
+      summary: Create treatment plan items for an open Visit
+      x-permission: emr.treatment-plan.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [treatmentId, estimatedCost]
+                    properties:
+                      treatmentId: { type: string, format: uuid }
+                      toothNumber: { type: integer }
+                      surface: { type: string }
+                      priority: { type: string, enum: [LOW, MEDIUM, HIGH] }
+                      estimatedCost: { type: number }
+                      estimatedDurationMinute: { type: integer }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+    get:
+      tags: [EMR]
+      summary: List treatment plan items for a Visit
+      x-permission: emr.treatment-plan.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /emr/treatment-plan/{itemId}/convert-to-reservation:
+    post:
+      tags: [EMR]
+      summary: Convert a Treatment Plan item into a scheduled Reservation
+      description: Requires both emr.treatment-plan.read and reservation.create (task-064's Security Impact literally names both).
+      x-permission: "emr.treatment-plan.read, reservation.create"
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doctorId, reservationDate, startTime, reservationType, source]
+              properties:
+                doctorId: { type: string, format: uuid }
+                reservationDate: { type: string, format: date }
+                startTime: { type: string, pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$" }
+                reservationType: { type: string, maxLength: 30 }
+                source: { type: string, enum: [WALK_IN, PHONE, WHATSAPP, WEBSITE, MOBILE_APP] }
+                complaint: { type: string, maxLength: 1000 }
+                notes: { type: string, maxLength: 1000 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Periodontal Assessment (docs/06-tasks/task-071.md..task-077.md, Epic P)
+  # Literal endpoint paths per docs/03-sad/15-module-emr.md Part 3.2D
+  # Section 39 OpenAPI Specification.
+  # ---------------------------------------------------------------------
+  /emr/periodontal-assessments:
+    post:
+      tags: [EMR]
+      summary: Create a periodontal assessment for an open Visit
+      x-permission: emr.periodontal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visitId, patientId, doctorId]
+              properties:
+                visitId: { type: string, format: uuid }
+                patientId: { type: string, format: uuid }
+                doctorId: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/periodontal-assessments/{assessmentId}/measurements:
+    post:
+      tags: [EMR]
+      summary: Add a per-tooth/per-point periodontal measurement (CAL auto-computed server-side)
+      x-permission: emr.periodontal.measurement.record
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toothNumber, measurementPoint, pocketDepth, gingivalMargin, bleeding]
+              properties:
+                toothNumber: { type: integer }
+                measurementPoint: { type: string, enum: [MB, B, DB, ML, L, DL] }
+                pocketDepth: { type: number, minimum: 0, maximum: 15 }
+                gingivalMargin: { type: number, minimum: -10, maximum: 10 }
+                bleeding: { type: boolean }
+                plaqueIndex: { type: integer, minimum: 0, maximum: 3 }
+                mobility: { type: integer, minimum: 0, maximum: 3 }
+                furcation: { type: string, enum: ["0", "I", "II", "III"], description: "Molars only (multiroot teeth)" }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/periodontal-assessments/{assessmentId}/measurements/{id}:
+    parameters:
+      - name: assessmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [EMR]
+      summary: Update a periodontal measurement
+      x-permission: emr.periodontal.measurement.update
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+    delete:
+      tags: [EMR]
+      summary: Delete a periodontal measurement
+      x-permission: emr.periodontal.measurement.delete
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/periodontal-assessments/{assessmentId}:
+    get:
+      tags: [EMR]
+      summary: Periodontal assessment detail (with all measurements)
+      x-permission: emr.periodontal.read
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/periodontal-assessments/{assessmentId}/history:
+    get:
+      tags: [EMR]
+      summary: All periodontal assessments (history) for the assessment's patient
+      x-permission: emr.periodontal.read
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/periodontal-assessments/{assessmentId}/lock:
+    post:
+      tags: [EMR]
+      summary: Lock a periodontal assessment (immutable afterward)
+      x-permission: emr.periodontal.lock
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Referral & Follow Up (docs/06-tasks/task-089.md/task-090.md, Epic T)
+  # ---------------------------------------------------------------------
+  /emr/visits/{id}/referrals:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [EMR]
+      summary: Create a referral to an external Specialist/Hospital/Laboratory/Radiology
+      x-permission: emr.referral.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetType, reason]
+              properties:
+                targetType: { type: string, enum: [SPECIALIST, HOSPITAL, LABORATORY, RADIOLOGY] }
+                reason: { type: string, minLength: 1, maxLength: 2000 }
+                note: { type: string, maxLength: 2000 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+    get:
+      tags: [EMR]
+      summary: List referrals for a Visit
+      x-permission: emr.visit.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /emr/visits/{id}/follow-ups:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    post:
+      tags: [EMR]
+      summary: Schedule a follow up, optionally auto-booking a Reservation
+      x-permission: emr.followup.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [followUpDate]
+              properties:
+                followUpDate: { type: string, format: date }
+                note: { type: string, maxLength: 2000 }
+                priority: { type: string, enum: [LOW, MEDIUM, HIGH] }
+                autoSchedule: { type: boolean, description: "When true, doctorId/startTime/reservationType/source become required" }
+                doctorId: { type: string, format: uuid }
+                startTime: { type: string, pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$" }
+                reservationType: { type: string, maxLength: 30 }
+                source: { type: string, enum: [WALK_IN, PHONE, WHATSAPP, WEBSITE, MOBILE_APP] }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+    get:
+      tags: [EMR]
+      summary: List follow ups for a Visit
+      x-permission: emr.visit.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Clinical Attachment (docs/06-tasks/task-078.md..task-084.md, Epic Q)
+  # Literal endpoint paths per docs/03-sad/15-module-emr.md Section 60
+  # OpenAPI Specification, except the `attachmentId` re-upload field.
+  # ---------------------------------------------------------------------
+  /emr/attachments:
+    post:
+      tags: [EMR]
+      summary: Upload an attachment (creates a new Attachment, or a new version when attachmentId is present)
+      x-permission: emr.attachment.upload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [visitId, patientId, category, file]
+              properties:
+                visitId: { type: string, format: uuid }
+                patientId: { type: string, format: uuid }
+                category: { type: string, enum: [CLINICAL_PHOTOGRAPHY, X_RAY, CBCT, CONSENT, PDF, VIDEO, OTHER] }
+                attachmentType: { type: string, maxLength: 100 }
+                attachmentId: { type: string, format: uuid, description: "When present, adds a new version to this existing Attachment instead of creating a new one" }
+                file: { type: string, format: binary }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/attachments/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [EMR]
+      summary: Attachment detail (current version + annotations)
+      x-permission: emr.attachment.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/attachments/{id}/download:
+    get:
+      tags: [EMR]
+      summary: Issue a short-lived signed download URL for the current version
+      x-permission: emr.attachment.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200':
+          description: Signed URL issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          url: { type: string }
+                          expiresInSeconds: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/attachments/{id}/annotations:
+    post:
+      tags: [EMR]
+      summary: "Add an annotation (only for annotatable categories: Clinical Photography/X-Ray/CBCT)"
+      x-permission: emr.attachment.annotate
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shape, positionX, positionY]
+              properties:
+                shape: { type: string, maxLength: 30 }
+                positionX: { type: number }
+                positionY: { type: number }
+                width: { type: number }
+                height: { type: number }
+                text: { type: string, maxLength: 2000 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/visits/{visitId}/attachments:
+    get:
+      tags: [EMR]
+      summary: List attachments for a Visit
+      x-permission: emr.attachment.read
+      parameters: [{ $ref: '#/components/parameters/VisitId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /emr/attachments/{id}/archive:
+    post:
+      tags: [EMR]
+      summary: Archive an attachment
+      x-permission: emr.attachment.archive
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/attachments/{id}/versions:
+    get:
+      tags: [EMR]
+      summary: List all versions of an attachment
+      x-permission: emr.attachment.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/attachments/{id}/versions/{version}/restore:
+    post:
+      tags: [EMR]
+      summary: Restore a prior version as the current version
+      x-permission: emr.attachment.restore
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - name: version
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /attachments/file/{token}:
+    get:
+      tags: [EMR]
+      summary: Serve the actual file bytes for a signed download URL (unauthenticated by design -- the JWT-signed token IS the authorization)
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: "File bytes" }
+        '401': { description: "Invalid or expired signed token", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # ---------------------------------------------------------------------
+  # EMR - Prescription (docs/06-tasks/task-065.md/task-066.md, Epic N)
+  # ---------------------------------------------------------------------
+  /emr/visits/{id}/prescriptions:
+    post:
+      tags: [EMR]
+      summary: Create a prescription (hard-blocked if any item conflicts with a recorded Drug allergy)
+      x-permission: emr.prescription.create
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [medicineName, dosage, frequency, duration]
+                    properties:
+                      medicineName: { type: string }
+                      dosage: { type: string }
+                      frequency: { type: string }
+                      duration: { type: string }
+                      instruction: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "PRESCRIPTION_ALLERGY_CONFLICT -- patient has a recorded Drug allergy to a prescribed medicine", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /patients/{patientId}/prescriptions:
+    get:
+      tags: [EMR]
+      summary: A patient's full, permanent prescription history
+      x-permission: emr.prescription.read
+      parameters: [{ $ref: '#/components/parameters/PatientId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /emr/prescriptions/{id}/print:
+    get:
+      tags: [EMR]
+      summary: Printable prescription (includes patient/doctor names)
+      x-permission: emr.prescription.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Consent (docs/06-tasks/task-086.md/task-087.md, Epic R)
+  # ---------------------------------------------------------------------
+  /emr/consents:
+    post:
+      tags: [EMR]
+      summary: Instantiate a consent from a template for a Visit
+      x-permission: emr.consent.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visitId, templateId, procedure]
+              properties:
+                visitId: { type: string, format: uuid }
+                templateId: { type: string, format: uuid }
+                procedure: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/consents/{id}/sign:
+    post:
+      tags: [EMR]
+      summary: Sign a consent (immutable afterward); stores the signed document as an Attachment
+      x-permission: emr.consent.sign
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signerName, signerRelationship, signatureData]
+              properties:
+                signerName: { type: string, minLength: 1, maxLength: 150 }
+                signerRelationship: { type: string, enum: [SELF, FATHER, MOTHER, HUSBAND, WIFE, LEGAL_GUARDIAN] }
+                signatureData: { type: string, description: "Opaque signature payload, e.g. a data: URL from a canvas draw" }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "CONSENT_ALREADY_SIGNED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /emr/consents/{id}:
+    get:
+      tags: [EMR]
+      summary: Consent detail
+      x-permission: emr.consent.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /patients/{patientId}/consents:
+    get:
+      tags: [EMR]
+      summary: All consents (signed and unsigned) for a patient, chronological
+      x-permission: emr.consent.read
+      parameters: [{ $ref: '#/components/parameters/PatientId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Medical Certificate (docs/06-tasks/task-088.md, Epic S)
+  # ---------------------------------------------------------------------
+  /emr/visits/{id}/medical-certificates:
+    post:
+      tags: [EMR]
+      summary: Issue a medical certificate (Doctor role only); stores the document as an Attachment
+      x-permission: emr.certificate.issue
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [certificateType, content]
+              properties:
+                certificateType: { type: string, enum: [FIT_TO_WORK, SICK_LEAVE, MEDICAL_STATEMENT, DENTAL_TREATMENT_CERTIFICATE] }
+                content: { type: string, minLength: 1 }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "ONLY_DOCTOR_CAN_ISSUE_CERTIFICATE -- acting user is not a registered Doctor", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /emr/medical-certificates/{id}:
+    get:
+      tags: [EMR]
+      summary: Medical certificate detail
+      x-permission: emr.certificate.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /patients/{patientId}/medical-certificates:
+    get:
+      tags: [EMR]
+      summary: All medical certificates issued for a patient
+      x-permission: emr.certificate.read
+      parameters: [{ $ref: '#/components/parameters/PatientId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
+  # EMR - Clinical Timeline (docs/06-tasks/task-091.md..task-094.md, Epic U)
+  # Read-only aggregation across every other Phase 2 EMR feature into a
+  # single chronologically-ordered feed per docs/03-sad/15-module-emr.md
+  # Part 3.4's literal API Endpoint list.
+  # ---------------------------------------------------------------------
+  /emr/timeline/{patientId}:
+    get:
+      tags: [EMR]
+      summary: Full chronological clinical timeline for a patient
+      x-permission: emr.timeline.read
+      parameters: [{ $ref: '#/components/parameters/PatientId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/timeline/{patientId}/summary:
+    get:
+      tags: [EMR]
+      summary: Condensed summary (most recent visit, active alerts, open treatment plan items, last prescription)
+      x-permission: emr.timeline.read
+      parameters: [{ $ref: '#/components/parameters/PatientId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/timeline/{patientId}/events:
+    get:
+      tags: [EMR]
+      summary: Timeline filtered by a single event type
+      x-permission: emr.timeline.read
+      parameters:
+        - { $ref: '#/components/parameters/PatientId' }
+        - name: eventType
+          in: query
+          schema: { type: string, enum: [VISIT, SOAP, DIAGNOSIS, TREATMENT, PRESCRIPTION, ODONTOGRAM, ATTACHMENT, CONSENT, REFERRAL, FOLLOW_UP] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/timeline/{patientId}/attachments:
+    get:
+      tags: [EMR]
+      summary: All attachments across every visit for a patient (cross-visit gallery, distinct from the single-visit /emr/visits/{visitId}/attachments)
+      x-permission: "emr.timeline.read, emr.attachment.read"
+      parameters: [{ $ref: '#/components/parameters/PatientId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
   # Billing (docs/06-tasks/task-054.md..task-058.md)
   # ---------------------------------------------------------------------
   /billing/invoices:
@@ -1264,6 +2190,16 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    PatientId:
+      name: patientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    VisitId:
+      name: visitId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   requestBodies:
     GenericJson:
@@ -1287,6 +2223,11 @@ components:
             limit: { type: integer }
             total: { type: integer }
             totalPages: { type: integer }
+    DateCountPoint:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        count: { type: integer }
     ApiErrorEnvelope:
       type: object
       required: [success, code, message, errors]
