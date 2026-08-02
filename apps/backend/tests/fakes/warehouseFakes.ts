@@ -1,11 +1,34 @@
-import { GoodsReceipt, GoodsReceiptItem, Item, PurchaseOrder, PurchaseOrderItem, PurchaseOrderStatus, StockTransaction, Supplier, WarehouseLocation, WarehouseStock } from '@prisma/client';
+import {
+  GoodsReceipt,
+  GoodsReceiptItem,
+  Item,
+  PurchaseOrder,
+  PurchaseOrderItem,
+  PurchaseOrderStatus,
+  StockAdjustment,
+  StockAdjustmentItem,
+  StockAdjustmentStatus,
+  StockReservation,
+  StockTransaction,
+  StockTransfer,
+  StockTransferItem,
+  StockTransferStatus,
+  Supplier,
+  WarehouseLocation,
+  WarehouseStock,
+} from '@prisma/client';
 import { CreateItemInput, IItemRepository, UpdateItemInput } from '../../src/modules/warehouse/domain/repositories/IItemRepository';
 import { CreateSupplierInput, ISupplierRepository } from '../../src/modules/warehouse/domain/repositories/ISupplierRepository';
 import {
   CreateWarehouseLocationInput,
   IWarehouseLocationRepository,
 } from '../../src/modules/warehouse/domain/repositories/IWarehouseLocationRepository';
-import { ApplyStockMovementInput, IStockRepository, StockListFilter } from '../../src/modules/warehouse/domain/repositories/IStockRepository';
+import {
+  ApplyReservationInput,
+  ApplyStockMovementInput,
+  IStockRepository,
+  StockListFilter,
+} from '../../src/modules/warehouse/domain/repositories/IStockRepository';
 import {
   CreatePurchaseOrderInput,
   IPurchaseOrderRepository,
@@ -18,6 +41,20 @@ import {
   GoodsReceiptWithItems,
   IGoodsReceiptRepository,
 } from '../../src/modules/warehouse/domain/repositories/IGoodsReceiptRepository';
+import {
+  CreateStockTransferInput,
+  IStockTransferRepository,
+  StockTransferWithItems,
+} from '../../src/modules/warehouse/domain/repositories/IStockTransferRepository';
+import {
+  CreateStockAdjustmentInput,
+  IStockAdjustmentRepository,
+  StockAdjustmentWithItems,
+} from '../../src/modules/warehouse/domain/repositories/IStockAdjustmentRepository';
+import {
+  CreateStockReservationInput,
+  IStockReservationRepository,
+} from '../../src/modules/warehouse/domain/repositories/IStockReservationRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -184,6 +221,10 @@ export class FakeStockRepository implements IStockRepository {
     return this.stocks.get(id) ?? null;
   }
 
+  async findByWarehouseAndItem(warehouseId: string, itemId: string): Promise<WarehouseStock | null> {
+    return [...this.stocks.values()].find((s) => s.warehouseId === warehouseId && s.itemId === itemId) ?? null;
+  }
+
   async findLedgerByWarehouseAndItem(warehouseId: string, itemId: string): Promise<StockTransaction[]> {
     return this.transactions
       .filter((t) => t.warehouseId === warehouseId && t.itemId === itemId)
@@ -241,6 +282,54 @@ export class FakeStockRepository implements IStockRepository {
       performedBy: input.performedBy,
       approvedBy: input.approvedBy ?? null,
       notes: input.notes ?? null,
+      createdAt: new Date(),
+    } as StockTransaction;
+    this.transactions.push(transaction);
+    return transaction;
+  }
+
+  async applyReservation(input: ApplyReservationInput): Promise<StockTransaction> {
+    let stock = [...this.stocks.values()].find((s) => s.warehouseId === input.warehouseId && s.itemId === input.itemId);
+    if (!stock) {
+      stock = {
+        id: nextFakeUuid(),
+        warehouseId: input.warehouseId,
+        itemId: input.itemId,
+        currentStock: 0 as never,
+        reservedStock: 0 as never,
+        availableStock: 0 as never,
+        minimumStock: null,
+        version: 0,
+        lastTransactionAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as WarehouseStock;
+      this.stocks.set(stock.id, stock);
+    }
+
+    const delta = input.release ? -input.quantity : input.quantity;
+    const newReservedStock = Math.max(0, Number(stock.reservedStock) + delta);
+    stock.reservedStock = newReservedStock as never;
+    stock.availableStock = (Number(stock.currentStock) - newReservedStock) as never;
+    stock.version += 1;
+    stock.lastTransactionAt = input.transactionDate;
+
+    const transaction: StockTransaction = {
+      id: nextFakeUuid(),
+      transactionNumber: input.transactionNumber,
+      warehouseId: input.warehouseId,
+      itemId: input.itemId,
+      batchId: null,
+      transactionType: input.release ? 'RELEASE_RESERVATION' : 'RESERVATION',
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
+      qtyIn: (input.release ? input.quantity : 0) as never,
+      qtyOut: (input.release ? 0 : input.quantity) as never,
+      balance: stock.currentStock,
+      transactionDate: input.transactionDate,
+      performedBy: input.performedBy,
+      approvedBy: null,
+      notes: null,
       createdAt: new Date(),
     } as StockTransaction;
     this.transactions.push(transaction);
@@ -450,5 +539,177 @@ export class FakeGoodsReceiptRepository implements IGoodsReceiptRepository {
 
   async count(): Promise<number> {
     return this.receipts.size;
+  }
+}
+
+export class FakeStockTransferRepository implements IStockTransferRepository {
+  transfers = new Map<string, StockTransferWithItems>();
+  private itemSequence = 0;
+
+  async create(input: CreateStockTransferInput): Promise<StockTransferWithItems> {
+    const transfer: StockTransferWithItems = {
+      id: nextFakeUuid(),
+      transferNumber: input.transferNumber,
+      sourceWarehouseId: input.sourceWarehouseId,
+      destinationWarehouseId: input.destinationWarehouseId,
+      status: 'DRAFT',
+      notes: input.notes ?? null,
+      submittedAt: null,
+      approvedBy: null,
+      approvedAt: null,
+      dispatchedBy: null,
+      dispatchedAt: null,
+      receivedBy: null,
+      receivedAt: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+      items: input.items.map((item) => {
+        this.itemSequence += 1;
+        return {
+          id: `sti-${this.itemSequence}-${nextFakeUuid()}`,
+          transferId: '',
+          itemId: item.itemId,
+          quantity: item.quantity as never,
+          createdAt: new Date(),
+        } as StockTransferItem;
+      }),
+    } as StockTransferWithItems;
+    transfer.items.forEach((item) => {
+      (item as StockTransferItem).transferId = transfer.id;
+    });
+    this.transfers.set(transfer.id, transfer);
+    return transfer;
+  }
+
+  async findById(id: string): Promise<StockTransferWithItems | null> {
+    return this.transfers.get(id) ?? null;
+  }
+
+  async updateStatus(
+    id: string,
+    status: StockTransferStatus,
+    fields: Partial<{
+      submittedAt: Date;
+      approvedBy: string;
+      approvedAt: Date;
+      dispatchedBy: string;
+      dispatchedAt: Date;
+      receivedBy: string;
+      receivedAt: Date;
+    }>,
+  ): Promise<StockTransferWithItems> {
+    const transfer = this.transfers.get(id);
+    if (!transfer) throw new Error('not found');
+    transfer.status = status;
+    Object.assign(transfer, fields);
+    return transfer;
+  }
+
+  async count(): Promise<number> {
+    return this.transfers.size;
+  }
+
+  async findByNumber(transferNumber: string): Promise<StockTransfer | null> {
+    return [...this.transfers.values()].find((t) => t.transferNumber === transferNumber) ?? null;
+  }
+}
+
+export class FakeStockAdjustmentRepository implements IStockAdjustmentRepository {
+  adjustments = new Map<string, StockAdjustmentWithItems>();
+  private itemSequence = 0;
+
+  async create(input: CreateStockAdjustmentInput): Promise<StockAdjustmentWithItems> {
+    const adjustment: StockAdjustmentWithItems = {
+      id: nextFakeUuid(),
+      adjustmentNumber: input.adjustmentNumber,
+      warehouseId: input.warehouseId,
+      direction: input.direction,
+      reasonCode: input.reasonCode,
+      status: 'DRAFT',
+      approvedBy: null,
+      approvedAt: null,
+      postedBy: null,
+      postedAt: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+      items: input.items.map((item) => {
+        this.itemSequence += 1;
+        return {
+          id: `sai-${this.itemSequence}-${nextFakeUuid()}`,
+          adjustmentId: '',
+          itemId: item.itemId,
+          quantity: item.quantity as never,
+          createdAt: new Date(),
+        } as StockAdjustmentItem;
+      }),
+    } as StockAdjustmentWithItems;
+    adjustment.items.forEach((item) => {
+      (item as StockAdjustmentItem).adjustmentId = adjustment.id;
+    });
+    this.adjustments.set(adjustment.id, adjustment);
+    return adjustment;
+  }
+
+  async findById(id: string): Promise<StockAdjustmentWithItems | null> {
+    return this.adjustments.get(id) ?? null;
+  }
+
+  async updateStatus(
+    id: string,
+    status: StockAdjustmentStatus,
+    fields: Partial<{ approvedBy: string; approvedAt: Date; postedBy: string; postedAt: Date }>,
+  ): Promise<StockAdjustmentWithItems> {
+    const adjustment = this.adjustments.get(id);
+    if (!adjustment) throw new Error('not found');
+    adjustment.status = status;
+    Object.assign(adjustment, fields);
+    return adjustment;
+  }
+
+  async count(): Promise<number> {
+    return this.adjustments.size;
+  }
+
+  async findByNumber(adjustmentNumber: string): Promise<StockAdjustment | null> {
+    return [...this.adjustments.values()].find((a) => a.adjustmentNumber === adjustmentNumber) ?? null;
+  }
+}
+
+export class FakeStockReservationRepository implements IStockReservationRepository {
+  reservations = new Map<string, StockReservation>();
+
+  async create(input: CreateStockReservationInput): Promise<StockReservation> {
+    const reservation: StockReservation = {
+      id: nextFakeUuid(),
+      warehouseId: input.warehouseId,
+      itemId: input.itemId,
+      quantity: input.quantity as never,
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
+      status: 'ACTIVE',
+      releasedBy: null,
+      releasedAt: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+    } as StockReservation;
+    this.reservations.set(reservation.id, reservation);
+    return reservation;
+  }
+
+  async findById(id: string): Promise<StockReservation | null> {
+    return this.reservations.get(id) ?? null;
+  }
+
+  async markReleased(id: string, releasedBy: string, releasedAt: Date): Promise<StockReservation> {
+    const reservation = this.reservations.get(id);
+    if (!reservation) throw new Error('not found');
+    reservation.status = 'RELEASED';
+    reservation.releasedBy = releasedBy;
+    reservation.releasedAt = releasedAt;
+    return reservation;
   }
 }

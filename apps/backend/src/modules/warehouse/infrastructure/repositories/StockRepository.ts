@@ -2,7 +2,7 @@ import { Prisma, StockTransaction, WarehouseStock } from '@prisma/client';
 import { prisma } from '../../../../shared/infrastructure/prisma';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { PagedResult, sanitizeSortField } from '../../../../shared/http/pagination';
-import { ApplyStockMovementInput, IStockRepository, StockListFilter } from '../../domain/repositories/IStockRepository';
+import { ApplyReservationInput, ApplyStockMovementInput, IStockRepository, StockListFilter } from '../../domain/repositories/IStockRepository';
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'currentStock', 'availableStock'] as const;
 
@@ -26,6 +26,10 @@ export class StockRepository implements IStockRepository {
 
   async findById(id: string): Promise<WarehouseStock | null> {
     return prisma.warehouseStock.findUnique({ where: { id } });
+  }
+
+  async findByWarehouseAndItem(warehouseId: string, itemId: string): Promise<WarehouseStock | null> {
+    return prisma.warehouseStock.findUnique({ where: { warehouseId_itemId: { warehouseId, itemId } } });
   }
 
   async findLedgerByWarehouseAndItem(warehouseId: string, itemId: string): Promise<StockTransaction[]> {
@@ -105,6 +109,60 @@ export class StockRepository implements IStockRepository {
           performedBy: input.performedBy,
           approvedBy: input.approvedBy,
           notes: input.notes,
+        },
+      });
+    });
+  }
+
+  /** docs/03-sad/18-module-warehouse.md UC-WHS-007 -- see IStockRepository.ApplyReservationInput doc-comment for the ledger qty_in/qty_out interpretation. */
+  async applyReservation(input: ApplyReservationInput): Promise<StockTransaction> {
+    return prisma.$transaction(async (tx) => {
+      let stock = await tx.warehouseStock.findUnique({
+        where: { warehouseId_itemId: { warehouseId: input.warehouseId, itemId: input.itemId } },
+      });
+
+      if (!stock) {
+        try {
+          stock = await tx.warehouseStock.create({
+            data: { warehouseId: input.warehouseId, itemId: input.itemId, currentStock: 0, reservedStock: 0, availableStock: 0, version: 0 },
+          });
+        } catch {
+          stock = await tx.warehouseStock.findUniqueOrThrow({
+            where: { warehouseId_itemId: { warehouseId: input.warehouseId, itemId: input.itemId } },
+          });
+        }
+      }
+
+      const delta = input.release ? -input.quantity : input.quantity;
+      const newReservedStock = Math.max(0, Number(stock.reservedStock) + delta);
+      const newAvailableStock = Number(stock.currentStock) - newReservedStock;
+
+      const updateResult = await tx.warehouseStock.updateMany({
+        where: { id: stock.id, version: stock.version },
+        data: {
+          reservedStock: newReservedStock,
+          availableStock: newAvailableStock,
+          version: { increment: 1 },
+          lastTransactionAt: input.transactionDate,
+        },
+      });
+      if (updateResult.count === 0) {
+        throw new Error('Stock balance was concurrently modified; retry the operation');
+      }
+
+      return tx.stockTransaction.create({
+        data: {
+          transactionNumber: input.transactionNumber,
+          warehouseId: input.warehouseId,
+          itemId: input.itemId,
+          transactionType: input.release ? 'RELEASE_RESERVATION' : 'RESERVATION',
+          referenceType: input.referenceType,
+          referenceId: input.referenceId,
+          qtyIn: input.release ? input.quantity : 0,
+          qtyOut: input.release ? 0 : input.quantity,
+          balance: stock.currentStock,
+          transactionDate: input.transactionDate,
+          performedBy: input.performedBy,
         },
       });
     });

@@ -16,6 +16,9 @@ import {
 } from '../../application/dtos/PurchaseOrderRequestDto';
 import { ListPurchaseOrderQueryDto } from '../../application/dtos/PurchaseOrderQueryDto';
 import { CreateGoodsReceiptRequestDto } from '../../application/dtos/GoodsReceiptRequestDto';
+import { CreateStockTransferRequestDto } from '../../application/dtos/StockTransferRequestDto';
+import { CreateStockAdjustmentRequestDto } from '../../application/dtos/StockAdjustmentRequestDto';
+import { CreateStockReservationRequestDto } from '../../application/dtos/StockReservationRequestDto';
 import { CreateItemUseCase } from '../../application/use-cases/CreateItemUseCase';
 import { ListItemsUseCase } from '../../application/use-cases/ListItemsUseCase';
 import { GetItemUseCase } from '../../application/use-cases/GetItemUseCase';
@@ -37,21 +40,39 @@ import { CancelPurchaseOrderUseCase } from '../../application/use-cases/CancelPu
 import { CreateGoodsReceiptUseCase } from '../../application/use-cases/CreateGoodsReceiptUseCase';
 import { GetGoodsReceiptUseCase } from '../../application/use-cases/GetGoodsReceiptUseCase';
 import { PostGoodsReceiptUseCase } from '../../application/use-cases/PostGoodsReceiptUseCase';
+import { CreateStockTransferUseCase } from '../../application/use-cases/CreateStockTransferUseCase';
+import { SubmitStockTransferUseCase } from '../../application/use-cases/SubmitStockTransferUseCase';
+import { ApproveStockTransferUseCase } from '../../application/use-cases/ApproveStockTransferUseCase';
+import { DispatchStockTransferUseCase } from '../../application/use-cases/DispatchStockTransferUseCase';
+import { ReceiveStockTransferUseCase } from '../../application/use-cases/ReceiveStockTransferUseCase';
+import { CreateStockAdjustmentUseCase } from '../../application/use-cases/CreateStockAdjustmentUseCase';
+import { ApproveStockAdjustmentUseCase } from '../../application/use-cases/ApproveStockAdjustmentUseCase';
+import { PostStockAdjustmentUseCase } from '../../application/use-cases/PostStockAdjustmentUseCase';
+import { ReserveStockUseCase } from '../../application/use-cases/ReserveStockUseCase';
+import { ReleaseStockReservationUseCase } from '../../application/use-cases/ReleaseStockReservationUseCase';
 import { PurchaseOrderNumberGenerator } from '../../application/services/PurchaseOrderNumberGenerator';
 import { GoodsReceiptNumberGenerator } from '../../application/services/GoodsReceiptNumberGenerator';
 import { StockTransactionNumberGenerator } from '../../application/services/StockTransactionNumberGenerator';
+import { StockTransferNumberGenerator } from '../../application/services/StockTransferNumberGenerator';
+import { StockAdjustmentNumberGenerator } from '../../application/services/StockAdjustmentNumberGenerator';
 import { ItemRepository } from '../../infrastructure/repositories/ItemRepository';
 import { SupplierRepository } from '../../infrastructure/repositories/SupplierRepository';
 import { WarehouseLocationRepository } from '../../infrastructure/repositories/WarehouseLocationRepository';
 import { StockRepository } from '../../infrastructure/repositories/StockRepository';
 import { PurchaseOrderRepository } from '../../infrastructure/repositories/PurchaseOrderRepository';
 import { GoodsReceiptRepository } from '../../infrastructure/repositories/GoodsReceiptRepository';
+import { StockTransferRepository } from '../../infrastructure/repositories/StockTransferRepository';
+import { StockAdjustmentRepository } from '../../infrastructure/repositories/StockAdjustmentRepository';
+import { StockReservationRepository } from '../../infrastructure/repositories/StockReservationRepository';
 import { ItemController } from '../controllers/ItemController';
 import { SupplierController } from '../controllers/SupplierController';
 import { WarehouseLocationController } from '../controllers/WarehouseLocationController';
 import { StockController } from '../controllers/StockController';
 import { PurchaseOrderController } from '../controllers/PurchaseOrderController';
 import { GoodsReceiptController } from '../controllers/GoodsReceiptController';
+import { StockTransferController } from '../controllers/StockTransferController';
+import { StockAdjustmentController } from '../controllers/StockAdjustmentController';
+import { StockReservationController } from '../controllers/StockReservationController';
 
 /**
  * docs/06-tasks/task-095.md..task-114.md (Epic V Warehouse Foundation +
@@ -70,6 +91,9 @@ export function buildWarehouseModule(
   const stockRepository = new StockRepository();
   const purchaseOrderRepository = new PurchaseOrderRepository();
   const goodsReceiptRepository = new GoodsReceiptRepository();
+  const stockTransferRepository = new StockTransferRepository();
+  const stockAdjustmentRepository = new StockAdjustmentRepository();
+  const stockReservationRepository = new StockReservationRepository();
 
   const itemController = new ItemController(
     new CreateItemUseCase(itemRepository, auditService),
@@ -121,6 +145,31 @@ export function buildWarehouseModule(
       auditService,
       eventBus,
     ),
+  );
+
+  const stockTransferController = new StockTransferController(
+    new CreateStockTransferUseCase(stockTransferRepository, new StockTransferNumberGenerator(stockTransferRepository), auditService),
+    new SubmitStockTransferUseCase(stockTransferRepository, auditService),
+    new ApproveStockTransferUseCase(stockTransferRepository, auditService),
+    new DispatchStockTransferUseCase(stockTransferRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
+    new ReceiveStockTransferUseCase(stockTransferRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
+  );
+
+  const stockAdjustmentController = new StockAdjustmentController(
+    new CreateStockAdjustmentUseCase(stockAdjustmentRepository, new StockAdjustmentNumberGenerator(stockAdjustmentRepository), auditService),
+    new ApproveStockAdjustmentUseCase(stockAdjustmentRepository, auditService),
+    new PostStockAdjustmentUseCase(
+      stockAdjustmentRepository,
+      stockRepository,
+      new StockTransactionNumberGenerator(stockRepository),
+      auditService,
+      eventBus,
+    ),
+  );
+
+  const stockReservationController = new StockReservationController(
+    new ReserveStockUseCase(stockReservationRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
+    new ReleaseStockReservationUseCase(stockReservationRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
   );
 
   const router = Router();
@@ -239,6 +288,57 @@ export function buildWarehouseModule(
     '/warehouse/goods-receipts/:goodsReceiptId/post',
     requirePermission('warehouse.purchase.post'),
     goodsReceiptController.post,
+  );
+
+  // docs/06-tasks/task-115.md..task-120.md (Epic X, UC-WHS-004). All
+  // transfer workflow steps share `warehouse.stock.transfer` (the literal
+  // Section 8.1 Stock group verb); maker-checker for Approve is enforced
+  // at the use-case level (WarehouseSegregationOfDutiesException), the
+  // same pattern as PO/Adjustment approval, since Section 8.1 has no
+  // distinct per-step permission split for Transfer.
+  router.post(
+    '/warehouse/transfers',
+    requirePermission('warehouse.stock.transfer'),
+    validateBody(CreateStockTransferRequestDto),
+    stockTransferController.create,
+  );
+  router.post('/warehouse/transfers/:transferId/submit', requirePermission('warehouse.stock.transfer'), stockTransferController.submit);
+  router.post('/warehouse/transfers/:transferId/approve', requirePermission('warehouse.stock.transfer'), stockTransferController.approve);
+  router.post('/warehouse/transfers/:transferId/dispatch', requirePermission('warehouse.stock.transfer'), stockTransferController.dispatch);
+  router.post('/warehouse/transfers/:transferId/receive', requirePermission('warehouse.stock.transfer'), stockTransferController.receive);
+
+  // docs/06-tasks/task-121.md..task-124.md (Epic X, UC-WHS-005). Create/
+  // Approve share `warehouse.stock.adjust` (self-approval blocked at the
+  // use-case level); Post uses `warehouse.stock.adjust.post`, an
+  // extrapolated addition since task-124 explicitly requires it be
+  // separate from Approve for segregation of duties and Section 8.1 has
+  // no distinct "post" verb (same reasoning as `warehouse.purchase.post`
+  // in Epic W).
+  router.post(
+    '/warehouse/adjustments',
+    requirePermission('warehouse.stock.adjust'),
+    validateBody(CreateStockAdjustmentRequestDto),
+    stockAdjustmentController.create,
+  );
+  router.post('/warehouse/adjustments/:adjustmentId/approve', requirePermission('warehouse.stock.adjust'), stockAdjustmentController.approve);
+  router.post(
+    '/warehouse/adjustments/:adjustmentId/post',
+    requirePermission('warehouse.stock.adjust.post'),
+    stockAdjustmentController.post,
+  );
+
+  // docs/06-tasks/task-125.md/task-126.md (Epic X, UC-WHS-007). Both share
+  // the literal `warehouse.stock.reserve` Section 8.1 verb.
+  router.post(
+    '/warehouse/reservations',
+    requirePermission('warehouse.stock.reserve'),
+    validateBody(CreateStockReservationRequestDto),
+    stockReservationController.create,
+  );
+  router.post(
+    '/warehouse/reservations/:reservationId/release',
+    requirePermission('warehouse.stock.reserve'),
+    stockReservationController.release,
   );
 
   return router;

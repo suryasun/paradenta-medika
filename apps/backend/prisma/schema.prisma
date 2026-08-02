@@ -1646,12 +1646,15 @@ model Item {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  category           ItemCategory        @relation(fields: [categoryId], references: [id])
-  unit               Unit                @relation(fields: [unitId], references: [id])
-  stocks             WarehouseStock[]
-  stockTransactions  StockTransaction[]
-  purchaseOrderItems PurchaseOrderItem[]
-  goodsReceiptItems  GoodsReceiptItem[]
+  category             ItemCategory          @relation(fields: [categoryId], references: [id])
+  unit                 Unit                  @relation(fields: [unitId], references: [id])
+  stocks               WarehouseStock[]
+  stockTransactions    StockTransaction[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  goodsReceiptItems    GoodsReceiptItem[]
+  stockTransferItems   StockTransferItem[]
+  stockAdjustmentItems StockAdjustmentItem[]
+  stockReservations    StockReservation[]
 
   @@index([categoryId])
   @@index([isActive])
@@ -1708,6 +1711,10 @@ model WarehouseLocation {
   stockTransactions StockTransaction[]
   purchaseOrders    PurchaseOrder[]
   goodsReceipts     GoodsReceipt[]
+  transfersOut      StockTransfer[]    @relation("TransferSource")
+  transfersIn       StockTransfer[]    @relation("TransferDestination")
+  adjustments       StockAdjustment[]
+  reservations      StockReservation[]
 
   @@unique([branchId, locationCode])
   @@index([branchId])
@@ -1930,6 +1937,162 @@ model GoodsReceiptItem {
 
   @@index([goodsReceiptId])
   @@map("goods_receipt_items")
+}
+
+// ---------------------------------------------------------------------------
+// Warehouse Module: Stock Movement (docs/03-sad/18-module-warehouse.md
+// UC-WHS-004 Transfer/UC-WHS-005 Adjustment/UC-WHS-007 Reserve-Release,
+// Epic X task-115-126). Table names follow the same unprefixed
+// domain-term convention as Epic V/W.
+// ---------------------------------------------------------------------------
+
+enum StockTransferStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  DISPATCHED
+  RECEIVED
+}
+
+/// docs/03-sad/18-module-warehouse.md UC-WHS-004 flowchart: Create ->
+/// Approve -> Dispatch (reserve/out source) -> Receive (in destination) ->
+/// Post paired transactions -> Publish event. Two distinct FKs to
+/// WarehouseLocation require named relations to disambiguate.
+model StockTransfer {
+  id                     String              @id @default(uuid()) @db.Char(36)
+  transferNumber         String              @unique @map("transfer_number") @db.VarChar(30)
+  sourceWarehouseId      String              @map("source_warehouse_id") @db.Char(36)
+  destinationWarehouseId String              @map("destination_warehouse_id") @db.Char(36)
+  status                 StockTransferStatus @default(DRAFT)
+  notes                  String?             @db.Text
+
+  submittedAt  DateTime? @map("submitted_at")
+  approvedBy   String?   @map("approved_by") @db.Char(36)
+  approvedAt   DateTime? @map("approved_at")
+  dispatchedBy String?   @map("dispatched_by") @db.Char(36)
+  dispatchedAt DateTime? @map("dispatched_at")
+  receivedBy   String?   @map("received_by") @db.Char(36)
+  receivedAt   DateTime? @map("received_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  sourceWarehouse      WarehouseLocation   @relation("TransferSource", fields: [sourceWarehouseId], references: [id])
+  destinationWarehouse WarehouseLocation   @relation("TransferDestination", fields: [destinationWarehouseId], references: [id])
+  items                StockTransferItem[]
+
+  @@index([sourceWarehouseId])
+  @@index([destinationWarehouseId])
+  @@index([status])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String  @id @default(uuid()) @db.Char(36)
+  transferId String  @map("transfer_id") @db.Char(36)
+  itemId     String  @map("item_id") @db.Char(36)
+  quantity   Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id])
+  item     Item          @relation(fields: [itemId], references: [id])
+
+  @@index([transferId])
+  @@map("stock_transfer_items")
+}
+
+enum StockAdjustmentDirection {
+  IN
+  OUT
+}
+
+enum StockAdjustmentStatus {
+  DRAFT
+  APPROVED
+  POSTED
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 5.6: "stock_adjustments
+/// memuat nomor, direction, item/batch/warehouse, quantity, reason code,
+/// evidence, status, linked stock transaction, requester/approver" --
+/// `direction` modeled at the header level (one adjustment = one
+/// direction), matching that literal flat column list rather than
+/// allowing mixed-direction line items, which the SAD text doesn't
+/// describe.
+model StockAdjustment {
+  id               String                   @id @default(uuid()) @db.Char(36)
+  adjustmentNumber String                   @unique @map("adjustment_number") @db.VarChar(30)
+  warehouseId      String                   @map("warehouse_id") @db.Char(36)
+  direction        StockAdjustmentDirection
+  reasonCode       String                   @map("reason_code") @db.VarChar(50)
+  status           StockAdjustmentStatus    @default(DRAFT)
+
+  approvedBy String?   @map("approved_by") @db.Char(36)
+  approvedAt DateTime? @map("approved_at")
+  postedBy   String?   @map("posted_by") @db.Char(36)
+  postedAt   DateTime? @map("posted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  warehouse WarehouseLocation     @relation(fields: [warehouseId], references: [id])
+  items     StockAdjustmentItem[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@map("stock_adjustments")
+}
+
+model StockAdjustmentItem {
+  id           String  @id @default(uuid()) @db.Char(36)
+  adjustmentId String  @map("adjustment_id") @db.Char(36)
+  itemId       String  @map("item_id") @db.Char(36)
+  quantity     Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  adjustment StockAdjustment @relation(fields: [adjustmentId], references: [id])
+  item       Item            @relation(fields: [itemId], references: [id])
+
+  @@index([adjustmentId])
+  @@map("stock_adjustment_items")
+}
+
+enum StockReservationStatus {
+  ACTIVE
+  RELEASED
+}
+
+/// docs/03-sad/18-module-warehouse.md UC-WHS-007: "Reservation menambah
+/// reserved_stock dan mengurangi available_stock tanpa mengurangi
+/// current_stock." `referenceType`/`referenceId` follow the same
+/// MovementReference value object shape as StockTransaction.
+model StockReservation {
+  id            String                 @id @default(uuid()) @db.Char(36)
+  warehouseId   String                 @map("warehouse_id") @db.Char(36)
+  itemId        String                 @map("item_id") @db.Char(36)
+  quantity      Decimal                @db.Decimal(18, 2)
+  referenceType String                 @map("reference_type") @db.VarChar(50)
+  referenceId   String                 @map("reference_id") @db.Char(36)
+  status        StockReservationStatus @default(ACTIVE)
+
+  releasedBy String?   @map("released_by") @db.Char(36)
+  releasedAt DateTime? @map("released_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  warehouse WarehouseLocation @relation(fields: [warehouseId], references: [id])
+  item      Item              @relation(fields: [itemId], references: [id])
+
+  @@index([warehouseId, itemId])
+  @@index([status])
+  @@map("stock_reservations")
 }
 
 model AuditLog {

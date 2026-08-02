@@ -1,4 +1,4 @@
-import { BusinessException, ConflictException, NotFoundException } from '../../../../shared/http/exceptions';
+import { AuthorizationException, BusinessException, ConflictException, NotFoundException } from '../../../../shared/http/exceptions';
 
 export class ItemNotFoundException extends NotFoundException {
   constructor() {
@@ -127,5 +127,82 @@ export class BatchRequiredException extends BusinessException {
 export class GoodsReceiptAlreadyPostedException extends ConflictException {
   constructor() {
     super('This goods receipt has already been posted', 'WHS_DUPLICATE_MOVEMENT');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stock Movement (docs/03-sad/18-module-warehouse.md UC-WHS-004/UC-WHS-005/
+// UC-WHS-007, Section 6.5 literal error codes where they exist).
+// ---------------------------------------------------------------------------
+
+export class StockTransferNotFoundException extends NotFoundException {
+  constructor() {
+    super('Stock transfer not found');
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_SOURCE_DESTINATION_SAME". */
+export class SourceDestinationSameException extends BusinessException {
+  constructor() {
+    super('WHS_SOURCE_DESTINATION_SAME', 'Transfer source and destination warehouse must be different');
+  }
+}
+
+export class StockTransferNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('WHS_TRANSFER_INVALID_STATUS', `Stock transfer must be in ${expected} status for this action`);
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_STOCK_INSUFFICIENT". */
+export class StockInsufficientException extends ConflictException {
+  constructor() {
+    super('Available stock is insufficient for this operation', 'WHS_STOCK_INSUFFICIENT');
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_DUPLICATE_MOVEMENT" -- reposting an already-received transfer. */
+export class StockTransferAlreadyReceivedException extends ConflictException {
+  constructor() {
+    super('This transfer has already been received', 'WHS_DUPLICATE_MOVEMENT');
+  }
+}
+
+export class StockAdjustmentNotFoundException extends NotFoundException {
+  constructor() {
+    super('Stock adjustment not found');
+  }
+}
+
+export class StockAdjustmentNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('WHS_ADJUSTMENT_INVALID_STATUS', `Stock adjustment must be in ${expected} status for this action`);
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_ADJUSTMENT_APPROVAL_REQUIRED" (403). */
+export class AdjustmentApprovalRequiredException extends AuthorizationException {
+  constructor() {
+    super('This adjustment must be approved before it can be posted', 'WHS_ADJUSTMENT_APPROVAL_REQUIRED');
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_NEGATIVE_STOCK_FORBIDDEN". */
+export class NegativeStockForbiddenException extends BusinessException {
+  constructor() {
+    super('WHS_NEGATIVE_STOCK_FORBIDDEN', 'This mutation would result in a negative stock balance');
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_DUPLICATE_MOVEMENT" -- reposting an already-posted adjustment. */
+export class StockAdjustmentAlreadyPostedException extends ConflictException {
+  constructor() {
+    super('This adjustment has already been posted', 'WHS_DUPLICATE_MOVEMENT');
+  }
+}
+
+export class StockReservationNotFoundException extends NotFoundException {
+  constructor() {
+    super('Stock reservation not found');
   }
 }

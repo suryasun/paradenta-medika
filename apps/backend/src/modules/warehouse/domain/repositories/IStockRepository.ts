@@ -33,11 +33,37 @@ export interface ApplyStockMovementInput {
   notes?: string;
 }
 
+/**
+ * docs/03-sad/18-module-warehouse.md UC-WHS-007: "Reservation menambah
+ * reserved_stock dan mengurangi available_stock tanpa mengurangi
+ * current_stock." Unlike `applyStockMovement`, this does NOT change
+ * `currentStock` -- only `reservedStock`/`availableStock`. The SAD does
+ * not literally specify how a RESERVATION/RELEASE_RESERVATION ledger row's
+ * qty_in/qty_out map when current_stock is unaffected; this is
+ * implemented as qtyOut=quantity for RESERVATION (committed/unavailable)
+ * and qtyIn=quantity for RELEASE_RESERVATION (returned to available),
+ * with `balance` left as the unchanged currentStock snapshot -- a
+ * documented interpretation of a genuine SAD gap, not a silent guess.
+ */
+export interface ApplyReservationInput {
+  transactionNumber: string;
+  warehouseId: string;
+  itemId: string;
+  quantity: number;
+  release: boolean;
+  referenceType: string;
+  referenceId: string;
+  transactionDate: Date;
+  performedBy: string;
+}
+
 export interface IStockRepository {
   list(query: ListQueryDto, filter: StockListFilter): Promise<PagedResult<WarehouseStock>>;
   findById(id: string): Promise<WarehouseStock | null>;
+  findByWarehouseAndItem(warehouseId: string, itemId: string): Promise<WarehouseStock | null>;
   findLedgerByWarehouseAndItem(warehouseId: string, itemId: string): Promise<StockTransaction[]>;
   findByTransactionNumber(transactionNumber: string): Promise<StockTransaction | null>;
   countTransactions(): Promise<number>;
   applyStockMovement(input: ApplyStockMovementInput): Promise<StockTransaction>;
+  applyReservation(input: ApplyReservationInput): Promise<StockTransaction>;
 }

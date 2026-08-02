@@ -125,7 +125,11 @@ const PERMISSION_KEYS = [
   'warehouse.purchase.read',
   'warehouse.purchase.receive',
   'warehouse.purchase.submit',
+  'warehouse.stock.adjust',
+  'warehouse.stock.adjust.post',
   'warehouse.stock.read',
+  'warehouse.stock.reserve',
+  'warehouse.stock.transfer',
   'warehouse.supplier.manage',
   'warehouse.supplier.read',
 ];
@@ -224,6 +228,16 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.purchase.create',
     'warehouse.purchase.submit',
     'warehouse.purchase.receive',
+    // task-115-126 (Epic X): Transfer/Adjustment/Reservation share one
+    // permission across their lifecycle steps (see warehouse.routes.ts
+    // comments) since self-approval is blocked at the use-case level, not
+    // the permission level -- so Staff gets the same `.transfer`/`.adjust`/
+    // `.reserve` grants as Manager, matching the Actor Matrix's "Transfer/
+    // issue stock", "Create adjustment", and "Reserve stock" rows. Post
+    // (`.adjust.post`) is intentionally withheld -- Manager-only.
+    'warehouse.stock.transfer',
+    'warehouse.stock.adjust',
+    'warehouse.stock.reserve',
   ],
   // Warehouse Manager has every row in the Actor Matrix ✔ except the
   // Finance-specific "Approve variance/adjustment (financial threshold)"
@@ -243,6 +257,10 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.purchase.cancel',
     'warehouse.purchase.receive',
     'warehouse.purchase.post',
+    'warehouse.stock.transfer',
+    'warehouse.stock.adjust',
+    'warehouse.stock.adjust.post',
+    'warehouse.stock.reserve',
   ],
 };
 

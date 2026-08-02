@@ -2513,6 +2513,171 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: "WHS_DUPLICATE_MOVEMENT -- receipt already posted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
+  /warehouse/transfers:
+    post:
+      tags: [Warehouse]
+      summary: Create a stock transfer between two warehouses (draft; stock is unaffected until Dispatch)
+      x-permission: warehouse.stock.transfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceWarehouseId, destinationWarehouseId, items]
+              properties:
+                sourceWarehouseId: { type: string, format: uuid }
+                destinationWarehouseId: { type: string, format: uuid }
+                notes: { type: string }
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [itemId, quantity]
+                    properties:
+                      itemId: { type: string, format: uuid }
+                      quantity: { type: number }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_SOURCE_DESTINATION_SAME", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/transfers/{transferId}/submit:
+    post:
+      tags: [Warehouse]
+      summary: Submit a draft transfer for approval
+      x-permission: warehouse.stock.transfer
+      parameters: [{ name: transferId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_TRANSFER_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/transfers/{transferId}/approve:
+    post:
+      tags: [Warehouse]
+      summary: Approve a submitted transfer (maker-checker -- approver cannot be the requester)
+      x-permission: warehouse.stock.transfer
+      parameters: [{ name: transferId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_SEGREGATION_OF_DUTIES (self-approval) or WHS_TRANSFER_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/transfers/{transferId}/dispatch:
+    post:
+      tags: [Warehouse]
+      summary: Dispatch an approved transfer -- decrements source warehouse stock
+      x-permission: warehouse.stock.transfer
+      parameters: [{ name: transferId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "WHS_STOCK_INSUFFICIENT", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "WHS_TRANSFER_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/transfers/{transferId}/receive:
+    post:
+      tags: [Warehouse]
+      summary: Receive a dispatched transfer -- increments destination warehouse stock
+      x-permission: warehouse.stock.transfer
+      parameters: [{ name: transferId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "WHS_DUPLICATE_MOVEMENT -- transfer already received", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "WHS_TRANSFER_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/adjustments:
+    post:
+      tags: [Warehouse]
+      summary: Create a stock adjustment (draft; stock is unaffected until Post)
+      x-permission: warehouse.stock.adjust
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [warehouseId, direction, reasonCode, items]
+              properties:
+                warehouseId: { type: string, format: uuid }
+                direction: { type: string, enum: [IN, OUT] }
+                reasonCode: { type: string, example: "DAMAGED" }
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [itemId, quantity]
+                    properties:
+                      itemId: { type: string, format: uuid }
+                      quantity: { type: number }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /warehouse/adjustments/{adjustmentId}/approve:
+    post:
+      tags: [Warehouse]
+      summary: Approve a draft adjustment (maker-checker -- approver cannot be the requester)
+      x-permission: warehouse.stock.adjust
+      parameters: [{ name: adjustmentId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_SEGREGATION_OF_DUTIES (self-approval) or WHS_ADJUSTMENT_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/adjustments/{adjustmentId}/post:
+    post:
+      tags: [Warehouse]
+      summary: Post an approved adjustment -- the transaction boundary that writes the stock ledger (a stricter permission tier than Create/Approve)
+      x-permission: warehouse.stock.adjust.post
+      parameters: [{ name: adjustmentId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: "WHS_ADJUSTMENT_APPROVAL_REQUIRED -- must be approved before it can be posted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "WHS_DUPLICATE_MOVEMENT -- adjustment already posted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "WHS_NEGATIVE_STOCK_FORBIDDEN -- an OUT adjustment would drive stock negative", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/reservations:
+    post:
+      tags: [Warehouse]
+      summary: Reserve stock against a reference document (UC-WHS-007) -- affects reservedStock/availableStock only, never currentStock
+      x-permission: warehouse.stock.reserve
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [warehouseId, itemId, quantity, referenceType, referenceId]
+              properties:
+                warehouseId: { type: string, format: uuid }
+                itemId: { type: string, format: uuid }
+                quantity: { type: number }
+                referenceType: { type: string, example: "TREATMENT_PLAN" }
+                referenceId: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "WHS_STOCK_INSUFFICIENT", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/reservations/{reservationId}/release:
+    post:
+      tags: [Warehouse]
+      summary: Release a stock reservation, returning its quantity to available stock (idempotent -- releasing an already-released reservation is a no-op)
+      x-permission: warehouse.stock.reserve
+      parameters: [{ name: reservationId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 components:
   securitySchemes:
     bearerAuth:
