@@ -1655,6 +1655,8 @@ model Item {
   stockTransferItems   StockTransferItem[]
   stockAdjustmentItems StockAdjustmentItem[]
   stockReservations    StockReservation[]
+  stockOpnameItems     StockOpnameItem[]
+  itemBatches          ItemBatch[]
 
   @@index([categoryId])
   @@index([isActive])
@@ -1715,6 +1717,8 @@ model WarehouseLocation {
   transfersIn       StockTransfer[]    @relation("TransferDestination")
   adjustments       StockAdjustment[]
   reservations      StockReservation[]
+  stockOpnames      StockOpname[]
+  itemBatches       ItemBatch[]
 
   @@unique([branchId, locationCode])
   @@index([branchId])
@@ -1762,13 +1766,14 @@ enum WarehouseStockTransactionType {
 }
 
 /// docs/03-sad/18-module-warehouse.md Section 5.5: immutable stock ledger.
-/// `batchId` is a plain nullable column (no FK yet) -- ItemBatch is built in
-/// Epic Y (task-127-135), out of Epic V's scope; the relation is added once
-/// that model exists rather than inventing it here. The idempotency unique
-/// key follows Section 5.7 literally; MySQL treats NULL as distinct in
-/// unique indexes, so writers posting a non-batch transaction (batchId
-/// null) MUST additionally duplicate-check at the application layer per
-/// Section 3.5 Rule 4 -- documented here for Epic W/X/Y/Z implementers.
+/// `batchId` now carries a real FK to `ItemBatch` (built in Epic Y,
+/// task-127-135) -- Epic V/W/X posted transactions with `batchId` left
+/// null since the model didn't exist yet; Epic Y's PostGoodsReceiptUseCase
+/// is the first writer to populate it. The idempotency unique key follows
+/// Section 5.7 literally; MySQL treats NULL as distinct in unique indexes,
+/// so writers posting a non-batch transaction (batchId null) MUST
+/// additionally duplicate-check at the application layer per Section 3.5
+/// Rule 4 -- documented here for Epic Z implementers.
 model StockTransaction {
   id                String                        @id @default(uuid()) @db.Char(36)
   transactionNumber String                        @unique @map("transaction_number") @db.VarChar(30)
@@ -1790,6 +1795,7 @@ model StockTransaction {
 
   warehouse WarehouseLocation @relation(fields: [warehouseId], references: [id])
   item      Item              @relation(fields: [itemId], references: [id])
+  batch     ItemBatch?        @relation(fields: [batchId], references: [id])
 
   @@unique([referenceType, referenceId, transactionType, itemId, batchId], name: "idempotency_key")
   @@index([warehouseId, itemId, transactionDate])
@@ -1915,10 +1921,10 @@ model GoodsReceipt {
 }
 
 /// docs/03-sad/18-module-warehouse.md Section 6.2 literal Create Goods
-/// Receipt example: batchNumber/expiryDate captured here per line. Full
-/// ItemBatch-entity linkage (FEFO allocation, remaining-quantity tracking)
-/// is explicitly task-134 (Epic Y) per task-114's own Backend Scope --
-/// deferred, not built here, to avoid inventing that model early.
+/// Receipt example: batchNumber/expiryDate captured here per line.
+/// PostGoodsReceiptUseCase (Epic Y, task-134) upserts an `ItemBatch` row
+/// from these fields when the item `isBatchTracked`, linking
+/// `StockTransaction.batchId`.
 model GoodsReceiptItem {
   id                  String    @id @default(uuid()) @db.Char(36)
   goodsReceiptId      String    @map("goods_receipt_id") @db.Char(36)
@@ -2093,6 +2099,137 @@ model StockReservation {
   @@index([warehouseId, itemId])
   @@index([status])
   @@map("stock_reservations")
+}
+
+// ---------------------------------------------------------------------------
+// Warehouse Module: Stock Opname & Batch (docs/03-sad/18-module-warehouse.md
+// UC-WHS-006, Epic Y task-127-135). Table names follow the module's own
+// literal Section 5.1 dictionary (`stock_opnames`, `stock_opname_items`,
+// `item_batches`), consistent with Epic V/W/X's naming choice.
+// ---------------------------------------------------------------------------
+
+/// docs/03-sad/18-module-warehouse.md Section 5.6 literal status list.
+/// task-130/task-131 split UC-WHS-006's narrative step 1 ("system takes a
+/// balance snapshot when the opname opens") into two task-spec endpoints:
+/// Create (draft, scope only, no snapshot yet) and Start Count (freezes
+/// the systemQuantity snapshot, DRAFT -> COUNTING) -- task-130's own AC
+/// ("System quantity snapshot is immutable once counting starts") is the
+/// literal source of truth here per this project's task-spec-over-SAD-
+/// narrative priority, already established for other Epic X/Y splits.
+enum StockOpnameStatus {
+  DRAFT
+  COUNTING
+  SUBMITTED
+  APPROVED
+  POSTED
+  REJECTED
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 5.6: "stock_opnames memuat
+/// nomor, branch/warehouse, tanggal, status, snapshot time, catatan, dan
+/// approval data." `opnameDate` + `warehouseId` back the
+/// `WHS_OPNAME_ALREADY_ACTIVE` check (Section 5.7's "unique active opname
+/// scope"), enforced at the application layer (not a DB unique index,
+/// since "active" excludes POSTED/REJECTED -- MySQL has no native partial
+/// unique index) -- same pattern as this module's other segregation/status
+/// guards enforced in the use-case layer.
+model StockOpname {
+  id           String            @id @default(uuid()) @db.Char(36)
+  opnameNumber String            @unique @map("opname_number") @db.VarChar(30)
+  warehouseId  String            @map("warehouse_id") @db.Char(36)
+  opnameDate   DateTime          @map("opname_date") @db.Date
+  status       StockOpnameStatus @default(DRAFT)
+  notes        String?           @db.Text
+  snapshotAt   DateTime?         @map("snapshot_at")
+
+  submittedAt DateTime? @map("submitted_at")
+  approvedBy  String?   @map("approved_by") @db.Char(36)
+  approvedAt  DateTime? @map("approved_at")
+  postedBy    String?   @map("posted_by") @db.Char(36)
+  postedAt    DateTime? @map("posted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  warehouse WarehouseLocation @relation(fields: [warehouseId], references: [id])
+  items     StockOpnameItem[]
+
+  @@index([warehouseId, opnameDate])
+  @@index([status])
+  @@map("stock_opnames")
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 5.6: "stock_opname_items
+/// menyimpan item/batch, system quantity, physical quantity, variance,
+/// reason, dan proof." `systemQuantity`/`physicalQuantity`/`variance` stay
+/// nullable until Start Count / Submit populate them respectively --
+/// task-131's own text ("Submit counted quantities... computing variance
+/// per line") is read as the physical count arriving in the Submit
+/// request body itself, since no separate per-line "record count"
+/// endpoint exists anywhere in task-127-135's literal API table
+/// (docs/03-sad/18-module-warehouse.md Section 6.4) or task-129's PATCH
+/// (whose own AC explicitly blocks edits once counting has started).
+model StockOpnameItem {
+  id               String   @id @default(uuid()) @db.Char(36)
+  opnameId         String   @map("opname_id") @db.Char(36)
+  itemId           String   @map("item_id") @db.Char(36)
+  systemQuantity   Decimal? @map("system_quantity") @db.Decimal(18, 2)
+  physicalQuantity Decimal? @map("physical_quantity") @db.Decimal(18, 2)
+  variance         Decimal? @db.Decimal(18, 2)
+  notes            String?  @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  opname StockOpname @relation(fields: [opnameId], references: [id])
+  item   Item        @relation(fields: [itemId], references: [id])
+
+  @@index([opnameId])
+  @@map("stock_opname_items")
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 5.4 literal status list
+/// (active, quarantined, expired, depleted).
+enum ItemBatchStatus {
+  ACTIVE
+  QUARANTINED
+  EXPIRED
+  DEPLETED
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 5.4 `item_batches`: key
+/// alokasi batch (warehouse_id, item_id, batch_number), received/expiry
+/// date, initial/remaining quantity (not negative), status. Populated by
+/// PostGoodsReceiptUseCase (task-114/task-134) when the item is
+/// isBatchTracked; `remainingQuantity` is decremented by future
+/// consumption/transfer/quarantine epics, never by direct client write.
+model ItemBatch {
+  id                String          @id @default(uuid()) @db.Char(36)
+  warehouseId       String          @map("warehouse_id") @db.Char(36)
+  itemId            String          @map("item_id") @db.Char(36)
+  batchNumber       String          @map("batch_number") @db.VarChar(50)
+  receivedDate      DateTime        @map("received_date") @db.Date
+  expiryDate        DateTime?       @map("expiry_date") @db.Date
+  initialQuantity   Decimal         @map("initial_quantity") @db.Decimal(18, 2)
+  remainingQuantity Decimal         @map("remaining_quantity") @db.Decimal(18, 2)
+  status            ItemBatchStatus @default(ACTIVE)
+
+  quarantinedBy String?   @map("quarantined_by") @db.Char(36)
+  quarantinedAt DateTime? @map("quarantined_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  warehouse         WarehouseLocation  @relation(fields: [warehouseId], references: [id])
+  item              Item               @relation(fields: [itemId], references: [id])
+  stockTransactions StockTransaction[]
+
+  @@unique([warehouseId, itemId, batchNumber])
+  @@index([itemId])
+  @@index([expiryDate])
+  @@index([status])
+  @@map("item_batches")
 }
 
 model AuditLog {

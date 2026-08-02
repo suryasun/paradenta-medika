@@ -5,7 +5,9 @@ import {
   GoodsReceiptNotFoundException,
   PurchaseOrderNotFoundException,
 } from '../../domain/exceptions/WarehouseExceptions';
+import { IBatchRepository } from '../../domain/repositories/IBatchRepository';
 import { IGoodsReceiptRepository } from '../../domain/repositories/IGoodsReceiptRepository';
+import { IItemRepository } from '../../domain/repositories/IItemRepository';
 import { IPurchaseOrderRepository } from '../../domain/repositories/IPurchaseOrderRepository';
 import { IStockRepository } from '../../domain/repositories/IStockRepository';
 import { StockTransactionNumberGenerator } from '../services/StockTransactionNumberGenerator';
@@ -38,18 +40,20 @@ export interface GoodsReceiptPostedEventPayload {
  * fully received. Idempotent on the receipt's own `status` field --
  * reposting an already-`POSTED` receipt is rejected before any mutation.
  *
- * Batch/expiry captured on `GoodsReceiptItem` (task-112) is not yet linked
- * into a real `ItemBatch` ledger entity here -- that FEFO/batch-tracking
- * entity is explicitly task-134 (Epic Y) per this task's own Backend
- * Scope note ("creates/updates the batch record (task-134)"), so
- * `StockTransaction.batchId` stays null for batch-tracked items posted in
- * this epic; full batch-ledger linkage lands with Epic Y.
+ * docs/06-tasks/task-134.md ("Creates warehouse_batches table (populated
+ * by Goods Receipt task-114 when isBatchTracked)"): for each line whose
+ * item `isBatchTracked`, upserts an `ItemBatch` row from the receipt
+ * line's `batchNumber`/`expiryDate` (validated non-null by
+ * CreateGoodsReceiptUseCase's own `BatchRequiredException` check) and
+ * links the resulting batch onto the `StockTransaction.batchId`.
  */
 export class PostGoodsReceiptUseCase {
   constructor(
     private readonly goodsReceiptRepository: IGoodsReceiptRepository,
     private readonly purchaseOrderRepository: IPurchaseOrderRepository,
     private readonly stockRepository: IStockRepository,
+    private readonly itemRepository: IItemRepository,
+    private readonly batchRepository: IBatchRepository,
     private readonly numberGenerator: StockTransactionNumberGenerator,
     private readonly auditService: IAuditService,
     private readonly eventBus: IEventBus,
@@ -71,11 +75,27 @@ export class PostGoodsReceiptUseCase {
 
     const receivedByPoItemId = new Map<string, number>();
     for (const line of receipt.items) {
+      let batchId: string | undefined;
+      const item = await this.itemRepository.findById(line.itemId);
+      if (item?.isBatchTracked && line.batchNumber) {
+        const batch = await this.batchRepository.upsertReceipt({
+          warehouseId: receipt.warehouseId,
+          itemId: line.itemId,
+          batchNumber: line.batchNumber,
+          receivedDate: receipt.receiptDate,
+          expiryDate: line.expiryDate,
+          quantity: Number(line.quantity),
+          createdBy: input.actorUserId,
+        });
+        batchId = batch.id;
+      }
+
       const transactionNumber = await this.numberGenerator.generate(receipt.receiptDate);
       await this.stockRepository.applyStockMovement({
         transactionNumber,
         warehouseId: receipt.warehouseId,
         itemId: line.itemId,
+        batchId,
         transactionType: 'PURCHASE',
         referenceType: 'GOODS_RECEIPT',
         referenceId: receipt.id,

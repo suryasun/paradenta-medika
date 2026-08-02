@@ -114,10 +114,17 @@ const PERMISSION_KEYS = [
   'system.user.read',
   'system.user.role.manage',
   'system.user.session.revoke',
+  'warehouse.batch.quarantine',
+  'warehouse.batch.read',
   'warehouse.item.manage',
   'warehouse.item.read',
   'warehouse.location.manage',
   'warehouse.location.read',
+  'warehouse.opname.approve',
+  'warehouse.opname.count',
+  'warehouse.opname.create',
+  'warehouse.opname.post',
+  'warehouse.opname.read',
   'warehouse.purchase.approve',
   'warehouse.purchase.cancel',
   'warehouse.purchase.create',
@@ -238,6 +245,19 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.stock.transfer',
     'warehouse.stock.adjust',
     'warehouse.stock.reserve',
+    // task-127-135 (Epic Y): opname read/create/count reuses the same
+    // "Adjustment/opname ✔" Actor Matrix row as Staff's adjust grant above
+    // -- opname.approve/opname.post are withheld, mirroring "Approve
+    // variance/adjustment" being a Manager-only row. Batch quarantine is
+    // a safety action any warehouse worker should be able to trigger
+    // immediately on discovering a bad batch (Section 8.2 only requires a
+    // *high* role for quarantine *release*, which this phase doesn't
+    // implement), so both roles get it.
+    'warehouse.opname.read',
+    'warehouse.opname.create',
+    'warehouse.opname.count',
+    'warehouse.batch.read',
+    'warehouse.batch.quarantine',
   ],
   // Warehouse Manager has every row in the Actor Matrix ✔ except the
   // Finance-specific "Approve variance/adjustment (financial threshold)"
@@ -261,6 +281,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.stock.adjust',
     'warehouse.stock.adjust.post',
     'warehouse.stock.reserve',
+    'warehouse.opname.read',
+    'warehouse.opname.create',
+    'warehouse.opname.count',
+    'warehouse.opname.approve',
+    'warehouse.opname.post',
+    'warehouse.batch.read',
+    'warehouse.batch.quarantine',
   ],
 };
 

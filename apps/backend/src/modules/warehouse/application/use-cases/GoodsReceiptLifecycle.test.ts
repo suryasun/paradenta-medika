@@ -8,6 +8,7 @@ import { PurchaseOrderNumberGenerator } from '../services/PurchaseOrderNumberGen
 import { GoodsReceiptNumberGenerator } from '../services/GoodsReceiptNumberGenerator';
 import { StockTransactionNumberGenerator } from '../services/StockTransactionNumberGenerator';
 import {
+  FakeBatchRepository,
   FakeGoodsReceiptRepository,
   FakeItemRepository,
   FakePurchaseOrderRepository,
@@ -29,6 +30,7 @@ async function buildSut() {
   const warehouseLocationRepository = new FakeWarehouseLocationRepository();
   const itemRepository = new FakeItemRepository();
   const stockRepository = new FakeStockRepository();
+  const batchRepository = new FakeBatchRepository();
   const auditService = new FakeAuditService();
   const eventBus = new InMemoryEventBus();
 
@@ -81,6 +83,8 @@ async function buildSut() {
     goodsReceiptRepository,
     purchaseOrderRepository,
     stockRepository,
+    itemRepository,
+    batchRepository,
     new StockTransactionNumberGenerator(stockRepository),
     auditService,
     eventBus,
@@ -89,6 +93,7 @@ async function buildSut() {
   return {
     purchaseOrderRepository,
     stockRepository,
+    batchRepository,
     warehouse,
     trackedItem,
     plainItem,
@@ -249,5 +254,43 @@ describe('Goods Receipt lifecycle (task-111-114, UC-WHS-002)', () => {
 
     const updatedPo = await purchaseOrderRepository.findById(po.id);
     expect(updatedPo?.status).toBe('PARTIALLY_RECEIVED');
+  });
+
+  it('posts a batch-tracked receipt and creates a linked ItemBatch (task-134)', async () => {
+    const { batchRepository, warehouse, trackedItem, createPoUseCase, submitPoUseCase, approvePoUseCase, createGrUseCase, postGrUseCase } =
+      await buildSut();
+    const po = await createPoUseCase.execute({
+      supplierId: 'sup-1',
+      warehouseId: warehouse.id,
+      items: [{ itemId: trackedItem.id, quantity: 10, unitPrice: 1000 }],
+      actorUserId: 'requester-1',
+    });
+    await submitPoUseCase.execute({ purchaseOrderId: po.id, actorUserId: 'requester-1' });
+    await approvePoUseCase.execute({ purchaseOrderId: po.id, actorUserId: 'manager-1' });
+
+    const receipt = await createGrUseCase.execute({
+      purchaseOrderId: po.id,
+      warehouseId: warehouse.id,
+      receiptDate: '2026-08-02',
+      items: [
+        {
+          purchaseOrderItemId: po.items[0].id,
+          itemId: trackedItem.id,
+          quantity: 10,
+          unitCost: 900,
+          batchNumber: 'RES-2607-A',
+          expiryDate: '2027-01-01',
+        },
+      ],
+      actorUserId: 'staff-1',
+    });
+    await postGrUseCase.execute({ goodsReceiptId: receipt.id, actorUserId: 'staff-1' });
+
+    const batch = [...batchRepository.batches.values()].find(
+      (b) => b.warehouseId === warehouse.id && b.itemId === trackedItem.id && b.batchNumber === 'RES-2607-A',
+    );
+    expect(batch).toBeDefined();
+    expect(Number(batch?.remainingQuantity)).toBe(10);
+    expect(batch?.status).toBe('ACTIVE');
   });
 });

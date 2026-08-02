@@ -2678,6 +2678,169 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /warehouse/stock-opnames:
+    get:
+      tags: [Warehouse]
+      summary: List stock opnames
+      x-permission: warehouse.opname.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, COUNTING, SUBMITTED, APPROVED, POSTED, REJECTED] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Warehouse]
+      summary: Create a draft stock opname scoped to the given itemIds (UC-WHS-006 step 1)
+      x-permission: warehouse.opname.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [warehouseId, opnameDate, items]
+              properties:
+                warehouseId: { type: string, format: uuid }
+                opnameDate: { type: string, format: date }
+                notes: { type: string }
+                items:
+                  type: array
+                  minItems: 1
+                  items: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: "WHS_OPNAME_ALREADY_ACTIVE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/stock-opnames/{opnameId}:
+    parameters:
+      - name: opnameId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Warehouse]
+      summary: Stock opname detail (with line items, system/physical/variance)
+      x-permission: warehouse.opname.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Warehouse]
+      summary: Update a draft opname's scope/notes (rejected once counting has started)
+      x-permission: warehouse.opname.create
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_OPNAME_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/stock-opnames/{opnameId}/start-count:
+    post:
+      tags: [Warehouse]
+      summary: Freeze the system quantity snapshot and transition the opname to counting
+      x-permission: warehouse.opname.count
+      parameters: [{ name: opnameId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_OPNAME_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/stock-opnames/{opnameId}/submit:
+    post:
+      tags: [Warehouse]
+      summary: Submit physical counts for approval; computes variance (physical - system) per line
+      x-permission: warehouse.opname.count
+      parameters: [{ name: opnameId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [itemId, physicalQuantity]
+                    properties:
+                      itemId: { type: string, format: uuid }
+                      physicalQuantity: { type: number }
+                      notes: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_OPNAME_INVALID_STATUS or WHS_OPNAME_ITEM_NOT_IN_SCOPE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/stock-opnames/{opnameId}/approve:
+    post:
+      tags: [Warehouse]
+      summary: Approve the counted variance (maker-checker -- approver cannot be the requester)
+      x-permission: warehouse.opname.approve
+      parameters: [{ name: opnameId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_SEGREGATION_OF_DUTIES (self-approval) or WHS_OPNAME_INVALID_STATUS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/stock-opnames/{opnameId}/post:
+    post:
+      tags: [Warehouse]
+      summary: Post the variance to the stock ledger (one OPNAME transaction per non-zero-variance line) -- a stricter permission tier than Create/Count/Approve
+      x-permission: warehouse.opname.post
+      parameters: [{ name: opnameId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "WHS_DUPLICATE_MOVEMENT -- opname already posted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "WHS_OPNAME_INVALID_STATUS or WHS_NEGATIVE_STOCK_FORBIDDEN", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/batches:
+    get:
+      tags: [Warehouse]
+      summary: List item batches (FEFO/expiry tracking)
+      x-permission: warehouse.batch.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: itemId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [ACTIVE, QUARANTINED, EXPIRED, DEPLETED] }
+        - name: expiryFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: expiryTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /warehouse/batches/{batchId}/quarantine:
+    post:
+      tags: [Warehouse]
+      summary: Quarantine an active batch -- removes its quantity from availableStock (via reservedStock) without affecting currentStock, so FEFO consumption can no longer select it
+      x-permission: warehouse.batch.quarantine
+      parameters: [{ name: batchId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "WHS_BATCH_INVALID_STATUS -- only an active batch can be quarantined", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
 components:
   securitySchemes:
     bearerAuth:

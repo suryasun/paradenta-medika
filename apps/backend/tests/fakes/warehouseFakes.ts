@@ -2,12 +2,16 @@ import {
   GoodsReceipt,
   GoodsReceiptItem,
   Item,
+  ItemBatch,
   PurchaseOrder,
   PurchaseOrderItem,
   PurchaseOrderStatus,
   StockAdjustment,
   StockAdjustmentItem,
   StockAdjustmentStatus,
+  StockOpname,
+  StockOpnameItem,
+  StockOpnameStatus,
   StockReservation,
   StockTransaction,
   StockTransfer,
@@ -55,6 +59,15 @@ import {
   CreateStockReservationInput,
   IStockReservationRepository,
 } from '../../src/modules/warehouse/domain/repositories/IStockReservationRepository';
+import {
+  CreateStockOpnameInput,
+  IStockOpnameRepository,
+  ReplaceStockOpnameScopeInput,
+  StockOpnameListFilter,
+  StockOpnameWithItems,
+  SubmitStockOpnameLineInput,
+} from '../../src/modules/warehouse/domain/repositories/IStockOpnameRepository';
+import { BatchListFilter, IBatchRepository, UpsertBatchReceiptInput } from '../../src/modules/warehouse/domain/repositories/IBatchRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -711,5 +724,205 @@ export class FakeStockReservationRepository implements IStockReservationReposito
     reservation.releasedBy = releasedBy;
     reservation.releasedAt = releasedAt;
     return reservation;
+  }
+}
+
+export class FakeStockOpnameRepository implements IStockOpnameRepository {
+  opnames = new Map<string, StockOpnameWithItems>();
+  private itemSequence = 0;
+
+  async create(input: CreateStockOpnameInput): Promise<StockOpnameWithItems> {
+    const opname: StockOpnameWithItems = {
+      id: nextFakeUuid(),
+      opnameNumber: input.opnameNumber,
+      warehouseId: input.warehouseId,
+      opnameDate: input.opnameDate,
+      status: 'DRAFT',
+      notes: input.notes ?? null,
+      snapshotAt: null,
+      submittedAt: null,
+      approvedBy: null,
+      approvedAt: null,
+      postedBy: null,
+      postedAt: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+      items: input.itemIds.map((itemId) => {
+        this.itemSequence += 1;
+        return {
+          id: `soi-${this.itemSequence}-${nextFakeUuid()}`,
+          opnameId: '',
+          itemId,
+          systemQuantity: null,
+          physicalQuantity: null,
+          variance: null,
+          notes: null,
+          createdAt: new Date(),
+        } as StockOpnameItem;
+      }),
+    } as StockOpnameWithItems;
+    opname.items.forEach((item) => {
+      (item as StockOpnameItem).opnameId = opname.id;
+    });
+    this.opnames.set(opname.id, opname);
+    return opname;
+  }
+
+  async list(query: ListQueryDto, filter: StockOpnameListFilter): Promise<PagedResult<StockOpnameWithItems>> {
+    const all = [...this.opnames.values()].filter(
+      (o) => (!filter.warehouseId || o.warehouseId === filter.warehouseId) && (!filter.status || o.status === filter.status),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async findById(id: string): Promise<StockOpnameWithItems | null> {
+    return this.opnames.get(id) ?? null;
+  }
+
+  async findActive(warehouseId: string, opnameDate: Date): Promise<StockOpname | null> {
+    return (
+      [...this.opnames.values()].find(
+        (o) =>
+          o.warehouseId === warehouseId &&
+          o.opnameDate.getTime() === opnameDate.getTime() &&
+          o.status !== 'POSTED' &&
+          o.status !== 'REJECTED',
+      ) ?? null
+    );
+  }
+
+  async replaceScope(id: string, input: ReplaceStockOpnameScopeInput): Promise<StockOpnameWithItems> {
+    const opname = this.opnames.get(id);
+    if (!opname) throw new Error('not found');
+    if (input.itemIds) {
+      opname.items = input.itemIds.map((itemId) => {
+        this.itemSequence += 1;
+        return {
+          id: `soi-${this.itemSequence}-${nextFakeUuid()}`,
+          opnameId: id,
+          itemId,
+          systemQuantity: null,
+          physicalQuantity: null,
+          variance: null,
+          notes: null,
+          createdAt: new Date(),
+        } as StockOpnameItem;
+      });
+    }
+    if (input.notes !== undefined) opname.notes = input.notes;
+    opname.updatedBy = input.updatedBy;
+    opname.updatedAt = new Date();
+    return opname;
+  }
+
+  async startCount(id: string, systemQuantities: Map<string, number>, snapshotAt: Date): Promise<StockOpnameWithItems> {
+    const opname = this.opnames.get(id);
+    if (!opname) throw new Error('not found');
+    opname.items.forEach((item) => {
+      if (systemQuantities.has(item.itemId)) {
+        item.systemQuantity = systemQuantities.get(item.itemId) as never;
+      }
+    });
+    opname.status = 'COUNTING';
+    opname.snapshotAt = snapshotAt;
+    return opname;
+  }
+
+  async submit(id: string, lines: SubmitStockOpnameLineInput[], submittedAt: Date): Promise<StockOpnameWithItems> {
+    const opname = this.opnames.get(id);
+    if (!opname) throw new Error('not found');
+    for (const line of lines) {
+      const item = opname.items.find((i) => i.itemId === line.itemId);
+      if (!item) continue;
+      const systemQuantity = item.systemQuantity ? Number(item.systemQuantity) : 0;
+      item.physicalQuantity = line.physicalQuantity as never;
+      item.variance = (line.physicalQuantity - systemQuantity) as never;
+      item.notes = line.notes ?? null;
+    }
+    opname.status = 'SUBMITTED';
+    opname.submittedAt = submittedAt;
+    return opname;
+  }
+
+  async updateStatus(
+    id: string,
+    status: StockOpnameStatus,
+    fields: Partial<{ approvedBy: string; approvedAt: Date; postedBy: string; postedAt: Date }>,
+  ): Promise<StockOpnameWithItems> {
+    const opname = this.opnames.get(id);
+    if (!opname) throw new Error('not found');
+    opname.status = status;
+    Object.assign(opname, fields);
+    return opname;
+  }
+
+  async count(): Promise<number> {
+    return this.opnames.size;
+  }
+
+  async findByNumber(opnameNumber: string): Promise<StockOpname | null> {
+    return [...this.opnames.values()].find((o) => o.opnameNumber === opnameNumber) ?? null;
+  }
+}
+
+export class FakeBatchRepository implements IBatchRepository {
+  batches = new Map<string, ItemBatch>();
+
+  async upsertReceipt(input: UpsertBatchReceiptInput): Promise<ItemBatch> {
+    const existing = [...this.batches.values()].find(
+      (b) => b.warehouseId === input.warehouseId && b.itemId === input.itemId && b.batchNumber === input.batchNumber,
+    );
+    if (existing) {
+      existing.initialQuantity = (Number(existing.initialQuantity) + input.quantity) as never;
+      existing.remainingQuantity = (Number(existing.remainingQuantity) + input.quantity) as never;
+      return existing;
+    }
+
+    const batch: ItemBatch = {
+      id: nextFakeUuid(),
+      warehouseId: input.warehouseId,
+      itemId: input.itemId,
+      batchNumber: input.batchNumber,
+      receivedDate: input.receivedDate,
+      expiryDate: input.expiryDate ?? null,
+      initialQuantity: input.quantity as never,
+      remainingQuantity: input.quantity as never,
+      status: 'ACTIVE',
+      quarantinedBy: null,
+      quarantinedAt: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+    } as ItemBatch;
+    this.batches.set(batch.id, batch);
+    return batch;
+  }
+
+  async findById(id: string): Promise<ItemBatch | null> {
+    return this.batches.get(id) ?? null;
+  }
+
+  async list(query: ListQueryDto, filter: BatchListFilter): Promise<PagedResult<ItemBatch>> {
+    const all = [...this.batches.values()].filter(
+      (b) =>
+        (!filter.itemId || b.itemId === filter.itemId) &&
+        (!filter.warehouseId || b.warehouseId === filter.warehouseId) &&
+        (!filter.status || b.status === filter.status) &&
+        (!filter.expiryFrom || (b.expiryDate && b.expiryDate.getTime() >= filter.expiryFrom.getTime())) &&
+        (!filter.expiryTo || (b.expiryDate && b.expiryDate.getTime() <= filter.expiryTo.getTime())),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async markQuarantined(id: string, quarantinedBy: string, quarantinedAt: Date): Promise<ItemBatch> {
+    const batch = this.batches.get(id);
+    if (!batch) throw new Error('not found');
+    batch.status = 'QUARANTINED';
+    batch.quarantinedBy = quarantinedBy;
+    batch.quarantinedAt = quarantinedAt;
+    return batch;
   }
 }

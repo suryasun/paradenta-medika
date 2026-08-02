@@ -206,3 +206,60 @@ export class StockReservationNotFoundException extends NotFoundException {
     super('Stock reservation not found');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Stock Opname & Batch (docs/03-sad/18-module-warehouse.md UC-WHS-006,
+// Section 6.5 literal error codes where they exist).
+// ---------------------------------------------------------------------------
+
+export class StockOpnameNotFoundException extends NotFoundException {
+  constructor() {
+    super('Stock opname not found');
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_OPNAME_ALREADY_ACTIVE" (409). */
+export class StockOpnameAlreadyActiveException extends ConflictException {
+  constructor() {
+    super('This warehouse already has an active stock opname for this date', 'WHS_OPNAME_ALREADY_ACTIVE');
+  }
+}
+
+/**
+ * No literal Section 6.5 code covers a wrong-status opname action (Update/
+ * Start-Count/Submit/Approve out of sequence) -- extrapolated by the same
+ * `WHS_TRANSFER_INVALID_STATUS`/`WHS_ADJUSTMENT_INVALID_STATUS` naming
+ * convention already established in Epic X for the identical gap.
+ */
+export class StockOpnameNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('WHS_OPNAME_INVALID_STATUS', `Stock opname must be in ${expected} status for this action`);
+  }
+}
+
+/** docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_DUPLICATE_MOVEMENT" -- reposting an already-posted opname (task-133 AC). */
+export class StockOpnameAlreadyPostedException extends ConflictException {
+  constructor() {
+    super('This stock opname has already been posted', 'WHS_DUPLICATE_MOVEMENT');
+  }
+}
+
+/** Submit rejects any line whose itemId was not part of the opname's original scope (set at Create/Update time). */
+export class StockOpnameItemNotInScopeException extends BusinessException {
+  constructor() {
+    super('WHS_OPNAME_ITEM_NOT_IN_SCOPE', 'One or more submitted items are not part of this opname\'s scope');
+  }
+}
+
+export class BatchNotFoundException extends NotFoundException {
+  constructor() {
+    super('Batch not found');
+  }
+}
+
+/** No literal Section 6.5 code for quarantining a non-active batch -- extrapolated by the same `WHS_*_INVALID_STATUS` convention. */
+export class BatchNotActiveException extends BusinessException {
+  constructor() {
+    super('WHS_BATCH_INVALID_STATUS', 'Only an active batch can be quarantined');
+  }
+}

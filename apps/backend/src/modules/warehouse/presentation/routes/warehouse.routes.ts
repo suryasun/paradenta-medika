@@ -19,6 +19,9 @@ import { CreateGoodsReceiptRequestDto } from '../../application/dtos/GoodsReceip
 import { CreateStockTransferRequestDto } from '../../application/dtos/StockTransferRequestDto';
 import { CreateStockAdjustmentRequestDto } from '../../application/dtos/StockAdjustmentRequestDto';
 import { CreateStockReservationRequestDto } from '../../application/dtos/StockReservationRequestDto';
+import { CreateStockOpnameRequestDto, SubmitStockOpnameRequestDto, UpdateStockOpnameRequestDto } from '../../application/dtos/StockOpnameRequestDto';
+import { ListStockOpnameQueryDto } from '../../application/dtos/StockOpnameQueryDto';
+import { ListBatchQueryDto } from '../../application/dtos/BatchQueryDto';
 import { CreateItemUseCase } from '../../application/use-cases/CreateItemUseCase';
 import { ListItemsUseCase } from '../../application/use-cases/ListItemsUseCase';
 import { GetItemUseCase } from '../../application/use-cases/GetItemUseCase';
@@ -50,11 +53,22 @@ import { ApproveStockAdjustmentUseCase } from '../../application/use-cases/Appro
 import { PostStockAdjustmentUseCase } from '../../application/use-cases/PostStockAdjustmentUseCase';
 import { ReserveStockUseCase } from '../../application/use-cases/ReserveStockUseCase';
 import { ReleaseStockReservationUseCase } from '../../application/use-cases/ReleaseStockReservationUseCase';
+import { CreateStockOpnameUseCase } from '../../application/use-cases/CreateStockOpnameUseCase';
+import { ListStockOpnamesUseCase } from '../../application/use-cases/ListStockOpnamesUseCase';
+import { GetStockOpnameUseCase } from '../../application/use-cases/GetStockOpnameUseCase';
+import { UpdateStockOpnameUseCase } from '../../application/use-cases/UpdateStockOpnameUseCase';
+import { StartStockOpnameCountUseCase } from '../../application/use-cases/StartStockOpnameCountUseCase';
+import { SubmitStockOpnameUseCase } from '../../application/use-cases/SubmitStockOpnameUseCase';
+import { ApproveStockOpnameUseCase } from '../../application/use-cases/ApproveStockOpnameUseCase';
+import { PostStockOpnameUseCase } from '../../application/use-cases/PostStockOpnameUseCase';
+import { ListBatchesUseCase } from '../../application/use-cases/ListBatchesUseCase';
+import { QuarantineBatchUseCase } from '../../application/use-cases/QuarantineBatchUseCase';
 import { PurchaseOrderNumberGenerator } from '../../application/services/PurchaseOrderNumberGenerator';
 import { GoodsReceiptNumberGenerator } from '../../application/services/GoodsReceiptNumberGenerator';
 import { StockTransactionNumberGenerator } from '../../application/services/StockTransactionNumberGenerator';
 import { StockTransferNumberGenerator } from '../../application/services/StockTransferNumberGenerator';
 import { StockAdjustmentNumberGenerator } from '../../application/services/StockAdjustmentNumberGenerator';
+import { StockOpnameNumberGenerator } from '../../application/services/StockOpnameNumberGenerator';
 import { ItemRepository } from '../../infrastructure/repositories/ItemRepository';
 import { SupplierRepository } from '../../infrastructure/repositories/SupplierRepository';
 import { WarehouseLocationRepository } from '../../infrastructure/repositories/WarehouseLocationRepository';
@@ -64,6 +78,8 @@ import { GoodsReceiptRepository } from '../../infrastructure/repositories/GoodsR
 import { StockTransferRepository } from '../../infrastructure/repositories/StockTransferRepository';
 import { StockAdjustmentRepository } from '../../infrastructure/repositories/StockAdjustmentRepository';
 import { StockReservationRepository } from '../../infrastructure/repositories/StockReservationRepository';
+import { StockOpnameRepository } from '../../infrastructure/repositories/StockOpnameRepository';
+import { BatchRepository } from '../../infrastructure/repositories/BatchRepository';
 import { ItemController } from '../controllers/ItemController';
 import { SupplierController } from '../controllers/SupplierController';
 import { WarehouseLocationController } from '../controllers/WarehouseLocationController';
@@ -73,6 +89,8 @@ import { GoodsReceiptController } from '../controllers/GoodsReceiptController';
 import { StockTransferController } from '../controllers/StockTransferController';
 import { StockAdjustmentController } from '../controllers/StockAdjustmentController';
 import { StockReservationController } from '../controllers/StockReservationController';
+import { StockOpnameController } from '../controllers/StockOpnameController';
+import { BatchController } from '../controllers/BatchController';
 
 /**
  * docs/06-tasks/task-095.md..task-114.md (Epic V Warehouse Foundation +
@@ -94,6 +112,8 @@ export function buildWarehouseModule(
   const stockTransferRepository = new StockTransferRepository();
   const stockAdjustmentRepository = new StockAdjustmentRepository();
   const stockReservationRepository = new StockReservationRepository();
+  const stockOpnameRepository = new StockOpnameRepository();
+  const batchRepository = new BatchRepository();
 
   const itemController = new ItemController(
     new CreateItemUseCase(itemRepository, auditService),
@@ -141,6 +161,8 @@ export function buildWarehouseModule(
       goodsReceiptRepository,
       purchaseOrderRepository,
       stockRepository,
+      itemRepository,
+      batchRepository,
       new StockTransactionNumberGenerator(stockRepository),
       auditService,
       eventBus,
@@ -170,6 +192,22 @@ export function buildWarehouseModule(
   const stockReservationController = new StockReservationController(
     new ReserveStockUseCase(stockReservationRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
     new ReleaseStockReservationUseCase(stockReservationRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
+  );
+
+  const stockOpnameController = new StockOpnameController(
+    new CreateStockOpnameUseCase(stockOpnameRepository, new StockOpnameNumberGenerator(stockOpnameRepository), auditService),
+    new ListStockOpnamesUseCase(stockOpnameRepository),
+    new GetStockOpnameUseCase(stockOpnameRepository),
+    new UpdateStockOpnameUseCase(stockOpnameRepository, auditService),
+    new StartStockOpnameCountUseCase(stockOpnameRepository, stockRepository, auditService),
+    new SubmitStockOpnameUseCase(stockOpnameRepository, auditService),
+    new ApproveStockOpnameUseCase(stockOpnameRepository, auditService),
+    new PostStockOpnameUseCase(stockOpnameRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService, eventBus),
+  );
+
+  const batchController = new BatchController(
+    new ListBatchesUseCase(batchRepository),
+    new QuarantineBatchUseCase(batchRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
   );
 
   const router = Router();
@@ -340,6 +378,54 @@ export function buildWarehouseModule(
     requirePermission('warehouse.stock.reserve'),
     stockReservationController.release,
   );
+
+  // docs/06-tasks/task-127.md..task-133.md (Epic Y, UC-WHS-006). Permission
+  // codes are the literal `warehouse.opname.*` Section 8.1 catalog
+  // (read/create/count/approve/post) -- unlike Transfer/Adjustment in
+  // Epic X, this group didn't need any extrapolated addition. Update
+  // reuses `create` (editing a draft's own scope, same convention as PO's
+  // PATCH); Start Count and Submit both reuse `count` (both are steps the
+  // counting staff performs); Post is Manager-only, mirroring the
+  // Adjustment `.post` dual-tier precedent even though Section 8.1
+  // doesn't explicitly say so -- consistent with "Approve variance/
+  // adjustment" being a Manager-only Actor Matrix row (Section 4.1).
+  router.get(
+    '/warehouse/stock-opnames',
+    requirePermission('warehouse.opname.read'),
+    validateQuery(ListStockOpnameQueryDto),
+    stockOpnameController.list,
+  );
+  router.post(
+    '/warehouse/stock-opnames',
+    requirePermission('warehouse.opname.create'),
+    validateBody(CreateStockOpnameRequestDto),
+    stockOpnameController.create,
+  );
+  router.get('/warehouse/stock-opnames/:opnameId', requirePermission('warehouse.opname.read'), stockOpnameController.detail);
+  router.patch(
+    '/warehouse/stock-opnames/:opnameId',
+    requirePermission('warehouse.opname.create'),
+    validateBody(UpdateStockOpnameRequestDto),
+    stockOpnameController.update,
+  );
+  router.post(
+    '/warehouse/stock-opnames/:opnameId/start-count',
+    requirePermission('warehouse.opname.count'),
+    stockOpnameController.startCount,
+  );
+  router.post(
+    '/warehouse/stock-opnames/:opnameId/submit',
+    requirePermission('warehouse.opname.count'),
+    validateBody(SubmitStockOpnameRequestDto),
+    stockOpnameController.submit,
+  );
+  router.post('/warehouse/stock-opnames/:opnameId/approve', requirePermission('warehouse.opname.approve'), stockOpnameController.approve);
+  router.post('/warehouse/stock-opnames/:opnameId/post', requirePermission('warehouse.opname.post'), stockOpnameController.post);
+
+  // docs/06-tasks/task-134.md/task-135.md (Epic Y). Literal
+  // `warehouse.batch.*` Section 8.1 catalog verbs.
+  router.get('/warehouse/batches', requirePermission('warehouse.batch.read'), validateQuery(ListBatchQueryDto), batchController.list);
+  router.post('/warehouse/batches/:batchId/quarantine', requirePermission('warehouse.batch.quarantine'), batchController.quarantine);
 
   return router;
 }
