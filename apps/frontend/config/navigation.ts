@@ -20,6 +20,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Patients", href: "/patients", permission: "patient.read" },
   { label: "Reservations", href: "/reservations", permission: "reservation.read" },
   { label: "Queue", href: "/queue", permission: "queue.read" },
-  { label: "EMR", href: "/emr", permission: "emr.visit.read" },
+  // No standalone EMR sidebar entry: apps/backend has no Visit List
+  // endpoint (docs/06-tasks/task-048.md..053.md never add one) -- a Visit
+  // is only ever reached via Queue's "Open Visit" action on a CALLED entry.
   { label: "Billing", href: "/billing", permission: "billing.invoice.read" },
 ];

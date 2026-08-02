@@ -12,6 +12,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
 import { PermissionGuard } from "@/components/guards/PermissionGuard";
+import { useOpenVisit } from "@/features/emr/hooks/useOpenVisit";
 import { useQueues } from "../hooks/useQueues";
 import {
   useCallQueue,
@@ -50,6 +51,7 @@ function QueueRow({ queue }: { queue: QueueEntry }) {
   const completeQueue = useCompleteQueue();
   const skipQueue = useSkipQueue();
   const cancelQueue = useCancelQueue();
+  const openVisit = useOpenVisit();
 
   return (
     <>
@@ -86,6 +88,11 @@ function QueueRow({ queue }: { queue: QueueEntry }) {
                 <PermissionGuard permission="queue.start">
                   <Button isLoading={startService.isPending} onClick={() => startService.mutate(queue.id)}>
                     Start
+                  </Button>
+                </PermissionGuard>
+                <PermissionGuard permission="emr.visit.create">
+                  <Button variant="secondary" isLoading={openVisit.isPending} onClick={() => openVisit.mutate(queue.id)}>
+                    Open Visit
                   </Button>
                 </PermissionGuard>
               </>

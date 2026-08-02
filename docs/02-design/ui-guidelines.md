@@ -44,4 +44,4 @@ WCAG 2.1 AA (see design-system.md §9). Minimum 44×44px hit targets on touch-ca
 
 ## 8. Copy tone
 
-Bahasa Indonesia for all product labels, actions, and messages (clinic staff-facing); technical/system terms (module names in code, API fields, status enum values like `BOOKED`/`WAITING`) stay in English since they mirror the SAD's domain language 1:1 — this avoids translation drift between UI copy and backend contracts.
+English language for all product labels, actions, and messages (clinic staff-facing); technical/system terms (module names in code, API fields, status enum values like `BOOKED`/`WAITING`) stay in English since they mirror the SAD's domain language 1:1 — this avoids translation drift between UI copy and backend contracts.
