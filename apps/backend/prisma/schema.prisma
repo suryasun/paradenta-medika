@@ -220,6 +220,7 @@ model Branch {
   visits             Visit[]
   warehouseLocations WarehouseLocation[]
   purchaseOrders     PurchaseOrder[]
+  financeAccounts    Account[]
 
   @@map("branches")
 }
@@ -2230,6 +2231,67 @@ model ItemBatch {
   @@index([expiryDate])
   @@index([status])
   @@map("item_batches")
+}
+
+// ---------------------------------------------------------------------------
+// Finance Module: Chart of Accounts (docs/03-sad/17-module-finance.md
+// Section 6.1, Epic AB task-143-145). Table name follows the SAD's own
+// literal Section 5.1 dictionary (`accounts`, unprefixed) rather than the
+// task files' `finance_accounts` phrasing, consistent with the same
+// implementer's-choice permission already exercised throughout the
+// Warehouse module (SAD Section 5.1 there: "Implementasi memilih satu
+// nama fisik yang konsisten melalui migration").
+// ---------------------------------------------------------------------------
+
+enum FinanceAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum FinanceNormalBalance {
+  DEBIT
+  CREDIT
+}
+
+/// docs/03-sad/17-module-finance.md Section 3.3/5.2: `branchId` null means
+/// a shared template account; otherwise it's branch-effective. Section
+/// 5.2 requires code "unique per branch/template scope" -- MySQL treats
+/// NULL as distinct in a unique index, so a `(branchId, code)` DB
+/// constraint alone would NOT catch two shared-template (branchId=null)
+/// accounts sharing a code; CreateAccountUseCase additionally checks via
+/// `findByBranchAndCode` before insert, the same documented pattern
+/// already used for StockTransaction's idempotency key gap.
+/// No `deletedAt`/soft-delete columns: task-145's own AC says accounts
+/// are deactivated (isActive=false), never hard-deleted -- Section 5.2's
+/// literal accounts table has no deleted_at column, unlike most other
+/// tables in this schema.
+model Account {
+  id            String               @id @default(uuid()) @db.Char(36)
+  branchId      String?              @map("branch_id") @db.Char(36)
+  code          String               @db.VarChar(30)
+  name          String               @db.VarChar(150)
+  accountType   FinanceAccountType   @map("account_type")
+  normalBalance FinanceNormalBalance @map("normal_balance")
+  parentId      String?              @map("parent_id") @db.Char(36)
+  isPostable    Boolean              @default(true) @map("is_postable")
+  isActive      Boolean              @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch   Branch?   @relation(fields: [branchId], references: [id])
+  parent   Account?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children Account[] @relation("AccountHierarchy")
+
+  @@unique([branchId, code])
+  @@index([parentId])
+  @@index([accountType])
+  @@map("accounts")
 }
 
 model AuditLog {

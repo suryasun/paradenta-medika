@@ -18,6 +18,7 @@ import { buildEmrModule, buildAttachmentFileRouter } from './modules/emr/present
 import { buildBillingModule } from './modules/billing/presentation/routes/billing.routes';
 import { buildReportsModule } from './modules/reports/presentation/routes/reports.routes';
 import { buildWarehouseModule } from './modules/warehouse/presentation/routes/warehouse.routes';
+import { buildFinanceModule } from './modules/finance/presentation/routes/finance.routes';
 import { eventBus } from './shared/events/EventBus';
 
 const API_V1_PREFIX = '/api/v1';
@@ -103,7 +104,10 @@ export function createApp(config: ConfigService): Express {
   const warehouseRouter = buildWarehouseModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, warehouseRouter);
 
-  // Phase 3 modules are mounted here as each is implemented (Warehouse Epic V onward).
+  const financeRouter = buildFinanceModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
+  app.use(API_V1_PREFIX, financeRouter);
+
+  // Phase 3 modules are mounted here as each is implemented (Warehouse Epic V onward; Finance Epic AB onward).
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);

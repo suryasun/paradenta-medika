@@ -41,6 +41,7 @@ tags:
   - name: Billing
   - name: Reports
   - name: Warehouse
+  - name: Finance
 
 paths:
   # ---------------------------------------------------------------------
@@ -2984,6 +2985,84 @@ paths:
           schema: { type: string, enum: [DRAFT, COUNTING, SUBMITTED, APPROVED, POSTED, REJECTED] }
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
+  # Finance -- Chart of Accounts (docs/06-tasks/task-143.md..task-145.md,
+  # docs/03-sad/17-module-finance.md Section 6.1)
+  # ---------------------------------------------------------------------
+  /finance/accounts:
+    get:
+      tags: [Finance]
+      summary: List accounts (Chart of Accounts)
+      x-permission: finance.account.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Search' }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: accountType
+          in: query
+          schema: { type: string, enum: [asset, liability, equity, revenue, expense] }
+        - name: parentId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+        - name: isPostable
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Finance]
+      summary: Create an account
+      x-permission: finance.account.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, accountType, normalBalance, isPostable]
+              properties:
+                branchId: { type: string, format: uuid, nullable: true, description: "Omit for a shared-template account" }
+                code: { type: string, example: "1110" }
+                name: { type: string, example: "Kas Utama" }
+                accountType: { type: string, enum: [asset, liability, equity, revenue, expense] }
+                normalBalance: { type: string, enum: [debit, credit] }
+                parentId: { type: string, format: uuid, nullable: true }
+                isPostable: { type: boolean }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { description: "Parent account not found", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '409': { description: "FIN_ACCOUNT_CODE_EXISTS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "FIN_ACCOUNT_TYPE_MISMATCH -- accountType/normalBalance inconsistent", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/accounts/{accountId}:
+    patch:
+      tags: [Finance]
+      summary: Update an account (name/accountType/normalBalance/parentId/isPostable)
+      x-permission: finance.account.manage
+      parameters: [{ name: accountId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_ACCOUNT_TYPE_MISMATCH or FIN_ACCOUNT_CYCLIC_HIERARCHY", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/accounts/{accountId}/deactivate:
+    post:
+      tags: [Finance]
+      summary: Deactivate an account (no hard delete -- historical ledger stays visible)
+      x-permission: finance.account.manage
+      parameters: [{ name: accountId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
 components:
   securitySchemes:

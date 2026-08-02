@@ -68,6 +68,8 @@ const PERMISSION_KEYS = [
   'emr.visit.create',
   'emr.visit.read',
   'emr.vital.record',
+  'finance.account.manage',
+  'finance.account.read',
   'masterdata.branch.manage',
   'masterdata.branch.read',
   'masterdata.clinic.manage',
@@ -295,6 +297,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.batch.quarantine',
     'warehouse.report.read',
   ],
+  // docs/03-sad/17-module-finance.md Section 4.1 Actor Matrix: "Maintain
+  // COA mapping" is Finance Manager (and Administrator) only -- Finance
+  // Staff can read the chart of accounts (needed to pick accounts on a
+  // manual journal, Epic AC) but not create/edit/deactivate it.
+  FINANCE_STAFF: ['finance.account.read'],
+  FINANCE_MANAGER: ['finance.account.read', 'finance.account.manage'],
 };
 
 function toPermissionName(key: string): string {
@@ -322,6 +330,8 @@ const USERS: SeededUser[] = [
   { username: 'cashier1', email: 'cashier1@parakita.local', password: TEST_PASSWORD, roleCode: 'CASHIER' },
   { username: 'warehouse_staff1', email: 'warehouse.staff1@parakita.local', password: TEST_PASSWORD, roleCode: 'WAREHOUSE_STAFF' },
   { username: 'warehouse_manager1', email: 'warehouse.manager1@parakita.local', password: TEST_PASSWORD, roleCode: 'WAREHOUSE_MANAGER' },
+  { username: 'finance_staff1', email: 'finance.staff1@parakita.local', password: TEST_PASSWORD, roleCode: 'FINANCE_STAFF' },
+  { username: 'finance_manager1', email: 'finance.manager1@parakita.local', password: TEST_PASSWORD, roleCode: 'FINANCE_MANAGER' },
 ];
 
 async function seedPermissionsAndRoles() {
