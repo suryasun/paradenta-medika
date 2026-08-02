@@ -68,6 +68,13 @@ import {
   SubmitStockOpnameLineInput,
 } from '../../src/modules/warehouse/domain/repositories/IStockOpnameRepository';
 import { BatchListFilter, IBatchRepository, UpsertBatchReceiptInput } from '../../src/modules/warehouse/domain/repositories/IBatchRepository';
+import {
+  IWarehouseReportRepository,
+  MovementsFilter,
+  PurchasesReportFilter,
+  PurchasesReportRow,
+  StockCardFilter,
+} from '../../src/modules/warehouse/domain/repositories/IWarehouseReportRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -924,5 +931,74 @@ export class FakeBatchRepository implements IBatchRepository {
     batch.quarantinedBy = quarantinedBy;
     batch.quarantinedAt = quarantinedAt;
     return batch;
+  }
+}
+
+/** Composed over the same underlying fake stores as the entity-specific fakes, mirroring how the real WarehouseReportRepository queries the same tables. */
+export class FakeWarehouseReportRepository implements IWarehouseReportRepository {
+  constructor(
+    private readonly stockRepository: FakeStockRepository,
+    private readonly purchaseOrderRepository: FakePurchaseOrderRepository,
+  ) {}
+
+  private matchesDateRange(date: Date, dateFrom?: Date, dateTo?: Date): boolean {
+    if (dateFrom && date.getTime() < dateFrom.getTime()) return false;
+    if (dateTo && date.getTime() > dateTo.getTime()) return false;
+    return true;
+  }
+
+  async getStockCard(filter: StockCardFilter, query: ListQueryDto): Promise<PagedResult<StockTransaction>> {
+    const all = this.stockRepository.transactions
+      .filter(
+        (t) =>
+          t.warehouseId === filter.warehouseId &&
+          t.itemId === filter.itemId &&
+          this.matchesDateRange(t.transactionDate, filter.dateFrom, filter.dateTo),
+      )
+      .sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async getMovements(filter: MovementsFilter, query: ListQueryDto): Promise<PagedResult<StockTransaction>> {
+    const all = this.stockRepository.transactions.filter(
+      (t) =>
+        (!filter.warehouseId || t.warehouseId === filter.warehouseId) &&
+        (!filter.itemId || t.itemId === filter.itemId) &&
+        (!filter.transactionType || t.transactionType === filter.transactionType) &&
+        (!filter.referenceType || t.referenceType === filter.referenceType) &&
+        (!filter.performedBy || t.performedBy === filter.performedBy) &&
+        this.matchesDateRange(t.transactionDate, filter.dateFrom, filter.dateTo),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async getPurchasesReport(filter: PurchasesReportFilter, query: ListQueryDto): Promise<PagedResult<PurchasesReportRow>> {
+    const orders = [...this.purchaseOrderRepository.purchaseOrders.values()].filter(
+      (po) =>
+        (!filter.warehouseId || po.warehouseId === filter.warehouseId) &&
+        (!filter.supplierId || po.supplierId === filter.supplierId) &&
+        (!filter.status || po.status === filter.status) &&
+        this.matchesDateRange(po.orderDate, filter.dateFrom, filter.dateTo),
+    );
+
+    const items: PurchasesReportRow[] = orders.map((po) => ({
+      purchaseOrderId: po.id,
+      purchaseOrderNumber: po.purchaseOrderNumber,
+      supplierId: po.supplierId,
+      warehouseId: po.warehouseId,
+      orderDate: po.orderDate,
+      expectedDate: po.expectedDate,
+      status: po.status,
+      totalAmount: Number(po.totalAmount),
+      orderedQuantity: po.items.reduce((sum, item) => sum + Number(item.quantityOrdered), 0),
+      receivedQuantity: po.items.reduce((sum, item) => sum + Number(item.quantityReceived), 0),
+      receiptCount: 0,
+      firstReceiptPostedAt: null,
+    }));
+
+    const start = (query.page - 1) * query.limit;
+    return { items: items.slice(start, start + query.limit), total: items.length };
   }
 }

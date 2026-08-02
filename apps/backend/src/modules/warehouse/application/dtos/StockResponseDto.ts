@@ -14,6 +14,9 @@ export interface StockResponseDto {
 
 export interface StockLedgerEntryResponseDto {
   id: string;
+  warehouseId: string;
+  itemId: string;
+  batchId: string | null;
   transactionNumber: string;
   transactionType: string;
   referenceType: string;

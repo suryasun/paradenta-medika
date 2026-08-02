@@ -2841,6 +2841,150 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { description: "WHS_BATCH_INVALID_STATUS -- only an active batch can be quarantined", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
+  /warehouse/reports/stock-card:
+    get:
+      tags: [Warehouse]
+      summary: "Stock card report -- immutable in/out/balance ledger for one item/warehouse pair over a period"
+      x-permission: warehouse.report.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: warehouseId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: itemId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /warehouse/reports/stock-balance:
+    get:
+      tags: [Warehouse]
+      summary: "Stock balance report -- current, reserved, available, minimum, status"
+      x-permission: warehouse.report.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: itemId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /warehouse/reports/movements:
+    get:
+      tags: [Warehouse]
+      summary: "Movements report -- in/out by type, reference, actor"
+      x-permission: warehouse.report.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: itemId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: transactionType
+          in: query
+          schema: { type: string, enum: [PURCHASE, SALE, TREATMENT, ADJUSTMENT, TRANSFER, OPNAME, RETURN, RESERVATION, RELEASE_RESERVATION] }
+        - name: referenceType
+          in: query
+          schema: { type: string }
+        - name: performedBy
+          in: query
+          schema: { type: string, format: uuid }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /warehouse/reports/purchases:
+    get:
+      tags: [Warehouse]
+      summary: "Purchases report -- PO/receipt/vendor analysis with ordered vs received quantity and lead time"
+      x-permission: warehouse.report.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: supplierId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, SUBMITTED, APPROVED, REJECTED, CANCELLED, PARTIALLY_RECEIVED, RECEIVED] }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /warehouse/reports/expiry:
+    get:
+      tags: [Warehouse]
+      summary: "Expiry report -- near-expiry, expired, quarantined batches and remaining quantity"
+      x-permission: warehouse.report.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: itemId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [ACTIVE, QUARANTINED, EXPIRED, DEPLETED] }
+        - name: expiryFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: expiryTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /warehouse/reports/opnames:
+    get:
+      tags: [Warehouse]
+      summary: "Opnames report -- snapshot, count, variance, approval"
+      x-permission: warehouse.report.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, COUNTING, SUBMITTED, APPROVED, POSTED, REJECTED] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
 components:
   securitySchemes:
     bearerAuth:

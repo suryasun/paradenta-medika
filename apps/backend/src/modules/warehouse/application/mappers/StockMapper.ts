@@ -23,6 +23,9 @@ export function toStockResponseDto(stock: WarehouseStock, itemMinimumStock: numb
 export function toStockLedgerEntryResponseDto(transaction: StockTransaction): StockLedgerEntryResponseDto {
   return {
     id: transaction.id,
+    warehouseId: transaction.warehouseId,
+    itemId: transaction.itemId,
+    batchId: transaction.batchId,
     transactionNumber: transaction.transactionNumber,
     transactionType: transaction.transactionType,
     referenceType: transaction.referenceType,

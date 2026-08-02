@@ -132,6 +132,7 @@ const PERMISSION_KEYS = [
   'warehouse.purchase.read',
   'warehouse.purchase.receive',
   'warehouse.purchase.submit',
+  'warehouse.report.read',
   'warehouse.stock.adjust',
   'warehouse.stock.adjust.post',
   'warehouse.stock.read',
@@ -258,6 +259,10 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.opname.count',
     'warehouse.batch.read',
     'warehouse.batch.quarantine',
+    // task-137-142 (Epic AA): "Export laporan ✔" Actor Matrix row covers
+    // both roles for report *read* access (export itself isn't
+    // implemented this phase -- see warehouse.routes.ts comment).
+    'warehouse.report.read',
   ],
   // Warehouse Manager has every row in the Actor Matrix ✔ except the
   // Finance-specific "Approve variance/adjustment (financial threshold)"
@@ -288,6 +293,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.opname.post',
     'warehouse.batch.read',
     'warehouse.batch.quarantine',
+    'warehouse.report.read',
   ],
 };
 

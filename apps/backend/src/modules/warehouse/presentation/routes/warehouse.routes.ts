@@ -22,6 +22,7 @@ import { CreateStockReservationRequestDto } from '../../application/dtos/StockRe
 import { CreateStockOpnameRequestDto, SubmitStockOpnameRequestDto, UpdateStockOpnameRequestDto } from '../../application/dtos/StockOpnameRequestDto';
 import { ListStockOpnameQueryDto } from '../../application/dtos/StockOpnameQueryDto';
 import { ListBatchQueryDto } from '../../application/dtos/BatchQueryDto';
+import { StockCardQueryDto, MovementsQueryDto, PurchasesReportQueryDto } from '../../application/dtos/ReportQueryDto';
 import { CreateItemUseCase } from '../../application/use-cases/CreateItemUseCase';
 import { ListItemsUseCase } from '../../application/use-cases/ListItemsUseCase';
 import { GetItemUseCase } from '../../application/use-cases/GetItemUseCase';
@@ -63,6 +64,12 @@ import { ApproveStockOpnameUseCase } from '../../application/use-cases/ApproveSt
 import { PostStockOpnameUseCase } from '../../application/use-cases/PostStockOpnameUseCase';
 import { ListBatchesUseCase } from '../../application/use-cases/ListBatchesUseCase';
 import { QuarantineBatchUseCase } from '../../application/use-cases/QuarantineBatchUseCase';
+import { GetStockCardReportUseCase } from '../../application/use-cases/GetStockCardReportUseCase';
+import { GetStockBalanceReportUseCase } from '../../application/use-cases/GetStockBalanceReportUseCase';
+import { GetMovementsReportUseCase } from '../../application/use-cases/GetMovementsReportUseCase';
+import { GetPurchasesReportUseCase } from '../../application/use-cases/GetPurchasesReportUseCase';
+import { GetExpiryReportUseCase } from '../../application/use-cases/GetExpiryReportUseCase';
+import { GetOpnamesReportUseCase } from '../../application/use-cases/GetOpnamesReportUseCase';
 import { PurchaseOrderNumberGenerator } from '../../application/services/PurchaseOrderNumberGenerator';
 import { GoodsReceiptNumberGenerator } from '../../application/services/GoodsReceiptNumberGenerator';
 import { StockTransactionNumberGenerator } from '../../application/services/StockTransactionNumberGenerator';
@@ -80,6 +87,7 @@ import { StockAdjustmentRepository } from '../../infrastructure/repositories/Sto
 import { StockReservationRepository } from '../../infrastructure/repositories/StockReservationRepository';
 import { StockOpnameRepository } from '../../infrastructure/repositories/StockOpnameRepository';
 import { BatchRepository } from '../../infrastructure/repositories/BatchRepository';
+import { WarehouseReportRepository } from '../../infrastructure/repositories/WarehouseReportRepository';
 import { ItemController } from '../controllers/ItemController';
 import { SupplierController } from '../controllers/SupplierController';
 import { WarehouseLocationController } from '../controllers/WarehouseLocationController';
@@ -91,6 +99,7 @@ import { StockAdjustmentController } from '../controllers/StockAdjustmentControl
 import { StockReservationController } from '../controllers/StockReservationController';
 import { StockOpnameController } from '../controllers/StockOpnameController';
 import { BatchController } from '../controllers/BatchController';
+import { WarehouseReportController } from '../controllers/WarehouseReportController';
 
 /**
  * docs/06-tasks/task-095.md..task-114.md (Epic V Warehouse Foundation +
@@ -114,6 +123,7 @@ export function buildWarehouseModule(
   const stockReservationRepository = new StockReservationRepository();
   const stockOpnameRepository = new StockOpnameRepository();
   const batchRepository = new BatchRepository();
+  const warehouseReportRepository = new WarehouseReportRepository();
 
   const itemController = new ItemController(
     new CreateItemUseCase(itemRepository, auditService),
@@ -208,6 +218,15 @@ export function buildWarehouseModule(
   const batchController = new BatchController(
     new ListBatchesUseCase(batchRepository),
     new QuarantineBatchUseCase(batchRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
+  );
+
+  const warehouseReportController = new WarehouseReportController(
+    new GetStockCardReportUseCase(warehouseReportRepository),
+    new GetStockBalanceReportUseCase(stockRepository, itemRepository),
+    new GetMovementsReportUseCase(warehouseReportRepository),
+    new GetPurchasesReportUseCase(warehouseReportRepository),
+    new GetExpiryReportUseCase(batchRepository),
+    new GetOpnamesReportUseCase(stockOpnameRepository),
   );
 
   const router = Router();
@@ -426,6 +445,51 @@ export function buildWarehouseModule(
   // `warehouse.batch.*` Section 8.1 catalog verbs.
   router.get('/warehouse/batches', requirePermission('warehouse.batch.read'), validateQuery(ListBatchQueryDto), batchController.list);
   router.post('/warehouse/batches/:batchId/quarantine', requirePermission('warehouse.batch.quarantine'), batchController.quarantine);
+
+  // docs/06-tasks/task-137.md..task-142.md (Epic AA). All six reports are
+  // read-only and share the literal `warehouse.report.read` Section 8.1
+  // verb (report.export is not implemented in this phase -- no task in
+  // task-137-142 adds an export endpoint). Stock Balance/Expiry/Opnames
+  // reuse the existing stock/batch/opname repositories directly (their
+  // shapes already match Section 10.2's literal field lists); Stock
+  // Card/Movements/Purchases go through the new WarehouseReportRepository
+  // since no existing repository supports their filter/aggregation needs.
+  router.get(
+    '/warehouse/reports/stock-card',
+    requirePermission('warehouse.report.read'),
+    validateQuery(StockCardQueryDto),
+    warehouseReportController.stockCard,
+  );
+  router.get(
+    '/warehouse/reports/stock-balance',
+    requirePermission('warehouse.report.read'),
+    validateQuery(StockQueryDto),
+    warehouseReportController.stockBalance,
+  );
+  router.get(
+    '/warehouse/reports/movements',
+    requirePermission('warehouse.report.read'),
+    validateQuery(MovementsQueryDto),
+    warehouseReportController.movements,
+  );
+  router.get(
+    '/warehouse/reports/purchases',
+    requirePermission('warehouse.report.read'),
+    validateQuery(PurchasesReportQueryDto),
+    warehouseReportController.purchases,
+  );
+  router.get(
+    '/warehouse/reports/expiry',
+    requirePermission('warehouse.report.read'),
+    validateQuery(ListBatchQueryDto),
+    warehouseReportController.expiry,
+  );
+  router.get(
+    '/warehouse/reports/opnames',
+    requirePermission('warehouse.report.read'),
+    validateQuery(ListStockOpnameQueryDto),
+    warehouseReportController.opnames,
+  );
 
   return router;
 }
