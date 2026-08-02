@@ -376,6 +376,47 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     },
   });
 
+  // Doctor Schedule (docs/03-sad/13-module-reservation.md Section 15/16):
+  // no CRUD endpoint exists for this entity anywhere in the app (it is
+  // read-only from GetDoctorTimeSlotsUseCase/DoctorScheduleValidator), so
+  // seed data is the only way to populate it for manual/dev testing.
+  // Mon-Sat (dayOfWeek 1-6, getUTCDay() convention), 08:00-17:00 UTC,
+  // 30-minute slots, up to 3 patients per slot -- a reasonable dev-seed
+  // schedule, not a documented SAD default (none is specified).
+  const doctorSchedules: Array<{ doctorCode: string; dayOfWeek: number }> = [
+    { doctorCode: 'DOC001', dayOfWeek: 1 },
+    { doctorCode: 'DOC001', dayOfWeek: 2 },
+    { doctorCode: 'DOC001', dayOfWeek: 3 },
+    { doctorCode: 'DOC001', dayOfWeek: 4 },
+    { doctorCode: 'DOC001', dayOfWeek: 5 },
+    { doctorCode: 'DOC001', dayOfWeek: 6 },
+    { doctorCode: 'DOC002', dayOfWeek: 1 },
+    { doctorCode: 'DOC002', dayOfWeek: 2 },
+    { doctorCode: 'DOC002', dayOfWeek: 3 },
+    { doctorCode: 'DOC002', dayOfWeek: 4 },
+    { doctorCode: 'DOC002', dayOfWeek: 5 },
+    { doctorCode: 'DOC002', dayOfWeek: 6 },
+  ];
+  for (const entry of doctorSchedules) {
+    const doctor = await prisma.doctor.findUniqueOrThrow({ where: { doctorCode: entry.doctorCode } });
+    const existing = await prisma.doctorSchedule.findFirst({
+      where: { doctorId: doctor.id, dayOfWeek: entry.dayOfWeek, deletedAt: null },
+    });
+    if (!existing) {
+      await prisma.doctorSchedule.create({
+        data: {
+          doctorId: doctor.id,
+          dayOfWeek: entry.dayOfWeek,
+          startTime: new Date('1970-01-01T08:00:00.000Z'),
+          endTime: new Date('1970-01-01T17:00:00.000Z'),
+          slotDuration: 30,
+          maxPatient: 3,
+          isActive: true,
+        },
+      });
+    }
+  }
+
   const categories: Array<{ categoryCode: string; categoryName: string }> = [
     { categoryCode: 'KONS', categoryName: 'Konservasi Gigi' },
     { categoryCode: 'BEDAH', categoryName: 'Bedah Mulut' },
@@ -520,6 +561,7 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     clinics: 1,
     branches: 2,
     doctors: 2,
+    doctorSchedules: doctorSchedules.length,
     treatmentCategories: categories.length,
     treatments: treatments.length,
     paymentMethods: paymentMethods.length,
@@ -652,7 +694,7 @@ async function main() {
   console.log(`Seeded ${permissionCount} permissions and roles: ${['ADMINISTRATOR', ...Object.keys(ROLE_PERMISSIONS)].join(', ')}`);
   // eslint-disable-next-line no-console
   console.log(
-    `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods, ${masterDataCounts.toothConditions} tooth conditions, ${masterDataCounts.consentTemplates} consent templates.`,
+    `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.doctorSchedules} doctor schedules, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods, ${masterDataCounts.toothConditions} tooth conditions, ${masterDataCounts.consentTemplates} consent templates.`,
   );
   // eslint-disable-next-line no-console
   console.log(`Seeded ${patientCount} patients (5 active, 1 archived).`);
