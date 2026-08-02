@@ -1,19 +1,28 @@
 # Pages
 
-Index of page-level design specs. Per project policy, this index only documents what is actually specified in the source SAD — it does not invent page inventories for modules that lack them.
+Index of page-level design specs for all 11 modules. Only Patient (`patient.md`) has a source-verbatim spec from the SAD; the other 10 are **Proposed Design** documents derived from `docs/01-prd/features/` and `docs/01-prd/acceptance-criteria/`, per the resolution recorded in `docs/02-design/design-system.md`.
 
 ---
 
-# 1. Pages With Source Specification
+## 1. Page Specs
 
-| Module | Source | Status |
+| Module | File | Status |
 |---|---|---|
-| Patient | `docs/03-sad/12-module-patient.md` Section 12 (UI Pages) | Specified — see [patient.md](./patient.md) |
+| Master Data | [master-data.md](./master-data.md) | Proposed — derived from features + business rules |
+| Patient | [patient.md](./patient.md) | Source-specified (`docs/03-sad/12-module-patient.md` §12) |
+| Reservation | [reservation.md](./reservation.md) | Proposed |
+| Queue | [queue.md](./queue.md) | Proposed |
+| EMR | [emr.md](./emr.md) | Proposed — Odontogram flagged for a dedicated hi-fi pass |
+| Billing | [billing.md](./billing.md) | Proposed |
+| Finance | [finance.md](./finance.md) | Proposed |
+| Warehouse | [warehouse.md](./warehouse.md) | Proposed |
+| Human Resource | [hr.md](./hr.md) | Proposed |
+| Reporting & Dashboard | [reporting.md](./reporting.md) | Proposed |
+| System Administration | [system.md](./system.md) | Proposed |
 
-# 2. Modules Without a Page-Level Spec
+## 2. Visual references built this pass
 
-The following modules have no "UI Pages" (or equivalent) section in their SAD document: Master Data, Reservation, Queue, EMR, Billing, Finance, Warehouse, Human Resource, Reporting & Dashboard, System Administration.
+- `Parakita - Design System.dc.html` — tokens + component gallery (light/dark)
+- `Parakita - Key Screens.dc.html` — Dashboard, Patient List, Patient Detail (Profile tab), Queue Board — with Owner/Dokter/Kasir role switching
 
-This is a **Missing Documentation** gap per project policy (`CLAUDE.md`: "If information is missing, explicitly report the missing documentation instead of guessing"). Frontend page inventories for these modules must not be inferred from the backend API/use-case list alone; they require an explicit design pass (Figma + page spec) before implementation, because page composition, layout, and interaction are design decisions, not architecture decisions.
-
-Until that design pass happens, `docs/01-prd/features/<module>.md` is the closest available reference for what functionality each module's (currently unspecified) pages must expose.
+The remaining modules (Master Data, Reservation, EMR, Billing, Finance, Warehouse, HR, Reporting, System Admin) have page inventories but no visual mockup yet — flag to the user as a next step, prioritized by what Claude Code will implement first.

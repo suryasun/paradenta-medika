@@ -1,22 +1,47 @@
-# UI Guidelines
+# UI Guidelines — Parakita Medika
 
-## Missing Documentation
+> Status: **resolved**. Replaces the earlier gap report. The binding constraints listed there (Loading/Empty/Error states, RBAC-aware UI, no client-side-only enforcement, responsive layout) are restated below with concrete patterns, per `docs/02-design/design-system.md` and the module PRDs in `docs/01-prd/`.
 
-`docs/03-sad/` does not define interaction patterns, layout rules, or component usage guidance — this is a backend-focused Software Architecture Document set and does not include a UI/UX guideline document. Verified by full-text search across all 26 SAD documents; no matches for "interaction pattern", "layout rule", or similar terms.
+## 1. Page states (mandatory on every list/detail page)
 
-Per project policy, no interaction or layout rules are invented here.
+- **Loading** — skeleton rows matching the real row height/columns (not a spinner-only overlay) for tables; a skeleton card grid for dashboards.
+- **Empty** — an icon-free, single-sentence message + the primary create action (e.g. "Belum ada pasien terdaftar — Registrasi pasien pertama"). Never show an empty table with just column headers.
+- **Error** — the `Alert` component (severity=error) with a retry action; never a raw stack trace or blank page.
 
-## Binding Constraints From Existing Documentation
+## 2. Forms
 
-While there is no dedicated UI guideline document, the following **frontend requirements are binding** per `CLAUDE.md` (project instructions, "FRONTEND RULES" section) and must be satisfied by whatever UI guidelines are eventually authored:
+- Inline validation on blur, not only on submit. Error text sits directly under the field in `--color-error-error-700` (light) / `-300` (dark), 12px.
+- Multi-step forms (patient registration, PO approval, payroll run) use the Horizontal/Vertical Stepper — never a single 20-field form.
+- Destructive or financially irreversible actions (Void Invoice, Delete Master Data, Terminate Employee, Reopen Closed Period) always confirm via a modal dialog that restates the consequence in one sentence and requires a typed reason where the business rule mandates one (Void, Refund, Adjustment, Period Reopen — see `docs/01-prd/business-rules.md`).
+- Money fields are always right-aligned, 2-decimal, `Rp` prefixed, and never accept free-typed thousand separators — format on blur.
 
-- Never redesign UI; use the Design System (see `docs/02-design/design-system.md` — currently also a documentation gap).
-- Reuse components whenever possible.
-- Every page/flow must implement: Loading State, Empty State, Error State.
-- Responsive Layout is required (per `docs/03-sad/01-system-overview.md` Section 17 Architecture Quality Attributes and the Next.js/TailwindCSS stack).
-- Accessibility must be addressed (no specific WCAG target level is given in source documentation — this itself is a documentation gap that should be closed before implementation).
-- Permission Guards must reflect RBAC (`docs/03-sad/02-system-architecture.md` Section 17, Authorization & RBAC) — UI must hide/disable actions the current user's role/permission does not allow, while never relying on that hiding as the actual security boundary (enforcement is server-side, see `docs/02-design/navigation.md` Section 1).
+## 3. Tables
 
-## Recommended Action
+- Every data table has: search, at least one filter (branch/date/status as relevant), sort on sortable columns, and pagination (never infinite scroll for financial/clinical records — page numbers are auditable).
+- Row actions are icon buttons with a tooltip, collapsed into an overflow menu past 3 actions.
+- Status is always a colored pill (see design-system.md §8), never a plain text cell.
 
-A UI/UX designer should author concrete interaction and layout guidelines (form validation display, table pagination/sorting/filtering UX, modal vs. page-level flows, confirmation patterns for destructive actions such as Void/Cancel/Delete, and the accessibility target) referencing the module list in `docs/01-prd/features/overview.md`.
+## 4. Modals vs. full page
+
+- Modal: quick, single-entity actions with ≤ 6 fields (cancel reservation, add discount, quick edit).
+- Full page: anything with a stepper, a tab set, or that benefits from a URL (Patient Detail, Payroll Run, Stock Opname).
+
+## 5. RBAC in the UI
+
+Per `docs/02-design/navigation.md` and `docs/03-sad/21-module-system.md`: **menu and action visibility is convenience only** — hide/disable what the current user's role/permission does not allow, but every server call is independently authorized. Concretely:
+
+- Sidebar sections render only for roles mapped in `navigation.md` §2.
+- A disabled (not hidden) action — e.g. a Kasir seeing a greyed "Post Journal" button — is preferable to hiding it when the user needs to understand the workflow exists but isn't theirs; use hidden when the module itself is entirely out of the user's scope.
+- The Owner/Dokter/Kasir role switcher in `Parakita - Key Screens.dc.html` demonstrates this: sidebar contents change per role, never just an icon dimming.
+
+## 6. Responsive layout
+
+Primary target is desktop/tablet (clinic front-desk and back-office workstations); the sidebar collapses to icon-only under 1024px and to an overlay drawer under 768px. No phone-first layout is required for this release (confirm with the user if a tablet check-in kiosk or clinician mobile view is planned later).
+
+## 7. Accessibility
+
+WCAG 2.1 AA (see design-system.md §9). Minimum 44×44px hit targets on touch-capable clinic devices (check-in kiosk, tablet EMR). Keyboard focus is always visible; never `outline: none` without a replacement ring.
+
+## 8. Copy tone
+
+Bahasa Indonesia for all product labels, actions, and messages (clinic staff-facing); technical/system terms (module names in code, API fields, status enum values like `BOOKED`/`WAITING`) stay in English since they mirror the SAD's domain language 1:1 — this avoids translation drift between UI copy and backend contracts.

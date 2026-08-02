@@ -146,6 +146,85 @@ Seluruh perubahan data pasien harus dilakukan melalui Aggregate ini agar seluruh
 
 ---
 
-# 4. Missing Documentation
+# 4. Navigation Structure — Remaining Modules (Resolved)
 
-`docs/03-sad/` does not define an explicit sidebar navigation tree or route map for any module other than Patient. Per project policy, this gap is reported rather than invented. Before frontend routing is implemented for the remaining 10 modules, a Navigation Structure section (matching the Patient module's Section 13 format) should be authored for each module, informed by that module's UI Pages / use case list in `docs/01-prd/features/`.
+> Status: **proposed design**, not extracted from the SAD (which only specifies Patient's navigation — see §3). Each tree below is derived from that module's `docs/01-prd/features/<module>.md` use-case list and `docs/02-design/pages/<module>.md`. Mark this whole section as design output, not architecture, if referenced from code.
+
+```text
+Master Data
+├── Data Klinik & Cabang
+├── Departemen & Ruangan
+├── Dokter & Pegawai
+├── Treatment & Treatment Category
+├── Medicine / Medical Item / Consumable
+├── Supplier & Insurance
+└── Payment Method / Tax / Discount / Promotion
+
+Reservation
+├── Reservation List
+├── Create Reservation
+├── Doctor Schedule / Availability
+├── Reservation Timeline
+└── Reservation History
+
+Queue
+├── Queue Dashboard (board)
+├── Check-in
+└── Queue History
+
+EMR
+├── Visit (active)
+├── Odontogram
+├── SOAP Note
+├── Treatment Plan & Procedure
+├── Prescription
+├── Clinical Attachment / X-Ray
+└── Clinical Timeline
+
+Billing
+├── Invoice List
+├── Generate Invoice
+├── Payment
+├── Discount / Insurance
+└── Refund / Void
+
+Finance
+├── General Ledger
+├── Cash & Bank (Daily Closing)
+├── Expense
+├── Doctor Fee Settlement
+└── Financial Period
+
+Warehouse
+├── Stock Balance / Stock Card
+├── Purchase Order
+├── Goods Receipt
+├── Stock Transfer
+├── Stock Adjustment
+└── Stock Opname
+
+Human Resource
+├── Employee List
+├── Schedule & Attendance
+├── Leave & Overtime
+├── Payroll Run
+└── Payroll Register (Reports)
+
+Reporting
+├── Executive Dashboard
+├── Operational Reports
+├── Financial Reports
+├── Inventory Reports
+├── HR Reports
+└── Clinical & Quality Reports
+
+System Administration
+├── User Administration
+├── Role & Permission
+├── Menu & Feature Flag
+├── System Parameter
+├── Notification Template
+└── Audit / Activity Log
+```
+
+Each top-level item above maps 1:1 to the "Sidebar Section" rows in §2; sub-items are proposed screens pending confirmation, not yet reflected in a Figma frame per module (see `figma-links.md`).

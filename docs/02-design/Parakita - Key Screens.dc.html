@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="components/fig-tokens.css">
+  <link rel="stylesheet" href="components/dental-tokens.css">
+  <style>body{margin:0}*{box-sizing:border-box}</style>
+</helmet>
+
+<div style="font-family: Inter, sans-serif; background: var(--misc-body-bg); color: var(--theme-text-primary); height: 100vh; display: flex; overflow: hidden;">
+
+  <div style="width: 232px; flex-shrink: 0; background: var(--misc-paper); border-right: 1px solid var(--theme-divider); display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 20px 18px;">
+      <div style="width: 32px; height: 32px; border-radius: var(--border-radius-border-radius-md); background: var(--color-primary-primary-500); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;">PM</div>
+      <div style="font-weight: 700; font-size: 14px;">Parakita Medika</div>
+    </div>
+    <div style="flex: 1; overflow-y: auto; padding: 6px 12px;">
+      <sc-for list="{{ visibleMenu }}" as="item" hint-placeholder-count="6">
+        <div onclick="{{ item.onClick }}" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--border-radius-border-radius-md); font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 2px; background: {{ item.bg }}; color: {{ item.fg }};">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ item.dot }}; flex-shrink: 0;"></span>
+          {{ item.label }}
+        </div>
+      </sc-for>
+    </div>
+    <div style="padding: 14px 18px; border-top: 1px solid var(--theme-divider); font-size: 11px; color: var(--theme-text-secondary);">Menu tampil sesuai role (RBAC) — visibilitas UI saja; otorisasi sebenarnya di server.</div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+    <div style="height: 64px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; background: var(--misc-paper); border-bottom: 1px solid var(--theme-divider);">
+      <div style="font-size: 16px; font-weight: 700;">{{ screenTitle }}</div>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="display: flex; background: var(--theme-action-hover); border-radius: var(--border-radius-border-round); padding: 3px;">
+          <sc-for list="{{ roles }}" as="r" hint-placeholder-count="3">
+            <div onclick="{{ r.onClick }}" style="padding: 6px 14px; border-radius: var(--border-radius-border-round); font-size: 12px; font-weight: 600; cursor: pointer; background: {{ r.bg }}; color: {{ r.fg }};">{{ r.label }}</div>
+          </sc-for>
+        </div>
+        <button onclick="{{ toggleTheme }}" style="border: 1px solid var(--theme-outline-border); background: transparent; color: var(--theme-text-primary); border-radius: var(--border-radius-border-round); padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;">{{ themeLabel }}</button>
+        <div style="width: 34px; height: 34px; border-radius: 50%; background: var(--color-primary-primary-500); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px;">{{ userInitial }}</div>
+      </div>
+    </div>
+
+    <div style="flex: 1; overflow-y: auto; padding: 24px;">
+
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px;">
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+            <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-radius: var(--border-radius-border-radius-md); padding: 18px;">
+              <div style="font-size: 12px; color: var(--theme-text-secondary); font-weight: 600; margin-bottom: 8px;">{{ k.label }}</div>
+              <div style="font-size: 24px; font-weight: 700;">{{ k.value }}</div>
+              <div style="font-size: 12px; margin-top: 6px; color: {{ k.deltaColor }};">{{ k.delta }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px;">
+          <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-radius: var(--border-radius-border-radius-md); padding: 18px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px;">Aktivitas Terbaru</div>
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="5">
+              <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--theme-divider); font-size: 13px;">
+                <div>{{ a.text }}</div>
+                <div style="color: var(--theme-text-secondary);">{{ a.time }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-radius: var(--border-radius-border-radius-md); padding: 18px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px;">Antrean Sekarang</div>
+            <sc-for list="{{ queueMini }}" as="q" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--theme-divider);">
+                <span style="font-size: 13px; font-weight: 700; width: 36px;">{{ q.no }}</span>
+                <span style="font-size: 13px; flex: 1;">{{ q.name }}</span>
+                <span style="font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: var(--border-radius-border-round); background: {{ q.bg }}; color: {{ q.fg }};">{{ q.status }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPatientList }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <input placeholder="Cari nama, No. RM, atau No. Telp..." style="width: 340px; padding: 10px 14px; border-radius: var(--border-radius-border-radius-md); border: 1px solid var(--theme-outline-border); font-size: 13px; font-family: inherit; background: var(--misc-paper); color: var(--theme-text-primary);"></input>
+          <button style="padding: 10px 18px; border-radius: var(--border-radius-border-radius-md); border: none; background: var(--color-primary-primary-500); color: #fff; font-weight: 600; font-size: 13px; cursor: pointer;">+ Registrasi Pasien</button>
+        </div>
+        <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-radius: var(--border-radius-border-radius-md); overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 100px 1.4fr 1fr 1fr 100px 140px; padding: 12px 16px; background: var(--misc-table-header); font-size: 11px; font-weight: 700; color: var(--theme-text-secondary); text-transform: uppercase;">
+            <div>No. RM</div><div>Nama Pasien</div><div>Tgl Lahir</div><div>No. Telp</div><div>Status</div><div>Aksi</div>
+          </div>
+          <sc-for list="{{ patients }}" as="p" hint-placeholder-count="6">
+            <div onclick="{{ p.onClick }}" style="display: grid; grid-template-columns: 100px 1.4fr 1fr 1fr 100px 140px; padding: 12px 16px; border-top: 1px solid var(--theme-divider); font-size: 13px; align-items: center; cursor: pointer;">
+              <div style="color: var(--theme-text-secondary);">{{ p.mrn }}</div>
+              <div style="font-weight: 600;">{{ p.name }}</div>
+              <div>{{ p.dob }}</div>
+              <div>{{ p.phone }}</div>
+              <div><span style="font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: var(--border-radius-border-round); background: {{ p.statusBg }}; color: {{ p.statusFg }};">{{ p.status }}</span></div>
+              <div style="color: var(--color-primary-primary-600); font-weight: 600;">Lihat &rsaquo;</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPatientDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--color-primary-primary-100); color: var(--color-primary-primary-700); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px;">SR</div>
+          <div>
+            <div style="font-size: 18px; font-weight: 700;">Siti Rahayu</div>
+            <div style="font-size: 12px; color: var(--theme-text-secondary);">No. RM RM-2026-00842 · 34 tahun · Perempuan</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--theme-divider); margin-bottom: 20px;">
+          <sc-for list="{{ patientTabs }}" as="t" hint-placeholder-count="10">
+            <div onclick="{{ t.onClick }}" style="padding: 10px 14px; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid {{ t.border }}; color: {{ t.color }};">{{ t.label }}</div>
+          </sc-for>
+        </div>
+        <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-radius: var(--border-radius-border-radius-md); padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 640px;">
+          <sc-for list="{{ profileFields }}" as="f" hint-placeholder-count="6">
+            <div>
+              <div style="font-size: 11px; color: var(--theme-text-secondary); font-weight: 600; margin-bottom: 4px;">{{ f.label }}</div>
+              <div style="font-size: 14px;">{{ f.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <sc-for list="{{ queueColumns }}" as="col" hint-placeholder-count="4">
+            <div>
+              <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--theme-text-secondary); margin-bottom: 10px;">{{ col.label }} ({{ col.count }})</div>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <sc-for list="{{ col.tickets }}" as="tk" hint-placeholder-count="3">
+                  <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-left: 3px solid {{ col.accent }}; border-radius: var(--border-radius-border-radius-md); padding: 12px 14px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 14px;">
+                      <span>{{ tk.no }}</span><span style="font-size: 11px; color: var(--theme-text-secondary); font-weight: 500;">{{ tk.time }}</span>
+                    </div>
+                    <div style="font-size: 13px; margin-top: 4px;">{{ tk.name }}</div>
+                    <div style="font-size: 11px; color: var(--theme-text-secondary); margin-top: 2px;">{{ tk.doctor }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: 'light', role: 'owner', screen: 'dashboard', tab: 'Profile' };
+
+  componentDidMount() {
+    document.documentElement.setAttribute('data-theme', this.state.theme);
+  }
+
+  toggleTheme = () => {
+    this.setState(s => {
+      const next = s.theme === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      return { theme: next };
+    });
+  };
+
+  setRole = (role) => this.setState({ role });
+  setScreen = (screen) => this.setState({ screen });
+  setTab = (tab) => this.setState({ tab });
+
+  renderVals() {
+    const s = this.state;
+    const dark = s.theme === 'dark';
+    const pair = (hue) => ({
+      bg: dark ? `var(--opacity-color-${hue}-24)` : `var(--opacity-color-${hue}-16)`,
+      fg: dark ? `var(--color-${hue}-300)` : `var(--color-${hue}-700)`,
+    });
+    const menuAll = [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'patient-list', label: 'Pasien' },
+      { key: 'reservation', label: 'Reservasi' },
+      { key: 'queue', label: 'Antrean' },
+      { key: 'emr', label: 'Rekam Medis (EMR)' },
+      { key: 'billing', label: 'Kasir / Billing' },
+      { key: 'finance', label: 'Keuangan' },
+      { key: 'warehouse', label: 'Gudang' },
+      { key: 'hr', label: 'SDM' },
+      { key: 'reporting', label: 'Laporan' },
+      { key: 'system', label: 'Administrasi Sistem' },
+    ];
+    const roleMenuKeys = {
+      owner: ['dashboard', 'patient-list', 'reservation', 'reporting', 'finance', 'hr'],
+      dokter: ['dashboard', 'patient-list', 'reservation', 'queue', 'emr'],
+      kasir: ['patient-list', 'reservation', 'queue', 'billing'],
+    };
+    const allowed = roleMenuKeys[s.role];
+    const routeMap = { 'patient-list': 'patient-list', 'queue': 'queue', 'dashboard': 'dashboard' };
+
+    const visibleMenu = menuAll.filter(m => allowed.includes(m.key)).map(m => {
+      const clickable = ['dashboard', 'patient-list', 'queue'].includes(m.key);
+      const active = routeMap[m.key] === s.screen || (m.key === 'patient-list' && s.screen === 'patient-detail');
+      return {
+        label: m.label,
+        onClick: clickable ? () => this.setScreen(routeMap[m.key]) : () => {},
+        bg: active ? 'var(--opacity-color-primary-primary-16)' : 'transparent',
+        fg: active ? 'var(--color-primary-primary-700)' : 'var(--theme-text-primary)',
+        dot: active ? 'var(--color-primary-primary-500)' : 'var(--theme-divider)',
+      };
+    });
+
+    const roles = ['owner', 'dokter', 'kasir'].map(r => ({
+      label: r === 'owner' ? 'Owner' : r === 'dokter' ? 'Dokter' : 'Kasir',
+      onClick: () => this.setRole(r),
+      bg: s.role === r ? 'var(--misc-paper)' : 'transparent',
+      fg: s.role === r ? 'var(--color-primary-primary-700)' : 'var(--theme-text-secondary)',
+    }));
+
+    const titles = { dashboard: 'Dashboard', 'patient-list': 'Daftar Pasien', 'patient-detail': 'Detail Pasien', queue: 'Papan Antrean' };
+
+    const tabNames = ['Profile', 'Identity', 'Address', 'Emergency Contact', 'Reservation History', 'Visit History', 'Treatment History', 'Payment History', 'Attachments', 'Audit Trail'];
+    const patientTabs = tabNames.map(t => ({
+      label: t,
+      onClick: () => this.setTab(t),
+      border: s.tab === t ? 'var(--color-primary-primary-500)' : 'transparent',
+      color: s.tab === t ? 'var(--color-primary-primary-700)' : 'var(--theme-text-secondary)',
+    }));
+
+    return {
+      themeLabel: s.theme === 'light' ? '🌙 Dark' : '☀️ Light',
+      toggleTheme: this.toggleTheme,
+      roles,
+      visibleMenu,
+      screenTitle: titles[s.screen],
+      userInitial: s.role === 'owner' ? 'O' : s.role === 'dokter' ? 'D' : 'K',
+      isDashboard: s.screen === 'dashboard',
+      isPatientList: s.screen === 'patient-list',
+      isPatientDetail: s.screen === 'patient-detail',
+      isQueue: s.screen === 'queue',
+      kpis: [
+        { label: 'Rata-rata Waktu Tunggu', value: '12 mnt', delta: '↓ 3 mnt vs target 15 mnt', deltaColor: pair('success-success').fg },
+        { label: 'Rata-rata Waktu Registrasi', value: '4.2 mnt', delta: '↓ target < 5 mnt', deltaColor: pair('success-success').fg },
+        { label: 'Akurasi Invoice', value: '100%', delta: 'Sesuai target', deltaColor: pair('success-success').fg },
+        { label: 'Item Stok Menipis', value: '5 item', delta: '↑ perlu PO baru', deltaColor: pair('warning-warning').fg },
+      ],
+      activity: [
+        { text: 'Invoice INV-2026-1042 dibayar lunas — Siti Rahayu', time: '2 mnt lalu' },
+        { text: 'Reservasi baru dibuat — Budi Santoso, drg. Amelia', time: '9 mnt lalu' },
+        { text: 'Stok Anestesi Lidocaine diperbarui (opname)', time: '24 mnt lalu' },
+        { text: 'Tindakan scaling selesai — Rina Wulandari', time: '41 mnt lalu' },
+        { text: 'Payroll periode Juli disetujui', time: '1 jam lalu' },
+      ],
+      queueMini: [
+        { no: 'A-014', name: 'Budi Santoso', status: 'Waiting', bg: pair('warning-warning').bg, fg: pair('warning-warning').fg },
+        { no: 'A-013', name: 'Rina Wulandari', status: 'In Service', bg: pair('primary-primary').bg, fg: pair('primary-primary').fg },
+        { no: 'A-012', name: 'Ahmad Fauzi', status: 'Called', bg: pair('info-info').bg, fg: pair('info-info').fg },
+        { no: 'A-011', name: 'Dewi Lestari', status: 'Completed', bg: pair('success-success').bg, fg: pair('success-success').fg },
+      ],
+      patients: [
+        { mrn: 'RM-00842', name: 'Siti Rahayu', dob: '14/03/1992', phone: '0812-3456-7890', status: 'Aktif', statusBg: pair('success-success').bg, statusFg: pair('success-success').fg, onClick: () => { this.setScreen('patient-detail'); this.setTab('Profile'); } },
+        { mrn: 'RM-00841', name: 'Budi Santoso', dob: '02/11/1988', phone: '0813-1122-3344', status: 'Aktif', statusBg: pair('success-success').bg, statusFg: pair('success-success').fg, onClick: () => this.setScreen('patient-detail') },
+        { mrn: 'RM-00840', name: 'Rina Wulandari', dob: '27/07/1995', phone: '0857-9988-1122', status: 'Aktif', statusBg: pair('success-success').bg, statusFg: pair('success-success').fg, onClick: () => this.setScreen('patient-detail') },
+        { mrn: 'RM-00839', name: 'Ahmad Fauzi', dob: '19/01/1980', phone: '0821-4455-6677', status: 'Aktif', statusBg: pair('success-success').bg, statusFg: pair('success-success').fg, onClick: () => this.setScreen('patient-detail') },
+        { mrn: 'RM-00838', name: 'Dewi Lestari', dob: '05/05/2001', phone: '0899-2233-4455', status: 'Arsip', statusBg: 'var(--theme-action-hover)', statusFg: 'var(--theme-text-secondary)', onClick: () => this.setScreen('patient-detail') },
+      ],
+      patientTabs,
+      profileFields: [
+        { label: 'Nama Lengkap', value: 'Siti Rahayu' },
+        { label: 'Jenis Kelamin', value: 'Perempuan' },
+        { label: 'Tanggal Lahir', value: '14 Maret 1992' },
+        { label: 'No. Telepon Utama', value: '0812-3456-7890' },
+        { label: 'No. Identitas (KTP)', value: '3271xxxxxxxxxxx' },
+        { label: 'Cabang Terdaftar', value: 'Parakita Medika — Cabang Kemang' },
+      ],
+      queueColumns: [
+        { label: 'Waiting', accent: 'var(--color-warning-warning-500)', count: 3, tickets: [
+          { no: 'A-014', time: '09:40', name: 'Budi Santoso', doctor: 'drg. Amelia Putri' },
+          { no: 'A-015', time: '09:52', name: 'Yusuf Hakim', doctor: 'drg. Bayu Aji' },
+          { no: 'A-016', time: '10:01', name: 'Nabila Putri', doctor: 'drg. Amelia Putri' },
+        ]},
+        { label: 'Called', accent: 'var(--color-info-info-500)', count: 1, tickets: [
+          { no: 'A-012', time: '09:35', name: 'Ahmad Fauzi', doctor: 'drg. Bayu Aji' },
+        ]},
+        { label: 'In Service', accent: 'var(--color-primary-primary-500)', count: 1, tickets: [
+          { no: 'A-013', time: '09:20', name: 'Rina Wulandari', doctor: 'drg. Amelia Putri' },
+        ]},
+        { label: 'Completed', accent: 'var(--color-success-success-500)', count: 2, tickets: [
+          { no: 'A-011', time: '08:50', name: 'Dewi Lestari', doctor: 'drg. Bayu Aji' },
+          { no: 'A-010', time: '08:30', name: 'Siti Rahayu', doctor: 'drg. Amelia Putri' },
+        ]},
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

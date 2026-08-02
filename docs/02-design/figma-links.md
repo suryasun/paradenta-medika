@@ -1,15 +1,18 @@
 # Figma Links
 
-## Missing Documentation
+## Resolved
 
-No Figma files, frames, or links are referenced anywhere in `docs/03-sad/` or `docs/04-ai-contract/` (verified by full-text search for "Figma", "figma.com", and "mockup" across all source documents — no matches). This is expected: the Software Architecture Document set is a backend/architecture blueprint and does not include visual design artifacts.
+No screen-level Figma frames exist yet for Parakita Medika's own product screens — the only Figma asset attached to this project is the **source UI kit**, `materialize-figma-admin-dashboard-uikit-v4` (Materialize Admin Dashboard), used as the component/token foundation (see `design-system.md`).
 
-Per project policy, this table is left empty rather than populated with placeholder or invented links.
-
-| Screen/Module | Figma Link |
-|---|---|
-| | |
+| Screen/Module | Reference | Status |
+|---|---|---|
+| Design tokens & component gallery | `Parakita - Design System.dc.html` (this project) | Built — light/dark, full token set |
+| Dashboard | `Parakita - Key Screens.dc.html` (this project) | Built — Owner/Dokter/Kasir role variants |
+| Patient List / Patient Detail | `Parakita - Key Screens.dc.html` (this project) | Built — Profile tab only; remaining 9 detail tabs are structural placeholders (see `pages/patient.md` §12.2) |
+| Queue Board | `Parakita - Key Screens.dc.html` (this project) | Built |
+| Reservation, EMR, Billing, Finance, Warehouse, HR, Reporting, System Admin | — | Not yet designed — page inventories proposed in `pages/*.md`, no visual mockup yet |
+| Source UI kit (Materialize) | Figma file `materialize-figma-admin-dashboard-uikit-v4` (attached to this project) | Reference only — do not build from directly; use the materialized `components/Components.bundle.js` |
 
 ## Recommended Action
 
-Once a UI/UX designer produces Figma frames for each module listed in `docs/01-prd/features/overview.md`, this table should be populated with one row per screen/module, and `docs/02-design/pages/overview.md` should be updated to reference the corresponding frame per page.
+As each remaining module gets a design pass, add its screen(s) here and to `pages/overview.md`. When real Figma frames are created for Parakita Medika itself (distinct from the source UI kit), link them per-screen in this table.
