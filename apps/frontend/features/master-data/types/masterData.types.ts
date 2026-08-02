@@ -22,3 +22,11 @@ export interface Treatment {
   doctorFee: number | null;
   isActive: boolean;
 }
+
+export interface PaymentMethod {
+  id: string;
+  methodCode: string;
+  methodName: string;
+  isCash: boolean;
+  isActive: boolean;
+}
