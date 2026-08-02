@@ -14,6 +14,7 @@ import { DoctorRepository } from '../../infrastructure/repositories/DoctorReposi
 import { TreatmentCategoryRepository } from '../../infrastructure/repositories/TreatmentCategoryRepository';
 import { TreatmentRepository } from '../../infrastructure/repositories/TreatmentRepository';
 import { PaymentMethodRepository } from '../../infrastructure/repositories/PaymentMethodRepository';
+import { ToothConditionRepository } from '../../infrastructure/repositories/ToothConditionRepository';
 
 import { CreateClinicRequestDto, UpdateClinicRequestDto } from '../../application/dtos/ClinicRequestDto';
 import { CreateBranchRequestDto, UpdateBranchRequestDto } from '../../application/dtos/BranchRequestDto';
@@ -21,6 +22,7 @@ import { CreateDoctorRequestDto, UpdateDoctorRequestDto } from '../../applicatio
 import { CreateTreatmentCategoryRequestDto, UpdateTreatmentCategoryRequestDto } from '../../application/dtos/TreatmentCategoryRequestDto';
 import { CreateTreatmentRequestDto, UpdateTreatmentRequestDto } from '../../application/dtos/TreatmentRequestDto';
 import { CreatePaymentMethodRequestDto, UpdatePaymentMethodRequestDto } from '../../application/dtos/PaymentMethodRequestDto';
+import { CreateToothConditionRequestDto, UpdateToothConditionRequestDto } from '../../application/dtos/ToothConditionRequestDto';
 
 /**
  * docs/06-tasks/task-021.md..task-026.md composition root. Endpoint paths
@@ -187,6 +189,36 @@ export function buildMasterDataModule(
     requirePermission('masterdata.payment-method.manage'),
     validateBody(UpdatePaymentMethodRequestDto),
     paymentMethodController.update,
+  );
+
+  // --- Tooth Condition (task-067) ---
+  const toothConditionRepository = new ToothConditionRepository();
+  const toothConditionUseCases = buildCrudUseCases('ToothCondition', toothConditionRepository, auditService, {
+    validateCreate: async (input) => {
+      if (await toothConditionRepository.findByCode(input.conditionCode)) {
+        throw new MasterDataCodeExistsException('ToothCondition');
+      }
+    },
+  });
+  const toothConditionController = buildCrudController(toothConditionUseCases, 'ToothCondition');
+  router.get(
+    '/tooth-conditions',
+    requirePermission('masterdata.tooth-condition.read'),
+    validateQuery(ListQueryDto),
+    toothConditionController.list,
+  );
+  router.post(
+    '/tooth-conditions',
+    requirePermission('masterdata.tooth-condition.manage'),
+    validateBody(CreateToothConditionRequestDto),
+    toothConditionController.create,
+  );
+  router.get('/tooth-conditions/:id', requirePermission('masterdata.tooth-condition.read'), toothConditionController.detail);
+  router.put(
+    '/tooth-conditions/:id',
+    requirePermission('masterdata.tooth-condition.manage'),
+    validateBody(UpdateToothConditionRequestDto),
+    toothConditionController.update,
   );
 
   return router;

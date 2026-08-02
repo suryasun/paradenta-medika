@@ -11,4 +11,6 @@ export interface AppConfig {
   smtpHost: string;
   bcryptSaltRounds: number;
   frontendOrigin: string;
+  /** docs/06-tasks/task-078.md: local-filesystem stand-in for the not-yet-provisioned S3/MinIO instance. */
+  storageRoot: string;
 }

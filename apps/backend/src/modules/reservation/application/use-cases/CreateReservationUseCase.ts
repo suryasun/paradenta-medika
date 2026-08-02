@@ -21,6 +21,8 @@ export interface CreateReservationInput {
   source: 'WALK_IN' | 'PHONE' | 'WHATSAPP' | 'WEBSITE' | 'MOBILE_APP';
   complaint?: string;
   notes?: string;
+  /** docs/06-tasks/task-064.md: set when converting a Treatment Plan item to a Reservation. */
+  treatmentPlanItemId?: string;
   actorUserId: string;
   ipAddress?: string;
   correlationId?: string;
@@ -82,6 +84,7 @@ export class CreateReservationUseCase {
       source: input.source,
       complaint: input.complaint,
       notes: input.notes,
+      treatmentPlanItemId: input.treatmentPlanItemId,
       createdBy: input.actorUserId,
     });
 

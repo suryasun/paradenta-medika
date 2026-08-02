@@ -19,6 +19,8 @@ import { UpdateReservationUseCase } from '../../application/use-cases/UpdateRese
 import { RescheduleReservationUseCase } from '../../application/use-cases/RescheduleReservationUseCase';
 import { CancelReservationUseCase } from '../../application/use-cases/CancelReservationUseCase';
 import { CheckInPatientUseCase } from '../../application/use-cases/CheckInPatientUseCase';
+import { ReservationAnalyticsUseCase } from '../../application/use-cases/ReservationAnalyticsUseCase';
+import { ReservationAnalyticsQueryDto } from '../../application/dtos/ReservationAnalyticsQueryDto';
 import { GetDoctorAvailabilityUseCase } from '../../application/use-cases/GetDoctorAvailabilityUseCase';
 import { GetDoctorTimeSlotsUseCase } from '../../application/use-cases/GetDoctorTimeSlotsUseCase';
 import { ReservationRepository } from '../../infrastructure/repositories/ReservationRepository';
@@ -75,6 +77,7 @@ export function buildReservationModule(
     new RescheduleReservationUseCase(reservationRepository, timelineRepository, scheduleValidator, auditService, eventBus),
     new CancelReservationUseCase(reservationRepository, timelineRepository, auditService, eventBus),
     new CheckInPatientUseCase(reservationRepository, timelineRepository, auditService, eventBus),
+    new ReservationAnalyticsUseCase(reservationRepository),
   );
 
   const availabilityController = new DoctorAvailabilityController(
@@ -91,6 +94,14 @@ export function buildReservationModule(
     requirePermission('reservation.create'),
     validateBody(CreatePatientReservationRequestDto),
     reservationController.create,
+  );
+  // docs/06-tasks/task-060.md: registered before /reservations/:id so
+  // Express doesn't match "analytics" as the :id param.
+  router.get(
+    '/reservations/analytics',
+    requirePermission('reservation.analytics.read'),
+    validateQuery(ReservationAnalyticsQueryDto),
+    reservationController.analytics,
   );
   router.get('/reservations/:id', requirePermission('reservation.read'), reservationController.detail);
   router.put(

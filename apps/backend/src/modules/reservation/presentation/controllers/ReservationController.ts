@@ -7,6 +7,7 @@ import { UpdateReservationRequestDto } from '../../application/dtos/UpdateReserv
 import { RescheduleReservationRequestDto } from '../../application/dtos/RescheduleReservationRequestDto';
 import { CancelReservationRequestDto } from '../../application/dtos/CancelReservationRequestDto';
 import { ListReservationQueryDto } from '../../application/dtos/ListReservationQueryDto';
+import { ReservationAnalyticsQueryDto } from '../../application/dtos/ReservationAnalyticsQueryDto';
 import { CreateReservationUseCase } from '../../application/use-cases/CreateReservationUseCase';
 import { WalkInRegistrationUseCase } from '../../application/use-cases/WalkInRegistrationUseCase';
 import { ListReservationsUseCase } from '../../application/use-cases/ListReservationsUseCase';
@@ -15,6 +16,7 @@ import { UpdateReservationUseCase } from '../../application/use-cases/UpdateRese
 import { RescheduleReservationUseCase } from '../../application/use-cases/RescheduleReservationUseCase';
 import { CancelReservationUseCase } from '../../application/use-cases/CancelReservationUseCase';
 import { CheckInPatientUseCase } from '../../application/use-cases/CheckInPatientUseCase';
+import { ReservationAnalyticsUseCase } from '../../application/use-cases/ReservationAnalyticsUseCase';
 
 export class ReservationController {
   constructor(
@@ -26,6 +28,7 @@ export class ReservationController {
     private readonly rescheduleReservationUseCase: RescheduleReservationUseCase,
     private readonly cancelReservationUseCase: CancelReservationUseCase,
     private readonly checkInPatientUseCase: CheckInPatientUseCase,
+    private readonly reservationAnalyticsUseCase: ReservationAnalyticsUseCase,
   ) {}
 
   /**
@@ -158,6 +161,16 @@ export class ReservationController {
         correlationId: req.correlationId,
       });
       sendSuccess(res, reservation, 'Patient checked in');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  analytics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = req.query as unknown as ReservationAnalyticsQueryDto;
+      const analytics = await this.reservationAnalyticsUseCase.execute(query);
+      sendSuccess(res, analytics, 'Reservation analytics retrieved');
     } catch (error) {
       next(error);
     }

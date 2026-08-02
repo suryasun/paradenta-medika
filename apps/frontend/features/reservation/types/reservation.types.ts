@@ -46,6 +46,45 @@ export interface UpdateReservationInput {
   notes?: string;
 }
 
+// Mirrors apps/backend's ReservationAnalyticsResponseDto (docs/06-tasks/task-060.md).
+export interface DateCountPoint {
+  date: string;
+  count: number;
+}
+
+export interface HourCountPoint {
+  hour: number;
+  count: number;
+}
+
+export interface DoctorUtilizationEntry {
+  doctorId: string;
+  count: number;
+}
+
+export interface ReservationAnalytics {
+  dateRange: { from: string; to: string };
+  reservationTrend: DateCountPoint[];
+  peakHourAnalysis: HourCountPoint[];
+  doctorUtilization: DoctorUtilizationEntry[];
+  appointmentConversion: { totalCount: number; completedCount: number; conversionRate: number };
+  walkinRatio: { walkinCount: number; totalCount: number; ratio: number };
+  cancellationTrend: DateCountPoint[];
+  noShowTrend: DateCountPoint[];
+  kpi: {
+    totalReservations: number;
+    dailyReservations: number;
+    weeklyReservations: number;
+    monthlyReservations: number;
+  };
+}
+
+export interface ReservationAnalyticsParams {
+  dateFrom?: string;
+  dateTo?: string;
+  branchId?: string;
+}
+
 export interface ListReservationsParams {
   page?: number;
   limit?: number;

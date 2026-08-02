@@ -32,9 +32,38 @@ const PERMISSION_KEYS = [
   'billing.invoice.create',
   'billing.invoice.read',
   'billing.payment.create',
+  'emr.allergy.record',
+  'emr.attachment.annotate',
+  'emr.attachment.archive',
+  'emr.attachment.read',
+  'emr.attachment.restore',
+  'emr.attachment.upload',
+  'emr.certificate.issue',
+  'emr.certificate.read',
+  'emr.consent-template.manage',
+  'emr.consent-template.read',
+  'emr.consent.create',
+  'emr.consent.read',
+  'emr.consent.sign',
   'emr.diagnosis.record',
+  'emr.followup.create',
+  'emr.medical-history.record',
+  'emr.odontogram.read',
+  'emr.odontogram.record',
+  'emr.periodontal.create',
+  'emr.periodontal.lock',
+  'emr.periodontal.measurement.delete',
+  'emr.periodontal.measurement.record',
+  'emr.periodontal.measurement.update',
+  'emr.periodontal.read',
+  'emr.prescription.create',
+  'emr.prescription.read',
+  'emr.referral.create',
   'emr.soap.record',
+  'emr.timeline.read',
   'emr.treatment.record',
+  'emr.treatment-plan.create',
+  'emr.treatment-plan.read',
   'emr.visit.close',
   'emr.visit.create',
   'emr.visit.read',
@@ -51,6 +80,8 @@ const PERMISSION_KEYS = [
   'masterdata.treatment.read',
   'masterdata.treatment-category.manage',
   'masterdata.treatment-category.read',
+  'masterdata.tooth-condition.manage',
+  'masterdata.tooth-condition.read',
   'patient.archive',
   'patient.create',
   'patient.read',
@@ -66,6 +97,7 @@ const PERMISSION_KEYS = [
   'queue.start',
   'queue.transfer',
   'report.dashboard.operations.read',
+  'reservation.analytics.read',
   'reservation.cancel',
   'reservation.check-in',
   'reservation.create',
@@ -106,7 +138,37 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'emr.soap.record',
     'emr.diagnosis.record',
     'emr.treatment.record',
+    'emr.medical-history.record',
+    'emr.allergy.record',
+    'emr.odontogram.record',
+    'emr.odontogram.read',
+    'emr.treatment-plan.create',
+    'emr.treatment-plan.read',
+    'emr.periodontal.create',
+    'emr.periodontal.lock',
+    'emr.periodontal.measurement.delete',
+    'emr.periodontal.measurement.record',
+    'emr.periodontal.measurement.update',
+    'emr.periodontal.read',
+    'emr.referral.create',
+    'emr.followup.create',
+    'emr.attachment.upload',
+    'emr.attachment.read',
+    'emr.attachment.annotate',
+    'emr.attachment.archive',
+    'emr.attachment.restore',
+    'emr.prescription.create',
+    'emr.prescription.read',
+    'emr.consent-template.read',
+    'emr.consent.create',
+    'emr.consent.sign',
+    'emr.consent.read',
+    'emr.certificate.issue',
+    'emr.certificate.read',
+    'emr.timeline.read',
+    'reservation.create',
     'masterdata.treatment.read',
+    'masterdata.tooth-condition.read',
   ],
   REGISTRATION: [
     'patient.create',
@@ -376,6 +438,84 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     await prisma.paymentMethod.upsert({ where: { methodCode: method.methodCode }, update: {}, create: method });
   }
 
+  // docs/03-sad/15-module-emr.md Part 3.1C Section 21.3 "Standard Tooth
+  // Conditions" list, verbatim. Category assignment follows Section 21.2's
+  // 8 categories; colorCode follows Section 27's literal color table where
+  // given -- entries not named in Section 27 use a neutral "Slate" default
+  // (a seed-script judgment call, not a documented requirement).
+  const toothConditions: Array<{
+    conditionCode: string;
+    conditionName: string;
+    category:
+      | 'HEALTHY'
+      | 'DISEASE'
+      | 'RESTORATION'
+      | 'PROSTHODONTIC'
+      | 'ENDODONTIC'
+      | 'SURGICAL'
+      | 'ORTHODONTIC'
+      | 'IMPLANTOLOGY';
+    colorCode: string;
+  }> = [
+    { conditionCode: 'HEALTHY', conditionName: 'Healthy', category: 'HEALTHY', colorCode: 'Green' },
+    { conditionCode: 'INITIAL_CARIES', conditionName: 'Initial Caries', category: 'DISEASE', colorCode: 'Red' },
+    { conditionCode: 'DEEP_CARIES', conditionName: 'Deep Caries', category: 'DISEASE', colorCode: 'Red' },
+    { conditionCode: 'PULPITIS', conditionName: 'Pulpitis', category: 'DISEASE', colorCode: 'Slate' },
+    { conditionCode: 'NECROTIC_PULP', conditionName: 'Necrotic Pulp', category: 'DISEASE', colorCode: 'Slate' },
+    { conditionCode: 'ROOT_RESIDUE', conditionName: 'Root Residue', category: 'DISEASE', colorCode: 'Slate' },
+    { conditionCode: 'MISSING_TOOTH', conditionName: 'Missing Tooth', category: 'DISEASE', colorCode: 'Gray' },
+    { conditionCode: 'FRACTURE', conditionName: 'Fracture', category: 'DISEASE', colorCode: 'Orange' },
+    { conditionCode: 'CRACK_TOOTH', conditionName: 'Crack Tooth', category: 'DISEASE', colorCode: 'Orange' },
+    { conditionCode: 'ABRASION', conditionName: 'Abrasion', category: 'DISEASE', colorCode: 'Slate' },
+    { conditionCode: 'ATTRITION', conditionName: 'Attrition', category: 'DISEASE', colorCode: 'Slate' },
+    { conditionCode: 'EROSION', conditionName: 'Erosion', category: 'DISEASE', colorCode: 'Slate' },
+    { conditionCode: 'COMPOSITE_FILLING', conditionName: 'Composite Filling', category: 'RESTORATION', colorCode: 'Blue' },
+    { conditionCode: 'GLASS_IONOMER_CEMENT', conditionName: 'Glass Ionomer Cement', category: 'RESTORATION', colorCode: 'Blue' },
+    { conditionCode: 'AMALGAM_FILLING', conditionName: 'Amalgam Filling', category: 'RESTORATION', colorCode: 'Blue' },
+    { conditionCode: 'TEMPORARY_FILLING', conditionName: 'Temporary Filling', category: 'RESTORATION', colorCode: 'Yellow' },
+    { conditionCode: 'ROOT_CANAL_TREATMENT', conditionName: 'Root Canal Treatment', category: 'ENDODONTIC', colorCode: 'Purple' },
+    { conditionCode: 'CROWN', conditionName: 'Crown', category: 'PROSTHODONTIC', colorCode: 'Gold' },
+    { conditionCode: 'BRIDGE', conditionName: 'Bridge', category: 'PROSTHODONTIC', colorCode: 'Gold' },
+    { conditionCode: 'IMPLANT', conditionName: 'Implant', category: 'IMPLANTOLOGY', colorCode: 'Silver' },
+    { conditionCode: 'EXTRACTION', conditionName: 'Extraction', category: 'SURGICAL', colorCode: 'Gray' },
+    { conditionCode: 'MOBILITY', conditionName: 'Mobility', category: 'DISEASE', colorCode: 'Brown' },
+    { conditionCode: 'IMPACTED_TOOTH', conditionName: 'Impacted Tooth', category: 'SURGICAL', colorCode: 'Slate' },
+    { conditionCode: 'UNERUPTED_TOOTH', conditionName: 'Unerupted Tooth', category: 'DISEASE', colorCode: 'Slate' },
+    { conditionCode: 'SEALANT', conditionName: 'Sealant', category: 'RESTORATION', colorCode: 'Blue' },
+    { conditionCode: 'PERIAPICAL_LESION', conditionName: 'Periapical Lesion', category: 'DISEASE', colorCode: 'Red' },
+  ];
+  for (const condition of toothConditions) {
+    await prisma.toothCondition.upsert({ where: { conditionCode: condition.conditionCode }, update: {}, create: condition });
+  }
+
+  // docs/03-sad/15-module-emr.md Part 3.3D Section 39 "Consent Categories"
+  // -- one representative template per task-085's literal 3-category list.
+  // ConsentTemplate has no natural unique code, so `title` is used as the
+  // idempotency key for this dev seed only (not a DB constraint).
+  const consentTemplates: Array<{ category: 'GENERAL' | 'CLINICAL' | 'SURGICAL'; title: string; body: string }> = [
+    {
+      category: 'GENERAL',
+      title: 'Registration & Privacy Consent',
+      body: 'I consent to registration at Parakita Medika and to the collection and processing of my personal data per the clinic privacy policy.',
+    },
+    {
+      category: 'CLINICAL',
+      title: 'Dental Treatment Consent',
+      body: 'I have been informed of the proposed dental treatment, its risks, benefits, and alternatives, and I consent to proceed.',
+    },
+    {
+      category: 'SURGICAL',
+      title: 'Tooth Extraction / Surgical Consent',
+      body: 'I have been informed of the risks of the surgical procedure (including anesthesia) and consent to proceed.',
+    },
+  ];
+  for (const template of consentTemplates) {
+    const existing = await prisma.consentTemplate.findFirst({ where: { title: template.title } });
+    if (!existing) {
+      await prisma.consentTemplate.create({ data: template });
+    }
+  }
+
   return {
     clinics: 1,
     branches: 2,
@@ -383,6 +523,8 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     treatmentCategories: categories.length,
     treatments: treatments.length,
     paymentMethods: paymentMethods.length,
+    toothConditions: toothConditions.length,
+    consentTemplates: consentTemplates.length,
   };
 }
 
@@ -510,7 +652,7 @@ async function main() {
   console.log(`Seeded ${permissionCount} permissions and roles: ${['ADMINISTRATOR', ...Object.keys(ROLE_PERMISSIONS)].join(', ')}`);
   // eslint-disable-next-line no-console
   console.log(
-    `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods.`,
+    `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods, ${masterDataCounts.toothConditions} tooth conditions, ${masterDataCounts.consentTemplates} consent templates.`,
   );
   // eslint-disable-next-line no-console
   console.log(`Seeded ${patientCount} patients (5 active, 1 archived).`);

@@ -9,6 +9,9 @@ out/
 *.log
 coverage/
 .DS_Store
+
+# docs/06-tasks/task-078.md: local-filesystem object storage stand-in
+apps/backend/storage/
 *.tsbuildinfo
 .vscode/
 .idea/

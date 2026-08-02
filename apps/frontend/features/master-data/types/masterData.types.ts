@@ -30,3 +30,34 @@ export interface PaymentMethod {
   isCash: boolean;
   isActive: boolean;
 }
+
+// Mirrors apps/backend's ToothCondition (docs/06-tasks/task-067.md).
+export type ToothConditionCategory =
+  | "HEALTHY"
+  | "DISEASE"
+  | "RESTORATION"
+  | "PROSTHODONTIC"
+  | "ENDODONTIC"
+  | "SURGICAL"
+  | "ORTHODONTIC"
+  | "IMPLANTOLOGY";
+
+export interface ToothCondition {
+  id: string;
+  conditionCode: string;
+  conditionName: string;
+  category: ToothConditionCategory;
+  colorCode: string | null;
+  isActive: boolean;
+}
+
+// Mirrors apps/backend's ConsentTemplate (docs/06-tasks/task-085.md).
+export type ConsentCategory = "GENERAL" | "CLINICAL" | "SURGICAL";
+
+export interface ConsentTemplate {
+  id: string;
+  category: ConsentCategory;
+  title: string;
+  body: string;
+  isActive: boolean;
+}

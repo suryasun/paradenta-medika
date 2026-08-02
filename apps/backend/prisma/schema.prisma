@@ -257,11 +257,46 @@ model Treatment {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  treatmentCategory TreatmentCategory @relation(fields: [treatmentCategoryId], references: [id])
-  visitTreatments   VisitTreatment[]
+  treatmentCategory  TreatmentCategory   @relation(fields: [treatmentCategoryId], references: [id])
+  visitTreatments    VisitTreatment[]
+  treatmentPlanItems TreatmentPlanItem[]
 
   @@index([treatmentCategoryId])
   @@map("treatments")
+}
+
+// docs/03-sad/11-module-master-data.md Section 8.1 ("Tooth Condition |
+// Referensi Kondisi Gigi") + docs/03-sad/15-module-emr.md Part 3.1C Section
+// 21.2 "Condition Category" -- literal list.
+enum ToothConditionCategory {
+  HEALTHY
+  DISEASE
+  RESTORATION
+  PROSTHODONTIC
+  ENDODONTIC
+  SURGICAL
+  ORTHODONTIC
+  IMPLANTOLOGY
+}
+
+model ToothCondition {
+  id            String                 @id @default(uuid()) @db.Char(36)
+  conditionCode String                 @unique @map("condition_code") @db.VarChar(30)
+  conditionName String                 @map("condition_name") @db.VarChar(100)
+  category      ToothConditionCategory
+  colorCode     String?                @map("color_code") @db.VarChar(20)
+  isActive      Boolean                @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  odontogramEntries OdontogramEntry[]
+
+  @@map("tooth_conditions")
 }
 
 model PaymentMethod {
@@ -312,12 +347,16 @@ model Doctor {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  user         User             @relation(fields: [userId], references: [id])
-  branch       Branch           @relation(fields: [branchId], references: [id])
-  reservations Reservation[]
-  queues       Queue[]
-  visits       Visit[]
-  schedules    DoctorSchedule[]
+  user                   User                    @relation(fields: [userId], references: [id])
+  branch                 Branch                  @relation(fields: [branchId], references: [id])
+  reservations           Reservation[]
+  queues                 Queue[]
+  visits                 Visit[]
+  schedules              DoctorSchedule[]
+  periodontalAssessments PeriodontalAssessment[]
+  prescriptions          Prescription[]
+  consents               Consent[]
+  medicalCertificates    MedicalCertificate[]
 
   @@index([branchId])
   @@map("doctors")
@@ -370,10 +409,21 @@ model Patient {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  reservations Reservation[]
-  visits       Visit[]
-  invoices     Invoice[]
-  queues       Queue[]
+  reservations    Reservation[]
+  visits          Visit[]
+  invoices        Invoice[]
+  queues          Queue[]
+  medicalHistories MedicalHistory[]
+  allergies       Allergy[]
+  odontogramEntries OdontogramEntry[]
+  treatmentPlanItems TreatmentPlanItem[]
+  periodontalAssessments PeriodontalAssessment[]
+  referrals       Referral[]
+  followUps       FollowUp[]
+  attachments     Attachment[]
+  prescriptions   Prescription[]
+  consents        Consent[]
+  medicalCertificates MedicalCertificate[]
 
   @@unique([identityType, identityNumber])
   @@index([patientName])
@@ -441,13 +491,20 @@ model Reservation {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  patient   Patient               @relation(fields: [patientId], references: [id])
-  doctor    Doctor                @relation(fields: [doctorId], references: [id])
-  branch    Branch                @relation(fields: [branchId], references: [id])
-  schedule  DoctorSchedule?       @relation(fields: [scheduleId], references: [id])
-  queue     Queue?
-  visits    Visit[]
-  timelines ReservationTimeline[]
+  // docs/06-tasks/task-064.md: "may link back to treatment_plan_items via a
+  // new FK column" -- nullable since most Reservations don't originate from
+  // a Treatment Plan.
+  treatmentPlanItemId String? @map("treatment_plan_item_id") @db.Char(36)
+
+  patient          Patient               @relation(fields: [patientId], references: [id])
+  doctor            Doctor                @relation(fields: [doctorId], references: [id])
+  branch            Branch                @relation(fields: [branchId], references: [id])
+  schedule          DoctorSchedule?       @relation(fields: [scheduleId], references: [id])
+  treatmentPlanItem TreatmentPlanItem?    @relation(fields: [treatmentPlanItemId], references: [id])
+  queue             Queue?
+  visits            Visit[]
+  timelines         ReservationTimeline[]
+  followUps         FollowUp[]
 
   @@index([patientId])
   @@index([doctorId])
@@ -673,6 +730,17 @@ model Visit {
   soapNote        SoapNote?
   diagnoses       VisitDiagnosis[]
   treatmentEntries VisitTreatment[]
+  medicalHistories MedicalHistory[]
+  allergies       Allergy[]
+  odontogramEntries OdontogramEntry[]
+  treatmentPlanItems TreatmentPlanItem[]
+  periodontalAssessments PeriodontalAssessment[]
+  referrals       Referral[]
+  followUps       FollowUp[]
+  attachments     Attachment[]
+  prescriptions   Prescription[]
+  consents        Consent[]
+  medicalCertificates MedicalCertificate[]
 
   @@index([patientId])
   @@index([doctorId])
@@ -769,6 +837,619 @@ model VisitTreatment {
 
   @@index([visitId])
   @@map("visit_treatments")
+}
+
+// ---------------------------------------------------------------------------
+// Medical History & Allergy (docs/06-tasks/task-061.md, task-062.md,
+// docs/03-sad/15-module-emr.md Sections 18-19)
+//
+// Both are Patient-scoped (not Visit-scoped) per task-061's explicit
+// guidance, with an optional Visit reference for the encounter the entry
+// was recorded during. Medical History is append-only/versioned per the
+// "Sistem menyimpan histori perubahan" business rule (SAD Section 18) --
+// modeled as immutable rows per category rather than in-place updates, so
+// `isActive` marks the current row per (patientId, category) instead of a
+// mutable edit. Allergy is a normal auditable record (no versioning
+// requirement documented for it).
+// ---------------------------------------------------------------------------
+
+// docs/03-sad/15-module-emr.md Section 18 "Categories" -- literal list.
+enum MedicalHistoryCategory {
+  SYSTEMIC_DISEASE
+  HEART_DISEASE
+  DIABETES
+  HYPERTENSION
+  HEPATITIS
+  HIV
+  BLEEDING_DISORDER
+  SURGERY_HISTORY
+  PREGNANCY
+  HOSPITALIZATION_HISTORY
+}
+
+// docs/03-sad/15-module-emr.md Section 19 "Allergy Types" -- literal list.
+enum AllergyType {
+  DRUG
+  FOOD
+  LATEX
+  MATERIAL
+  LOCAL_ANESTHETIC
+  OTHER
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+model MedicalHistory {
+  id          String                 @id @default(uuid()) @db.Char(36)
+  patientId   String                 @map("patient_id") @db.Char(36)
+  visitId     String?                @map("visit_id") @db.Char(36)
+  category    MedicalHistoryCategory
+  description String                 @db.Text
+  isActive    Boolean                @default(true) @map("is_active")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  createdBy   String?                @map("created_by") @db.Char(36)
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  visit   Visit?  @relation(fields: [visitId], references: [id])
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("medical_histories")
+}
+
+model Allergy {
+  id           String          @id @default(uuid()) @db.Char(36)
+  patientId    String          @map("patient_id") @db.Char(36)
+  visitId      String?         @map("visit_id") @db.Char(36)
+  type         AllergyType
+  allergen     String          @db.VarChar(150)
+  severity     AllergySeverity
+  reaction     String?         @db.Text
+  notes        String?         @db.Text
+  createdAt    DateTime        @default(now()) @map("created_at")
+  createdBy    String?         @map("created_by") @db.Char(36)
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  visit   Visit?  @relation(fields: [visitId], references: [id])
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("allergies")
+}
+
+// ---------------------------------------------------------------------------
+// Interactive Odontogram (docs/06-tasks/task-068.md..task-070.md,
+// docs/03-sad/15-module-emr.md Part 3.1B/3.1C).
+//
+// toothNumber uses FDI notation (Part 3.1B Section 11-14): permanent teeth
+// 11-18/21-28/31-38/41-48, primary teeth 51-55/61-65/71-75/81-85 (mixed
+// dentition supported per Section 14's explicit business rule) -- validated
+// against the literal FDI set in application code rather than a DB CHECK
+// constraint (no Prisma/MySQL portable way to express it here).
+// surface stores a Surface Combination code per Section 18 (e.g. "O", "MO",
+// "MOD"), nullable for conditions that are not surface-specific (Crown,
+// Missing Tooth, Extraction -- Section 29 "Crown tidak membutuhkan
+// Surface"). Entries are append-only per Part 3.1C Section 24 "Tooth
+// Versioning" ("Odontogram tidak pernah diperbarui secara langsung"): no
+// isActive/update path exists, only new rows; task-069/070 derive "current
+// state" and "history" by querying this table rather than a stored flag.
+// ---------------------------------------------------------------------------
+
+model OdontogramEntry {
+  id               String   @id @default(uuid()) @db.Char(36)
+  visitId          String   @map("visit_id") @db.Char(36)
+  patientId        String   @map("patient_id") @db.Char(36)
+  toothNumber      Int      @map("tooth_number")
+  surface          String?  @db.VarChar(10)
+  toothConditionId String   @map("tooth_condition_id") @db.Char(36)
+  note             String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+  createdBy        String?  @map("created_by") @db.Char(36)
+
+  visit          Visit          @relation(fields: [visitId], references: [id])
+  patient        Patient        @relation(fields: [patientId], references: [id])
+  toothCondition ToothCondition @relation(fields: [toothConditionId], references: [id])
+
+  @@index([patientId, toothNumber])
+  @@index([visitId])
+  @@map("odontogram_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Treatment Planning (docs/06-tasks/task-063.md/task-064.md,
+// docs/03-sad/15-module-emr.md Section 22).
+//
+// Distinct from VisitTreatment (Phase 1 task-053, "performed now" entries
+// billed against the current Visit): a TreatmentPlanItem is a *planned*
+// future treatment ("Treatment dapat dilakukan pada Visit berikutnya"),
+// not yet performed or billed. Priority has no literal enum in the SAD --
+// LOW/MEDIUM/HIGH is a reasonable judgment call, documented here since
+// the task doesn't name one.
+// ---------------------------------------------------------------------------
+
+enum TreatmentPlanPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model TreatmentPlanItem {
+  id                     String                @id @default(uuid()) @db.Char(36)
+  visitId                String                @map("visit_id") @db.Char(36)
+  patientId              String                @map("patient_id") @db.Char(36)
+  treatmentId            String                @map("treatment_id") @db.Char(36)
+  toothNumber            Int?                  @map("tooth_number")
+  surface                String?               @db.VarChar(10)
+  priority               TreatmentPlanPriority @default(MEDIUM)
+  estimatedCost          Decimal               @map("estimated_cost") @db.Decimal(18, 2)
+  estimatedDurationMinute Int?                 @map("estimated_duration_minute")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  createdBy              String?               @map("created_by") @db.Char(36)
+
+  visit       Visit         @relation(fields: [visitId], references: [id])
+  patient     Patient       @relation(fields: [patientId], references: [id])
+  treatment   Treatment     @relation(fields: [treatmentId], references: [id])
+  reservations Reservation[]
+
+  @@index([visitId])
+  @@index([patientId])
+  @@map("treatment_plan_items")
+}
+
+// ---------------------------------------------------------------------------
+// Periodontal Assessment (docs/06-tasks/task-071.md..task-077.md,
+// docs/03-sad/15-module-emr.md Part 3.2A-3.2D).
+//
+// docs/03-sad Part 3.2C Section 24 "Aggregate Design" additionally names
+// ToothAssessment/ClinicalNote/Attachment/Version/History as separate
+// sub-entities of a fuller DDD aggregate -- not built here since no task in
+// this epic (071-077) lists them as a deliverable (ClinicalNote/Attachment
+// overlap with Epic Q's Clinical Attachment epic instead), per document
+// priority order (Task Specification outranks SAD). task-076's "history"
+// is satisfied by listing prior PeriodontalAssessment rows for the same
+// patient, the same pattern already used for Medical History/Odontogram,
+// rather than a separate versioned history table.
+//
+// status models the literal 6-state lifecycle from Section 38 for schema
+// fidelity, but only two transitions are exposed as use cases in this
+// epic: Create (implicit DRAFT) and Lock (-> LOCKED) -- no task defines
+// endpoints for the DRAFT->IN_PROGRESS->COMPLETED->REVIEWED steps.
+// Measurements are soft-deleted per Section 39's OpenAPI note ("operasi
+// DELETE disarankan sebagai Soft Delete").
+// ---------------------------------------------------------------------------
+
+enum PeriodontalAssessmentStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  REVIEWED
+  LOCKED
+  ARCHIVED
+}
+
+// docs/03-sad/15-module-emr.md Part 3.2B Section 11 "Standard Measurement Position".
+enum PeriodontalMeasurementPoint {
+  MB
+  B
+  DB
+  ML
+  L
+  DL
+}
+
+model PeriodontalAssessment {
+  id        String                      @id @default(uuid()) @db.Char(36)
+  visitId   String                      @map("visit_id") @db.Char(36)
+  patientId String                      @map("patient_id") @db.Char(36)
+  doctorId  String                      @map("doctor_id") @db.Char(36)
+  status    PeriodontalAssessmentStatus @default(DRAFT)
+  lockedAt  DateTime?                   @map("locked_at")
+  lockedBy  String?                     @map("locked_by") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  visit        Visit                    @relation(fields: [visitId], references: [id])
+  patient      Patient                  @relation(fields: [patientId], references: [id])
+  doctor       Doctor                   @relation(fields: [doctorId], references: [id])
+  measurements PeriodontalMeasurement[]
+
+  @@index([visitId])
+  @@index([patientId])
+  @@map("periodontal_assessments")
+}
+
+// docs/03-sad/15-module-emr.md Part 3.2B Sections 12-19: pocketDepth 0-15mm
+// (1 decimal), gingivalMargin can be negative up to +-10mm, cal is the
+// auto-computed pocketDepth+gingivalMargin (Section 14), plaqueIndex 0-3,
+// mobility Grade 0-3, furcation "0"/"I"/"II"/"III" (multiroot teeth only).
+model PeriodontalMeasurement {
+  id               String                      @id @default(uuid()) @db.Char(36)
+  assessmentId     String                      @map("assessment_id") @db.Char(36)
+  toothNumber      Int                         @map("tooth_number")
+  measurementPoint PeriodontalMeasurementPoint @map("measurement_point")
+  pocketDepth      Decimal                     @map("pocket_depth") @db.Decimal(4, 1)
+  gingivalMargin   Decimal                     @map("gingival_margin") @db.Decimal(4, 1)
+  cal              Decimal                     @db.Decimal(4, 1)
+  bleeding         Boolean                     @default(false)
+  plaqueIndex      Int?                        @map("plaque_index")
+  mobility         Int?
+  furcation        String?                     @db.VarChar(5)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  assessment PeriodontalAssessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@map("periodontal_measurements")
+}
+
+// ---------------------------------------------------------------------------
+// Referral & Follow Up (docs/06-tasks/task-089.md/task-090.md,
+// docs/03-sad/15-module-emr.md Section 26).
+//
+// FollowUp.priority reuses the TreatmentPlanPriority enum (LOW/MEDIUM/HIGH)
+// rather than declaring a duplicate enum with identical values -- Section
+// 26 names "Prioritas" as a Follow Up field but gives no literal grade
+// list, and Treatment Plan's is the only precedent already in this schema.
+// reservationId is set only when the Follow Up was auto-scheduled (task-090
+// "Follow Up dapat membuat Reservation otomatis"); the Reservation itself
+// is created by Phase 1's CreateReservationUseCase, not duplicated here.
+// ---------------------------------------------------------------------------
+
+enum ReferralTargetType {
+  SPECIALIST
+  HOSPITAL
+  LABORATORY
+  RADIOLOGY
+}
+
+model Referral {
+  id         String             @id @default(uuid()) @db.Char(36)
+  visitId    String             @map("visit_id") @db.Char(36)
+  patientId  String             @map("patient_id") @db.Char(36)
+  targetType ReferralTargetType @map("target_type")
+  reason     String             @db.Text
+  note       String?            @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  visit   Visit   @relation(fields: [visitId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([visitId])
+  @@index([patientId])
+  @@map("referrals")
+}
+
+model FollowUp {
+  id            String   @id @default(uuid()) @db.Char(36)
+  visitId       String   @map("visit_id") @db.Char(36)
+  patientId     String   @map("patient_id") @db.Char(36)
+  followUpDate  DateTime @map("follow_up_date") @db.Date
+  note          String?  @db.Text
+  priority      TreatmentPlanPriority @default(MEDIUM)
+  reservationId String?  @map("reservation_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  visit       Visit        @relation(fields: [visitId], references: [id])
+  patient     Patient      @relation(fields: [patientId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+
+  @@index([visitId])
+  @@index([patientId])
+  @@map("follow_ups")
+}
+
+// ---------------------------------------------------------------------------
+// Clinical Attachment (docs/06-tasks/task-078.md..task-084.md,
+// docs/03-sad/15-module-emr.md Part 3.3A + Section 60 OpenAPI Specification,
+// docs/03-sad/02-system-architecture.md Section 27 File Storage
+// Architecture).
+//
+// category uses task-078's own literal 7-value Backend Scope list
+// (Clinical Photography/X-Ray/CBCT/Consent/PDF/Video/Other) rather than
+// Part 3.3A Section 5's much richer nested taxonomy -- Task Specification
+// outranks SAD per document priority order. `attachmentType` is the
+// literal multipart field name from Section 60's OpenAPI spec (e.g.
+// "Periapical" for an X-Ray), stored free-text since no enum is given.
+//
+// Versioning: Attachment is the stable parent row (one per logical
+// attachment); each upload -- initial or a "correction" re-upload -- adds
+// an immutable AttachmentVersion row, and Attachment.currentVersionId is
+// repointed to it. Restoring an older version (task-084) just repoints
+// currentVersionId again; no version row is ever deleted or mutated, per
+// Section 4's Immutable/Versioned characteristics. The actual file bytes
+// live outside the database (Section 27.1 "Database hanya menyimpan
+// metadata file") in the object-storage abstraction under
+// shared/storage/ -- see IObjectStorageService.
+// ---------------------------------------------------------------------------
+
+enum AttachmentCategory {
+  CLINICAL_PHOTOGRAPHY
+  X_RAY
+  CBCT
+  CONSENT
+  PDF
+  VIDEO
+  OTHER
+}
+
+model Attachment {
+  id               String             @id @default(uuid()) @db.Char(36)
+  visitId          String             @map("visit_id") @db.Char(36)
+  patientId        String             @map("patient_id") @db.Char(36)
+  category         AttachmentCategory
+  attachmentType   String?            @map("attachment_type") @db.VarChar(100)
+  currentVersionId String?            @unique @map("current_version_id") @db.Char(36)
+  archivedAt       DateTime?          @map("archived_at")
+  archivedBy       String?            @map("archived_by") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  visit          Visit                  @relation(fields: [visitId], references: [id])
+  patient        Patient                @relation(fields: [patientId], references: [id])
+  versions       AttachmentVersion[]    @relation("AttachmentVersions")
+  currentVersion AttachmentVersion?     @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  annotations    AttachmentAnnotation[]
+
+  @@index([visitId])
+  @@index([patientId])
+  @@map("attachments")
+}
+
+// docs/03-sad/02-system-architecture.md Section 27.4 "File Metadata" --
+// literal field list (fileName/mimeType/fileSize/bucket/objectKey/
+// uploadedBy/uploadedAt), plus storedName/extension/checksum from
+// docs/03-sad/15-module-emr.md Part 3.3A Section 7's fuller metadata table.
+model AttachmentVersion {
+  id            String @id @default(uuid()) @db.Char(36)
+  attachmentId  String @map("attachment_id") @db.Char(36)
+  versionNumber Int    @map("version_number")
+  fileName      String @map("file_name") @db.VarChar(255)
+  storedName    String @map("stored_name") @db.VarChar(255)
+  extension     String @db.VarChar(20)
+  mimeType      String @map("mime_type") @db.VarChar(150)
+  fileSize      Int    @map("file_size")
+  bucket        String @db.VarChar(100)
+  objectKey     String @map("object_key") @db.VarChar(500)
+  checksum      String @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  attachment Attachment  @relation("AttachmentVersions", fields: [attachmentId], references: [id])
+  currentFor Attachment? @relation("CurrentVersion")
+
+  @@unique([attachmentId, versionNumber])
+  @@map("attachment_versions")
+}
+
+// docs/06-tasks/task-081.md: "persist annotation data (shape/position/text)
+// linked to the attachment, without modifying the original immutable file."
+model AttachmentAnnotation {
+  id           String  @id @default(uuid()) @db.Char(36)
+  attachmentId String  @map("attachment_id") @db.Char(36)
+  shape        String  @db.VarChar(30)
+  positionX    Float   @map("position_x")
+  positionY    Float   @map("position_y")
+  width        Float?
+  height       Float?
+  text         String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  attachment Attachment @relation(fields: [attachmentId], references: [id])
+
+  @@index([attachmentId])
+  @@map("attachment_annotations")
+}
+
+// ---------------------------------------------------------------------------
+// Prescription Management (docs/06-tasks/task-065.md/task-066.md,
+// docs/03-sad/15-module-emr.md Section 24).
+//
+// Two documented gaps resolved with explicit user sign-off (task-065's own
+// text flags both rather than assuming):
+// 1. Allergy conflict is a hard block, not an overridable warning -- no
+//    override path/reason field is modeled.
+// 2. "Obat berasal dari Master Medicine" is NOT enforced: no task in
+//    Phase 1 or 2 builds Medicine master data (it belongs to the
+//    not-yet-built Warehouse module, docs/03-sad/18-module-warehouse.md).
+//    medicineName is free text; PrescriptionItem has no Medicine FK. This
+//    is a deliberate, flagged deferral, not an oversight -- revisit once
+//    Warehouse's Medicine entity exists.
+// ---------------------------------------------------------------------------
+
+model Prescription {
+  id        String @id @default(uuid()) @db.Char(36)
+  visitId   String @map("visit_id") @db.Char(36)
+  patientId String @map("patient_id") @db.Char(36)
+  doctorId  String @map("doctor_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  visit   Visit              @relation(fields: [visitId], references: [id])
+  patient Patient            @relation(fields: [patientId], references: [id])
+  doctor  Doctor             @relation(fields: [doctorId], references: [id])
+  items   PrescriptionItem[]
+
+  @@index([visitId])
+  @@index([patientId])
+  @@map("prescriptions")
+}
+
+// docs/03-sad/15-module-emr.md Section 24 "Information" table -- literal
+// field list (Medicine/Dosage/Frequency/Duration/Instruction).
+model PrescriptionItem {
+  id           String  @id @default(uuid()) @db.Char(36)
+  prescriptionId String @map("prescription_id") @db.Char(36)
+  medicineName String  @map("medicine_name") @db.VarChar(200)
+  dosage       String  @db.VarChar(100)
+  frequency    String  @db.VarChar(100)
+  duration     String  @db.VarChar(100)
+  instruction  String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+// ---------------------------------------------------------------------------
+// Consent Management (docs/06-tasks/task-085.md..task-087.md,
+// docs/03-sad/15-module-emr.md Part 3.3D).
+//
+// Part 3.3D describes a much larger enterprise system (PDF generation with
+// QR verification, OTP patient identity verification, AES encryption at
+// rest, multiple signature capture types) than task-085..087 actually ask
+// for -- none of that is a listed deliverable in any of the three tasks,
+// so it is NOT built here, per document priority order (Task Specification
+// outranks SAD), the same scoping-down already applied to Periodontal
+// Assessment and Clinical Attachment. category uses task-085's own literal
+// 3-value list (General/Clinical/Surgical), not Section 39's fuller
+// 6-category list (which also includes Orthodontic/Esthetic/Publication).
+//
+// No hard gate: recording a Treatment (Phase 1 task-053) is NOT blocked by
+// a missing signed Consent -- Section 48's "wajib memiliki" rule never
+// states a system-enforcement mechanic (no "system rejects" wording, no
+// error code, no test scenario), and per explicit user sign-off this ships
+// as an independent feature without touching RecordTreatmentUseCase.
+//
+// "PDF Generation" (Section 42) is replaced with a minimal text document
+// (no PDF library is approved) uploaded through the existing
+// UploadAttachmentUseCase (task-078) with category CONSENT, in-process
+// rather than via multer/HTTP -- signedAttachmentId points at it.
+// ---------------------------------------------------------------------------
+
+enum ConsentCategory {
+  GENERAL
+  CLINICAL
+  SURGICAL
+}
+
+model ConsentTemplate {
+  id       String          @id @default(uuid()) @db.Char(36)
+  category ConsentCategory
+  title    String          @db.VarChar(200)
+  body     String          @db.Text
+  isActive Boolean         @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  consents Consent[]
+
+  @@map("consent_templates")
+}
+
+// docs/03-sad/15-module-emr.md Part 3.3D Section 40 "Signature Metadata" +
+// "Guardian Support" -- signerRelationship literal list.
+enum ConsentSignerRelationship {
+  SELF
+  FATHER
+  MOTHER
+  HUSBAND
+  WIFE
+  LEGAL_GUARDIAN
+}
+
+model Consent {
+  id                 String                     @id @default(uuid()) @db.Char(36)
+  templateId         String                     @map("template_id") @db.Char(36)
+  patientId          String                     @map("patient_id") @db.Char(36)
+  visitId            String                     @map("visit_id") @db.Char(36)
+  doctorId           String                     @map("doctor_id") @db.Char(36)
+  procedure          String                     @db.VarChar(200)
+  signedAt           DateTime?                  @map("signed_at")
+  signerName         String?                    @map("signer_name") @db.VarChar(150)
+  signerRelationship ConsentSignerRelationship? @map("signer_relationship")
+  signatureData      String?                    @map("signature_data") @db.Text
+  hash               String?                    @db.VarChar(64)
+  signedAttachmentId String?                    @map("signed_attachment_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  template ConsentTemplate @relation(fields: [templateId], references: [id])
+  patient  Patient         @relation(fields: [patientId], references: [id])
+  visit    Visit           @relation(fields: [visitId], references: [id])
+  doctor   Doctor          @relation(fields: [doctorId], references: [id])
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("consents")
+}
+
+// ---------------------------------------------------------------------------
+// Medical Certificate (docs/06-tasks/task-088.md,
+// docs/03-sad/15-module-emr.md Section 25).
+//
+// Section 25 is terse: only certificate types + 3 business rules, no field
+// list beyond that. `content` (the certificate body/statement) is a
+// reasonable minimal addition -- a certificate needs some text -- not
+// invented business logic. certificateNumber follows the same
+// date-prefixed sequential-counter format already used for Reservation
+// Numbers ("RSV-YYYYMMDD-0001"), since no literal format is specified.
+// "Hanya Doctor yang dapat menerbitkan" is enforced two ways: the
+// emr.certificate.issue permission (RBAC, seeded to DOCTOR only, the same
+// mechanism every other "(Doctor role)" task in this project relies on)
+// AND a use-case-level check that the actor has a linked Doctor profile
+// (IssueMedicalCertificateUseCase), since task-088 explicitly requires a
+// unit test for "only a Doctor-role user can issue."
+// ---------------------------------------------------------------------------
+
+enum MedicalCertificateType {
+  FIT_TO_WORK
+  SICK_LEAVE
+  MEDICAL_STATEMENT
+  DENTAL_TREATMENT_CERTIFICATE
+}
+
+model MedicalCertificate {
+  id                String                 @id @default(uuid()) @db.Char(36)
+  certificateNumber String                 @unique @map("certificate_number") @db.VarChar(30)
+  visitId           String                 @map("visit_id") @db.Char(36)
+  patientId         String                 @map("patient_id") @db.Char(36)
+  doctorId          String                 @map("doctor_id") @db.Char(36)
+  certificateType   MedicalCertificateType @map("certificate_type")
+  content           String                 @db.Text
+  issuedAt          DateTime               @default(now()) @map("issued_at")
+  attachmentId      String                 @map("attachment_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  visit   Visit   @relation(fields: [visitId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+  doctor  Doctor  @relation(fields: [doctorId], references: [id])
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("medical_certificates")
 }
 
 // ---------------------------------------------------------------------------

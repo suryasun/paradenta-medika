@@ -28,6 +28,7 @@ export class ReservationRepository implements IReservationRepository {
         source: input.source,
         complaint: input.complaint,
         notes: input.notes,
+        treatmentPlanItemId: input.treatmentPlanItemId,
         createdBy: input.createdBy,
       },
     });
@@ -142,6 +143,16 @@ export class ReservationRepository implements IReservationRepository {
   async countByDate(date: Date, branchId?: string): Promise<number> {
     return prisma.reservation.count({
       where: { reservationDate: date, deletedAt: null, ...(branchId ? { branchId } : {}) },
+    });
+  }
+
+  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string): Promise<Reservation[]> {
+    return prisma.reservation.findMany({
+      where: {
+        reservationDate: { gte: dateFrom, lte: dateTo },
+        deletedAt: null,
+        ...(branchId ? { branchId } : {}),
+      },
     });
   }
 }

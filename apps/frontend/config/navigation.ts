@@ -19,7 +19,15 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", permission: "report.dashboard.operations.read" },
   { label: "Patients", href: "/patients", permission: "patient.read" },
-  { label: "Reservations", href: "/reservations", permission: "reservation.read" },
+  {
+    label: "Reservations",
+    href: "/reservations",
+    permission: "reservation.read",
+    children: [
+      { label: "List", href: "/reservations", permission: "reservation.read" },
+      { label: "Analytics", href: "/reservations/analytics", permission: "reservation.analytics.read" },
+    ],
+  },
   { label: "Queue", href: "/queue", permission: "queue.read" },
   // No standalone EMR sidebar entry: apps/backend has no Visit List
   // endpoint (docs/06-tasks/task-048.md..053.md never add one) -- a Visit
@@ -36,6 +44,8 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Treatment Categories", href: "/master-data/treatment-categories", permission: "masterdata.treatment-category.read" },
       { label: "Treatments", href: "/master-data/treatments", permission: "masterdata.treatment.read" },
       { label: "Payment Methods", href: "/master-data/payment-methods", permission: "masterdata.payment-method.read" },
+      { label: "Tooth Conditions", href: "/master-data/tooth-conditions", permission: "masterdata.tooth-condition.read" },
+      { label: "Consent Templates", href: "/master-data/consent-templates", permission: "emr.consent-template.read" },
     ],
   },
   {

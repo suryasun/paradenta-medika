@@ -1,4 +1,9 @@
-export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
+/**
+ * 'READ' added for docs/06-tasks/task-080.md: "Audit Trail entry required
+ * for every download access (clinically/legally sensitive)" -- an access
+ * event, not a data mutation, so it doesn't fit CREATE/UPDATE/DELETE.
+ */
+export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'READ';
 
 export interface AuditContext {
   userId?: string;

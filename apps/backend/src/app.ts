@@ -14,7 +14,7 @@ import { buildMasterDataModule } from './modules/master-data/presentation/routes
 import { buildPatientModule } from './modules/patient/presentation/routes/patient.routes';
 import { buildReservationModule } from './modules/reservation/presentation/routes/reservation.routes';
 import { buildQueueModule } from './modules/queue/presentation/routes/queue.routes';
-import { buildEmrModule } from './modules/emr/presentation/routes/emr.routes';
+import { buildEmrModule, buildAttachmentFileRouter } from './modules/emr/presentation/routes/emr.routes';
 import { buildBillingModule } from './modules/billing/presentation/routes/billing.routes';
 import { buildReportsModule } from './modules/reports/presentation/routes/reports.routes';
 import { eventBus } from './shared/events/EventBus';
@@ -47,6 +47,15 @@ export function createApp(config: ConfigService): Express {
 
   app.use(buildHealthRouter(config));
 
+  // docs/06-tasks/task-080.md: signed-URL file serving. Must be mounted
+  // before any router with an unconditional `router.use(authenticate)`
+  // (system/master-data/emr/etc. below) -- those call next(err) on a
+  // missing bearer token, which skips straight to the global error
+  // handler rather than falling through to this sibling router, so
+  // mounting it later would make it unreachable for unauthenticated
+  // requests (verified live: returned 401 before this was moved here).
+  app.use(API_V1_PREFIX, buildAttachmentFileRouter(config));
+
   const auditService = new AuditService();
   const authModule = buildAuthModule(config, auditService);
   app.use(API_V1_PREFIX, authModule.router);
@@ -77,7 +86,7 @@ export function createApp(config: ConfigService): Express {
   const queueRouter = buildQueueModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, queueRouter);
 
-  const emrRouter = buildEmrModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
+  const emrRouter = buildEmrModule(config, auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, emrRouter);
 
   const billingRouter = buildBillingModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);

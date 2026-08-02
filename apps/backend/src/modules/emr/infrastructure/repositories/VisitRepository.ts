@@ -31,6 +31,10 @@ export class VisitRepository implements IVisitRepository {
     return prisma.visit.findFirst({ where: { visitNo } });
   }
 
+  async findByPatientId(patientId: string): Promise<Visit[]> {
+    return prisma.visit.findMany({ where: { patientId, deletedAt: null }, orderBy: { visitDate: 'asc' } });
+  }
+
   async count(): Promise<number> {
     return prisma.visit.count();
   }

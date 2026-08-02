@@ -31,6 +31,7 @@ export class FakeReservationRepository implements IReservationRepository {
       notes: input.notes ?? null,
       status: 'BOOKED',
       source: input.source,
+      treatmentPlanItemId: input.treatmentPlanItemId ?? null,
       checkedInAt: null,
       cancelledReason: null,
       cancelledAt: null,
@@ -127,6 +128,16 @@ export class FakeReservationRepository implements IReservationRepository {
     return [...this.reservations.values()].filter(
       (r) => r.reservationDate.getTime() === date.getTime() && (!branchId || r.branchId === branchId),
     ).length;
+  }
+
+  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string): Promise<Reservation[]> {
+    return [...this.reservations.values()].filter(
+      (r) =>
+        r.reservationDate.getTime() >= dateFrom.getTime() &&
+        r.reservationDate.getTime() <= dateTo.getTime() &&
+        (!branchId || r.branchId === branchId) &&
+        !r.deletedAt,
+    );
   }
 }
 

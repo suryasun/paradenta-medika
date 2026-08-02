@@ -23,6 +23,8 @@ export interface CreateReservationInput {
   source: 'WALK_IN' | 'PHONE' | 'WHATSAPP' | 'WEBSITE' | 'MOBILE_APP';
   complaint?: string;
   notes?: string;
+  /** docs/06-tasks/task-064.md: set when this Reservation originates from converting a Treatment Plan item. */
+  treatmentPlanItemId?: string;
   createdBy: string;
 }
 
@@ -50,4 +52,6 @@ export interface IReservationRepository {
   countActiveForPatientOnDate(patientId: string, date: Date, excludeId?: string): Promise<number>;
   count(): Promise<number>;
   countByDate(date: Date, branchId?: string): Promise<number>;
+  /** docs/06-tasks/task-060.md: raw rows for in-memory analytics aggregation over a date range. */
+  findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string): Promise<Reservation[]>;
 }

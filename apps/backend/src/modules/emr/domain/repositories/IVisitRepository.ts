@@ -16,6 +16,7 @@ export interface IVisitRepository {
   findById(id: string): Promise<Visit | null>;
   findByQueueId(queueId: string): Promise<Visit | null>;
   findByVisitNo(visitNo: string): Promise<Visit | null>;
+  findByPatientId(patientId: string): Promise<Visit[]>;
   count(): Promise<number>;
   markCompleted(id: string, updatedBy: string): Promise<Visit>;
 }

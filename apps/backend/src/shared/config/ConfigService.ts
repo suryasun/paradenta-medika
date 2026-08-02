@@ -54,6 +54,7 @@ export class ConfigService {
       smtpHost: env.SMTP_HOST as string,
       bcryptSaltRounds,
       frontendOrigin: env.FRONTEND_ORIGIN as string,
+      storageRoot: env.STORAGE_ROOT && env.STORAGE_ROOT.trim() !== '' ? env.STORAGE_ROOT : './storage',
     };
   }
 

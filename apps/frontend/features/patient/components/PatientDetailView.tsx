@@ -9,6 +9,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Tabs } from "@/components/ui/Tabs";
 import { PermissionGuard } from "@/components/guards/PermissionGuard";
 import { getApiErrorMessage } from "@/lib/api-client";
+import { ClinicalTimelineSection } from "@/features/emr/components/ClinicalTimelineSection";
 import { usePatient } from "../hooks/usePatient";
 import { useArchivePatient, useRestorePatient } from "../hooks/usePatientMutations";
 
@@ -22,9 +23,13 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 }
 
 // docs/02-design/pages/patient.md Section 12.2 "Patient Detail Tabs".
-// Reservation/Visit/Payment History are wired to real data sources (arrays
-// on PatientDetailResponseDto) but always render empty in Phase 1 -- see
-// features/patient/types/patient.types.ts for why. Emergency Contact,
+// Reservation/Payment History are wired to real data sources (arrays on
+// PatientDetailResponseDto) but always render empty in Phase 1 -- see
+// features/patient/types/patient.types.ts for why. Visit History is
+// replaced by the Clinical Timeline tab (docs/06-tasks/task-091.md:
+// "replacing/extending the generic history tabs ... with a unified
+// chronological feed"), which aggregates Visit plus every other Phase 2
+// EMR event type via GET /emr/timeline/{patientId}. Emergency Contact,
 // Attachments, Audit Trail, and Merge Patient have no Phase 1 API and are
 // not included.
 export function PatientDetailView({ patientId }: { patientId: string }) {
@@ -102,9 +107,9 @@ export function PatientDetailView({ patientId }: { patientId: string }) {
             content: <EmptyState title="No reservation history" description="Not yet available for this patient." />,
           },
           {
-            key: "visits",
-            label: "Visit History",
-            content: <EmptyState title="No visit history" description="Not yet available for this patient." />,
+            key: "clinical-timeline",
+            label: "Clinical Timeline",
+            content: <ClinicalTimelineSection patientId={patientId} />,
           },
           {
             key: "payments",

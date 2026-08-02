@@ -10,8 +10,20 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { useVisit } from "../hooks/useVisit";
 import { useCloseVisit } from "../hooks/useVisitMutations";
 import { OPEN_VISIT_STATUSES } from "../types/emr.types";
+import { AllergySection } from "./AllergySection";
+import { ClinicalAlertBanner } from "./ClinicalAlertBanner";
 import { DiagnosisSection } from "./DiagnosisSection";
+import { MedicalHistorySection } from "./MedicalHistorySection";
+import { AttachmentSection } from "./AttachmentSection";
+import { ConsentSection } from "./ConsentSection";
+import { FollowUpSection } from "./FollowUpSection";
+import { MedicalCertificateSection } from "./MedicalCertificateSection";
+import { OdontogramSection } from "./OdontogramSection";
+import { PeriodontalAssessmentSection } from "./PeriodontalAssessmentSection";
+import { PrescriptionSection } from "./PrescriptionSection";
+import { ReferralSection } from "./ReferralSection";
 import { SoapNoteSection } from "./SoapNoteSection";
+import { TreatmentPlanSection } from "./TreatmentPlanSection";
 import { TreatmentSection } from "./TreatmentSection";
 import { VitalSignSection } from "./VitalSignSection";
 
@@ -63,6 +75,8 @@ export function VisitWorkspace({ visitId }: { visitId: string }) {
         </p>
       )}
 
+      <ClinicalAlertBanner patientId={visit.patientId} />
+
       <Tabs
         items={[
           {
@@ -84,6 +98,63 @@ export function VisitWorkspace({ visitId }: { visitId: string }) {
             key: "treatment",
             label: "Treatment",
             content: <TreatmentSection visitId={visitId} treatmentEntries={visit.treatmentEntries} readOnly={readOnly} />,
+          },
+          {
+            key: "medical-history",
+            label: "Medical History",
+            content: <MedicalHistorySection patientId={visit.patientId} readOnly={readOnly} />,
+          },
+          {
+            key: "allergy",
+            label: "Allergy",
+            content: <AllergySection patientId={visit.patientId} readOnly={readOnly} />,
+          },
+          {
+            key: "odontogram",
+            label: "Odontogram",
+            content: <OdontogramSection visitId={visitId} patientId={visit.patientId} readOnly={readOnly} />,
+          },
+          {
+            key: "treatment-plan",
+            label: "Treatment Plan",
+            content: <TreatmentPlanSection visitId={visitId} readOnly={readOnly} />,
+          },
+          {
+            key: "periodontal",
+            label: "Periodontal",
+            content: (
+              <PeriodontalAssessmentSection visitId={visitId} patientId={visit.patientId} doctorId={visit.doctorId} readOnly={readOnly} />
+            ),
+          },
+          {
+            key: "referral",
+            label: "Referral",
+            content: <ReferralSection visitId={visitId} readOnly={readOnly} />,
+          },
+          {
+            key: "follow-up",
+            label: "Follow Up",
+            content: <FollowUpSection visitId={visitId} readOnly={readOnly} />,
+          },
+          {
+            key: "attachments",
+            label: "Attachments",
+            content: <AttachmentSection visitId={visitId} patientId={visit.patientId} readOnly={readOnly} />,
+          },
+          {
+            key: "prescription",
+            label: "Prescription",
+            content: <PrescriptionSection visitId={visitId} patientId={visit.patientId} readOnly={readOnly} />,
+          },
+          {
+            key: "consent",
+            label: "Consent",
+            content: <ConsentSection visitId={visitId} patientId={visit.patientId} readOnly={readOnly} />,
+          },
+          {
+            key: "medical-certificate",
+            label: "Medical Certificate",
+            content: <MedicalCertificateSection visitId={visitId} patientId={visit.patientId} readOnly={readOnly} />,
           },
         ]}
       />

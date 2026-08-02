@@ -4,6 +4,8 @@ import {
   CreateReservationInput,
   ListReservationsParams,
   Reservation,
+  ReservationAnalytics,
+  ReservationAnalyticsParams,
   TimeSlot,
   UpdateReservationInput,
 } from "../types/reservation.types";
@@ -47,6 +49,12 @@ export const reservationService = {
 
   async getTimeSlots(doctorId: string, date: string): Promise<TimeSlot[]> {
     const response = await apiClient.get<ApiSuccessBody<TimeSlot[]>>(`/doctors/${doctorId}/time-slots`, { params: { date } });
+    return response.data.data;
+  },
+
+  // docs/06-tasks/task-060.md.
+  async analytics(params: ReservationAnalyticsParams = {}): Promise<ReservationAnalytics> {
+    const response = await apiClient.get<ApiSuccessBody<ReservationAnalytics>>("/reservations/analytics", { params });
     return response.data.data;
   },
 };

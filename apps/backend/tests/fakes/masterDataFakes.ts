@@ -1,7 +1,12 @@
-import { Branch, Clinic, Doctor } from '@prisma/client';
+import { Branch, Clinic, Doctor, ToothCondition } from '@prisma/client';
 import { CreateClinicInput, IClinicRepository, UpdateClinicInput } from '../../src/modules/master-data/domain/repositories/IClinicRepository';
 import { CreateBranchInput, IBranchRepository, UpdateBranchInput } from '../../src/modules/master-data/domain/repositories/IBranchRepository';
 import { CreateDoctorInput, IDoctorRepository, UpdateDoctorInput } from '../../src/modules/master-data/domain/repositories/IDoctorRepository';
+import {
+  CreateToothConditionInput,
+  IToothConditionRepository,
+  UpdateToothConditionInput,
+} from '../../src/modules/master-data/domain/repositories/IToothConditionRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -139,5 +144,47 @@ export class FakeDoctorRepository implements IDoctorRepository {
     if (!doctor) throw new Error('not found');
     Object.assign(doctor, input);
     return doctor;
+  }
+}
+
+export class FakeToothConditionRepository implements IToothConditionRepository {
+  conditions = new Map<string, ToothCondition>();
+
+  async create(input: CreateToothConditionInput): Promise<ToothCondition> {
+    const condition: ToothCondition = {
+      id: nextId('tooth-condition'),
+      conditionCode: input.conditionCode,
+      conditionName: input.conditionName,
+      category: input.category,
+      colorCode: input.colorCode ?? null,
+      isActive: true,
+      createdAt: new Date(),
+      createdBy: null,
+      updatedAt: new Date(),
+      updatedBy: null,
+      deletedAt: null,
+      deletedBy: null,
+    } as ToothCondition;
+    this.conditions.set(condition.id, condition);
+    return condition;
+  }
+
+  async list(query: ListQueryDto): Promise<PagedResult<ToothCondition>> {
+    return paginate([...this.conditions.values()], query);
+  }
+
+  async findById(id: string): Promise<ToothCondition | null> {
+    return this.conditions.get(id) ?? null;
+  }
+
+  async findByCode(conditionCode: string): Promise<ToothCondition | null> {
+    return [...this.conditions.values()].find((c) => c.conditionCode === conditionCode) ?? null;
+  }
+
+  async update(id: string, input: UpdateToothConditionInput): Promise<ToothCondition> {
+    const condition = this.conditions.get(id);
+    if (!condition) throw new Error('not found');
+    Object.assign(condition, input);
+    return condition;
   }
 }

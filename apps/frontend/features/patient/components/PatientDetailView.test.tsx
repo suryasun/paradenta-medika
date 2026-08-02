@@ -3,11 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PatientDetailView } from "./PatientDetailView";
 import { patientService } from "../services/patient.service";
+import { emrService } from "@/features/emr/services/emr.service";
 import { useAuthStore } from "@/stores/auth.store";
 import { PatientDetail } from "../types/patient.types";
 
 jest.mock("../services/patient.service");
+jest.mock("@/features/emr/services/emr.service");
 const mockedPatientService = jest.mocked(patientService);
+const mockedEmrService = jest.mocked(emrService);
 
 jest.mock("next/link", () => {
   return function MockLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -80,8 +83,28 @@ describe("PatientDetailView", () => {
     await user.click(screen.getByRole("tab", { name: "Identity" }));
     expect(screen.getByText("3201xxxx")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Visit History" }));
-    expect(screen.getByText("No visit history")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Reservation History" }));
+    expect(screen.getByText("No reservation history")).toBeInTheDocument();
+  });
+
+  it("switches to the Clinical Timeline tab and shows the aggregated feed as empty", async () => {
+    const user = userEvent.setup();
+    mockedPatientService.detail.mockResolvedValue(DETAIL);
+    mockedEmrService.getPatientTimelineSummary.mockResolvedValue({
+      mostRecentVisit: null,
+      activeAlerts: { medicalHistory: [], allergies: [] },
+      openTreatmentPlanItems: [],
+      lastPrescription: null,
+    });
+    mockedEmrService.getPatientTimelineEvents.mockResolvedValue([]);
+    mockedEmrService.getPatientTimelineAttachments.mockResolvedValue([]);
+
+    renderView();
+    await screen.findByRole("heading", { name: "John Doe" });
+
+    await user.click(screen.getByRole("tab", { name: "Clinical Timeline" }));
+    expect(await screen.findByText("No clinical events recorded yet")).toBeInTheDocument();
+    expect(screen.getByText("No attachments across any visit yet")).toBeInTheDocument();
   });
 
   it("archiving from the detail page calls the archive endpoint", async () => {

@@ -50,3 +50,135 @@ export class MinimumDocumentationException extends BusinessException {
     super('MINIMUM_DOCUMENTATION_NOT_MET', `Visit cannot be closed: ${reasons.join('; ')}`);
   }
 }
+
+/** docs/03-sad/15-module-emr.md Part 3.1B Section 20: "Nomor FDI harus valid." */
+export class InvalidToothNumberException extends BusinessException {
+  constructor() {
+    super('INVALID_TOOTH_NUMBER', 'Tooth number is not a valid FDI notation number');
+  }
+}
+
+/** docs/03-sad/15-module-emr.md Part 3.1B Section 20: "Surface harus sesuai tipe gigi." */
+export class InvalidSurfaceCombinationException extends BusinessException {
+  constructor() {
+    super('INVALID_SURFACE_COMBINATION', 'Surface combination is invalid (must be a non-empty, non-repeating set of M/D/B/L/O/I)');
+  }
+}
+
+/** docs/06-tasks/task-068.md: a deactivated Tooth Condition cannot be selected. */
+export class ToothConditionNotActiveException extends BusinessException {
+  constructor() {
+    super('TOOTH_CONDITION_NOT_ACTIVE', 'Tooth Condition catalog item is not active');
+  }
+}
+
+export class TreatmentPlanItemNotFoundException extends NotFoundException {
+  constructor() {
+    super('Treatment Plan item not found');
+  }
+}
+
+export class AttachmentNotFoundException extends NotFoundException {
+  constructor() {
+    super('Attachment not found');
+  }
+}
+
+/** docs/06-tasks/task-084.md: restoring a non-existent version must be rejected. */
+export class AttachmentVersionNotFoundException extends NotFoundException {
+  constructor() {
+    super('Attachment version not found');
+  }
+}
+
+/** docs/03-sad/15-module-emr.md Part 3.3A Section 5 Attachment Matrix: annotation is not supported for every category. */
+export class AnnotationNotSupportedException extends BusinessException {
+  constructor() {
+    super('ANNOTATION_NOT_SUPPORTED', 'This attachment category does not support annotation');
+  }
+}
+
+/**
+ * docs/03-sad/15-module-emr.md Part 3.2D Section 40 names a literal
+ * `ASSESSMENT_NOT_FOUND` code, but NotFoundException's `code` is fixed to
+ * `NOT_FOUND` codebase-wide (see PatientNotFoundException/
+ * VisitNotFoundException) -- kept consistent with that established
+ * convention rather than special-casing this one entity.
+ */
+export class PeriodontalAssessmentNotFoundException extends NotFoundException {
+  constructor() {
+    super('Periodontal assessment not found');
+  }
+}
+
+/** docs/03-sad/15-module-emr.md Part 3.2D Section 40 "Business Error" -- literal error code. */
+export class PeriodontalAssessmentLockedException extends BusinessException {
+  constructor() {
+    super('ASSESSMENT_LOCKED', 'Assessment already locked');
+  }
+}
+
+export class PeriodontalMeasurementNotFoundException extends NotFoundException {
+  constructor() {
+    super('Periodontal measurement not found');
+  }
+}
+
+/** docs/03-sad/15-module-emr.md Part 3.2B Section 18: "Tidak berlaku pada gigi satu akar." */
+export class FurcationNotApplicableException extends BusinessException {
+  constructor() {
+    super('FURCATION_NOT_APPLICABLE', 'Furcation grade only applies to multiroot (molar) teeth');
+  }
+}
+
+/**
+ * docs/06-tasks/task-065.md Section 24: "Prescription harus divalidasi
+ * terhadap Allergy." Hard block, per explicit user sign-off (the SAD does
+ * not specify block-vs-override) -- no override path exists.
+ */
+export class PrescriptionAllergyConflictException extends BusinessException {
+  constructor(medicineName: string, allergen: string) {
+    super(
+      'PRESCRIPTION_ALLERGY_CONFLICT',
+      `Cannot prescribe "${medicineName}": patient has a recorded Drug allergy to "${allergen}"`,
+    );
+  }
+}
+
+export class PrescriptionNotFoundException extends NotFoundException {
+  constructor() {
+    super('Prescription not found');
+  }
+}
+
+export class ConsentNotFoundException extends NotFoundException {
+  constructor() {
+    super('Consent not found');
+  }
+}
+
+/** docs/03-sad/15-module-emr.md Part 3.3D Section 48: "Setelah ditandatangani, consent tidak dapat diubah." */
+export class ConsentAlreadySignedException extends BusinessException {
+  constructor() {
+    super('CONSENT_ALREADY_SIGNED', 'Consent has already been signed and cannot be modified or re-signed');
+  }
+}
+
+export class ConsentTemplateNotActiveException extends BusinessException {
+  constructor() {
+    super('CONSENT_TEMPLATE_NOT_ACTIVE', 'Consent template is not active');
+  }
+}
+
+/** docs/03-sad/15-module-emr.md Section 25 Business Rules: "Hanya Doctor yang dapat menerbitkan." */
+export class OnlyDoctorCanIssueCertificateException extends BusinessException {
+  constructor() {
+    super('ONLY_DOCTOR_CAN_ISSUE_CERTIFICATE', 'Only a Doctor can issue a Medical Certificate');
+  }
+}
+
+export class MedicalCertificateNotFoundException extends NotFoundException {
+  constructor() {
+    super('Medical certificate not found');
+  }
+}
