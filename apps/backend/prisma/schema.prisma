@@ -219,6 +219,7 @@ model Branch {
   queues             Queue[]
   visits             Visit[]
   warehouseLocations WarehouseLocation[]
+  purchaseOrders     PurchaseOrder[]
 
   @@map("branches")
 }
@@ -1645,10 +1646,12 @@ model Item {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  category          ItemCategory       @relation(fields: [categoryId], references: [id])
-  unit              Unit               @relation(fields: [unitId], references: [id])
-  stocks            WarehouseStock[]
-  stockTransactions StockTransaction[]
+  category           ItemCategory        @relation(fields: [categoryId], references: [id])
+  unit               Unit                @relation(fields: [unitId], references: [id])
+  stocks             WarehouseStock[]
+  stockTransactions  StockTransaction[]
+  purchaseOrderItems PurchaseOrderItem[]
+  goodsReceiptItems  GoodsReceiptItem[]
 
   @@index([categoryId])
   @@index([isActive])
@@ -1673,6 +1676,8 @@ model Supplier {
   updatedBy String?   @map("updated_by") @db.Char(36)
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  purchaseOrders PurchaseOrder[]
 
   @@map("suppliers")
 }
@@ -1701,6 +1706,8 @@ model WarehouseLocation {
   branch            Branch             @relation(fields: [branchId], references: [id])
   stocks            WarehouseStock[]
   stockTransactions StockTransaction[]
+  purchaseOrders    PurchaseOrder[]
+  goodsReceipts     GoodsReceipt[]
 
   @@unique([branchId, locationCode])
   @@index([branchId])
@@ -1781,6 +1788,148 @@ model StockTransaction {
   @@index([warehouseId, itemId, transactionDate])
   @@index([referenceType, referenceId])
   @@map("stock_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Warehouse Module: Procurement (docs/03-sad/18-module-warehouse.md UC-WHS-001/
+// UC-WHS-002, Epic W task-104-114). Table names follow the domain terms
+// PurchaseOrder/GoodsReceipt (no `warehouse_` prefix), consistent with Epic
+// V's naming choice for Item/Supplier/WarehouseLocation -- Section 5.1
+// explicitly says "Implementasi memilih satu nama fisik yang konsisten";
+// this keeps one physical-naming convention across the whole module rather
+// than mixing prefixed/unprefixed names across epics.
+// ---------------------------------------------------------------------------
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+  PARTIALLY_RECEIVED
+  RECEIVED
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 3.7 state machine; UC-WHS-001.
+model PurchaseOrder {
+  id                  String              @id @default(uuid()) @db.Char(36)
+  purchaseOrderNumber String              @unique @map("purchase_order_number") @db.VarChar(30)
+  supplierId          String              @map("supplier_id") @db.Char(36)
+  branchId            String              @map("branch_id") @db.Char(36)
+  warehouseId         String              @map("warehouse_id") @db.Char(36)
+  orderDate           DateTime            @default(now()) @map("order_date")
+  expectedDate        DateTime?           @map("expected_date")
+  status              PurchaseOrderStatus @default(DRAFT)
+  totalAmount         Decimal             @default(0) @map("total_amount") @db.Decimal(18, 2)
+
+  submittedAt     DateTime? @map("submitted_at")
+  approvedBy      String?   @map("approved_by") @db.Char(36)
+  approvedAt      DateTime? @map("approved_at")
+  rejectedBy      String?   @map("rejected_by") @db.Char(36)
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  cancelledBy     String?   @map("cancelled_by") @db.Char(36)
+  cancelledAt     DateTime? @map("cancelled_at")
+  cancelReason    String?   @map("cancel_reason") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  supplier      Supplier            @relation(fields: [supplierId], references: [id])
+  branch        Branch              @relation(fields: [branchId], references: [id])
+  warehouse     WarehouseLocation   @relation(fields: [warehouseId], references: [id])
+  items         PurchaseOrderItem[]
+  goodsReceipts GoodsReceipt[]
+
+  @@index([supplierId])
+  @@index([warehouseId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 3.2: "Kuantitas diterima tidak
+/// melebihi ordered kecuali approval over-receipt" -- `quantityReceived` is
+/// the running total across all posted Goods Receipts against this line.
+model PurchaseOrderItem {
+  id               String  @id @default(uuid()) @db.Char(36)
+  purchaseOrderId  String  @map("purchase_order_id") @db.Char(36)
+  itemId           String  @map("item_id") @db.Char(36)
+  quantityOrdered  Decimal @map("quantity_ordered") @db.Decimal(18, 2)
+  unitPrice        Decimal @map("unit_price") @db.Decimal(18, 2)
+  subtotal         Decimal @db.Decimal(18, 2)
+  quantityReceived Decimal @default(0) @map("quantity_received") @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  purchaseOrder     PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  item              Item               @relation(fields: [itemId], references: [id])
+  goodsReceiptItems GoodsReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@map("purchase_order_items")
+}
+
+enum GoodsReceiptStatus {
+  DRAFT
+  POSTED
+}
+
+/// docs/03-sad/18-module-warehouse.md UC-WHS-002: "Hanya receipt yang
+/// posted menambah stock ledger." Posting is the transaction boundary
+/// (task-114); creation (task-112) only records what was physically
+/// received, unposted.
+model GoodsReceipt {
+  id                 String             @id @default(uuid()) @db.Char(36)
+  goodsReceiptNumber String             @unique @map("goods_receipt_number") @db.VarChar(30)
+  purchaseOrderId    String             @map("purchase_order_id") @db.Char(36)
+  warehouseId        String             @map("warehouse_id") @db.Char(36)
+  receiptDate        DateTime           @map("receipt_date")
+  supplierDocumentNo String?            @map("supplier_document_no") @db.VarChar(50)
+  status             GoodsReceiptStatus @default(DRAFT)
+  postedBy           String?            @map("posted_by") @db.Char(36)
+  postedAt           DateTime?          @map("posted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  warehouse     WarehouseLocation  @relation(fields: [warehouseId], references: [id])
+  items         GoodsReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@index([warehouseId])
+  @@map("goods_receipts")
+}
+
+/// docs/03-sad/18-module-warehouse.md Section 6.2 literal Create Goods
+/// Receipt example: batchNumber/expiryDate captured here per line. Full
+/// ItemBatch-entity linkage (FEFO allocation, remaining-quantity tracking)
+/// is explicitly task-134 (Epic Y) per task-114's own Backend Scope --
+/// deferred, not built here, to avoid inventing that model early.
+model GoodsReceiptItem {
+  id                  String    @id @default(uuid()) @db.Char(36)
+  goodsReceiptId      String    @map("goods_receipt_id") @db.Char(36)
+  purchaseOrderItemId String    @map("purchase_order_item_id") @db.Char(36)
+  itemId              String    @map("item_id") @db.Char(36)
+  quantity            Decimal   @db.Decimal(18, 2)
+  unitCost            Decimal   @map("unit_cost") @db.Decimal(18, 2)
+  batchNumber         String?   @map("batch_number") @db.VarChar(50)
+  expiryDate          DateTime? @map("expiry_date")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  goodsReceipt      GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id])
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  item              Item              @relation(fields: [itemId], references: [id])
+
+  @@index([goodsReceiptId])
+  @@map("goods_receipt_items")
 }
 
 model AuditLog {

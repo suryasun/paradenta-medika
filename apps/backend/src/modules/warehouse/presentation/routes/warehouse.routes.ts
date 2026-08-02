@@ -1,5 +1,6 @@
 import { RequestHandler, Router } from 'express';
 import { IAuditService } from '../../../system/domain/services/IAuditService';
+import { IEventBus } from '../../../../shared/events/EventBus';
 import { validateBody } from '../../../../shared/http/validateBody';
 import { validateQuery } from '../../../../shared/http/validateQuery';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
@@ -7,6 +8,14 @@ import { CreateItemRequestDto, UpdateItemRequestDto } from '../../application/dt
 import { CreateSupplierRequestDto } from '../../application/dtos/SupplierRequestDto';
 import { CreateWarehouseLocationRequestDto } from '../../application/dtos/WarehouseLocationRequestDto';
 import { StockQueryDto } from '../../application/dtos/StockQueryDto';
+import {
+  CancelPurchaseOrderRequestDto,
+  CreatePurchaseOrderRequestDto,
+  RejectPurchaseOrderRequestDto,
+  UpdatePurchaseOrderRequestDto,
+} from '../../application/dtos/PurchaseOrderRequestDto';
+import { ListPurchaseOrderQueryDto } from '../../application/dtos/PurchaseOrderQueryDto';
+import { CreateGoodsReceiptRequestDto } from '../../application/dtos/GoodsReceiptRequestDto';
 import { CreateItemUseCase } from '../../application/use-cases/CreateItemUseCase';
 import { ListItemsUseCase } from '../../application/use-cases/ListItemsUseCase';
 import { GetItemUseCase } from '../../application/use-cases/GetItemUseCase';
@@ -17,22 +26,41 @@ import { CreateWarehouseLocationUseCase } from '../../application/use-cases/Crea
 import { ListWarehouseLocationsUseCase } from '../../application/use-cases/ListWarehouseLocationsUseCase';
 import { ListStocksUseCase } from '../../application/use-cases/ListStocksUseCase';
 import { GetStockLedgerUseCase } from '../../application/use-cases/GetStockLedgerUseCase';
+import { CreatePurchaseOrderUseCase } from '../../application/use-cases/CreatePurchaseOrderUseCase';
+import { ListPurchaseOrdersUseCase } from '../../application/use-cases/ListPurchaseOrdersUseCase';
+import { GetPurchaseOrderUseCase } from '../../application/use-cases/GetPurchaseOrderUseCase';
+import { UpdatePurchaseOrderUseCase } from '../../application/use-cases/UpdatePurchaseOrderUseCase';
+import { SubmitPurchaseOrderUseCase } from '../../application/use-cases/SubmitPurchaseOrderUseCase';
+import { ApprovePurchaseOrderUseCase } from '../../application/use-cases/ApprovePurchaseOrderUseCase';
+import { RejectPurchaseOrderUseCase } from '../../application/use-cases/RejectPurchaseOrderUseCase';
+import { CancelPurchaseOrderUseCase } from '../../application/use-cases/CancelPurchaseOrderUseCase';
+import { CreateGoodsReceiptUseCase } from '../../application/use-cases/CreateGoodsReceiptUseCase';
+import { GetGoodsReceiptUseCase } from '../../application/use-cases/GetGoodsReceiptUseCase';
+import { PostGoodsReceiptUseCase } from '../../application/use-cases/PostGoodsReceiptUseCase';
+import { PurchaseOrderNumberGenerator } from '../../application/services/PurchaseOrderNumberGenerator';
+import { GoodsReceiptNumberGenerator } from '../../application/services/GoodsReceiptNumberGenerator';
+import { StockTransactionNumberGenerator } from '../../application/services/StockTransactionNumberGenerator';
 import { ItemRepository } from '../../infrastructure/repositories/ItemRepository';
 import { SupplierRepository } from '../../infrastructure/repositories/SupplierRepository';
 import { WarehouseLocationRepository } from '../../infrastructure/repositories/WarehouseLocationRepository';
 import { StockRepository } from '../../infrastructure/repositories/StockRepository';
+import { PurchaseOrderRepository } from '../../infrastructure/repositories/PurchaseOrderRepository';
+import { GoodsReceiptRepository } from '../../infrastructure/repositories/GoodsReceiptRepository';
 import { ItemController } from '../controllers/ItemController';
 import { SupplierController } from '../controllers/SupplierController';
 import { WarehouseLocationController } from '../controllers/WarehouseLocationController';
 import { StockController } from '../controllers/StockController';
+import { PurchaseOrderController } from '../controllers/PurchaseOrderController';
+import { GoodsReceiptController } from '../controllers/GoodsReceiptController';
 
 /**
- * docs/06-tasks/task-095.md..task-103.md (Epic V: Warehouse Foundation)
- * composition root. Literal endpoint paths per
- * docs/03-sad/18-module-warehouse.md Section 6.1.
+ * docs/06-tasks/task-095.md..task-114.md (Epic V Warehouse Foundation +
+ * Epic W Procurement) composition root. Literal endpoint paths per
+ * docs/03-sad/18-module-warehouse.md Section 6.1/6.2.
  */
 export function buildWarehouseModule(
   auditService: IAuditService,
+  eventBus: IEventBus,
   authenticate: RequestHandler,
   requirePermission: (code: string) => RequestHandler,
 ): Router {
@@ -40,6 +68,8 @@ export function buildWarehouseModule(
   const supplierRepository = new SupplierRepository();
   const warehouseLocationRepository = new WarehouseLocationRepository();
   const stockRepository = new StockRepository();
+  const purchaseOrderRepository = new PurchaseOrderRepository();
+  const goodsReceiptRepository = new GoodsReceiptRepository();
 
   const itemController = new ItemController(
     new CreateItemUseCase(itemRepository, auditService),
@@ -61,6 +91,36 @@ export function buildWarehouseModule(
   const stockController = new StockController(
     new ListStocksUseCase(stockRepository, itemRepository),
     new GetStockLedgerUseCase(stockRepository),
+  );
+
+  const purchaseOrderController = new PurchaseOrderController(
+    new CreatePurchaseOrderUseCase(purchaseOrderRepository, warehouseLocationRepository, new PurchaseOrderNumberGenerator(purchaseOrderRepository), auditService),
+    new ListPurchaseOrdersUseCase(purchaseOrderRepository),
+    new GetPurchaseOrderUseCase(purchaseOrderRepository),
+    new UpdatePurchaseOrderUseCase(purchaseOrderRepository, auditService),
+    new SubmitPurchaseOrderUseCase(purchaseOrderRepository, auditService),
+    new ApprovePurchaseOrderUseCase(purchaseOrderRepository, auditService),
+    new RejectPurchaseOrderUseCase(purchaseOrderRepository, auditService),
+    new CancelPurchaseOrderUseCase(purchaseOrderRepository, auditService),
+  );
+
+  const goodsReceiptController = new GoodsReceiptController(
+    new CreateGoodsReceiptUseCase(
+      purchaseOrderRepository,
+      goodsReceiptRepository,
+      itemRepository,
+      new GoodsReceiptNumberGenerator(goodsReceiptRepository),
+      auditService,
+    ),
+    new GetGoodsReceiptUseCase(goodsReceiptRepository),
+    new PostGoodsReceiptUseCase(
+      goodsReceiptRepository,
+      purchaseOrderRepository,
+      stockRepository,
+      new StockTransactionNumberGenerator(stockRepository),
+      auditService,
+      eventBus,
+    ),
   );
 
   const router = Router();
@@ -109,6 +169,77 @@ export function buildWarehouseModule(
 
   router.get('/warehouse/stocks', requirePermission('warehouse.stock.read'), validateQuery(StockQueryDto), stockController.list);
   router.get('/warehouse/stocks/:stockId/ledger', requirePermission('warehouse.stock.read'), stockController.ledger);
+
+  // docs/06-tasks/task-104.md..task-110.md (Epic W, UC-WHS-001). Permission
+  // codes are the literal `warehouse.purchase.*` catalog from
+  // docs/03-sad/18-module-warehouse.md Section 8.1 -- task-105/106's own
+  // text vaguely says "warehouse.item.manage (procurement scope)", but that
+  // reuses Item's own permission for a different resource; the module's own
+  // literal Section 8.1 catalog (read/create/submit/approve/receive/cancel)
+  // is used instead as the actual source of truth.
+  router.get(
+    '/warehouse/purchase-orders',
+    requirePermission('warehouse.purchase.read'),
+    validateQuery(ListPurchaseOrderQueryDto),
+    purchaseOrderController.list,
+  );
+  router.post(
+    '/warehouse/purchase-orders',
+    requirePermission('warehouse.purchase.create'),
+    validateBody(CreatePurchaseOrderRequestDto),
+    purchaseOrderController.create,
+  );
+  router.get('/warehouse/purchase-orders/:purchaseOrderId', requirePermission('warehouse.purchase.read'), purchaseOrderController.detail);
+  // PATCH only edits a draft PO -- reuses `create` permission (the same
+  // permission that lets someone draft a PO lets them edit their own draft
+  // before submission); no separate "update" verb exists in Section 8.1.
+  router.patch(
+    '/warehouse/purchase-orders/:purchaseOrderId',
+    requirePermission('warehouse.purchase.create'),
+    validateBody(UpdatePurchaseOrderRequestDto),
+    purchaseOrderController.update,
+  );
+  router.post(
+    '/warehouse/purchase-orders/:purchaseOrderId/submit',
+    requirePermission('warehouse.purchase.submit'),
+    purchaseOrderController.submit,
+  );
+  router.post(
+    '/warehouse/purchase-orders/:purchaseOrderId/approve',
+    requirePermission('warehouse.purchase.approve'),
+    purchaseOrderController.approve,
+  );
+  router.post(
+    '/warehouse/purchase-orders/:purchaseOrderId/reject',
+    requirePermission('warehouse.purchase.approve'),
+    validateBody(RejectPurchaseOrderRequestDto),
+    purchaseOrderController.reject,
+  );
+  router.post(
+    '/warehouse/purchase-orders/:purchaseOrderId/cancel',
+    requirePermission('warehouse.purchase.cancel'),
+    validateBody(CancelPurchaseOrderRequestDto),
+    purchaseOrderController.cancel,
+  );
+
+  // docs/06-tasks/task-111.md..task-114.md (Epic W, UC-WHS-002). Create
+  // reuses `warehouse.purchase.receive` (literally "receive" in Section
+  // 8.1); Post uses `warehouse.purchase.post`, an extrapolated addition to
+  // that catalog since task-114 explicitly requires it be a *separate*
+  // permission from Create for segregation of duties, and Section 8.1's
+  // Purchase group has no distinct "post" verb to reuse instead.
+  router.post(
+    '/warehouse/goods-receipts',
+    requirePermission('warehouse.purchase.receive'),
+    validateBody(CreateGoodsReceiptRequestDto),
+    goodsReceiptController.create,
+  );
+  router.get('/warehouse/goods-receipts/:goodsReceiptId', requirePermission('warehouse.purchase.read'), goodsReceiptController.detail);
+  router.post(
+    '/warehouse/goods-receipts/:goodsReceiptId/post',
+    requirePermission('warehouse.purchase.post'),
+    goodsReceiptController.post,
+  );
 
   return router;
 }

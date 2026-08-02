@@ -118,6 +118,13 @@ const PERMISSION_KEYS = [
   'warehouse.item.read',
   'warehouse.location.manage',
   'warehouse.location.read',
+  'warehouse.purchase.approve',
+  'warehouse.purchase.cancel',
+  'warehouse.purchase.create',
+  'warehouse.purchase.post',
+  'warehouse.purchase.read',
+  'warehouse.purchase.receive',
+  'warehouse.purchase.submit',
   'warehouse.stock.read',
   'warehouse.supplier.manage',
   'warehouse.supplier.read',
@@ -204,13 +211,23 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'report.dashboard.operations.read',
   ],
   // docs/03-sad/18-module-warehouse.md Section 4.1 Actor Matrix: Warehouse
-  // Staff can view stock/create-submit PO/receive/transfer/adjust/opname
-  // but NOT "Kelola item/warehouse" (manage item/supplier/location master
-  // data) -- that row shows only Warehouse Manager + Administrator.
-  WAREHOUSE_STAFF: ['warehouse.item.read', 'warehouse.supplier.read', 'warehouse.location.read', 'warehouse.stock.read'],
+  // Staff can view stock/create-submit PO/receive but NOT "Kelola item/
+  // warehouse" (manage item/supplier/location master data), "Approve/
+  // reject PO", or Post (task-114's explicit segregation-of-duties note --
+  // Post is a stricter tier than Create/Receive, kept Manager-only here).
+  WAREHOUSE_STAFF: [
+    'warehouse.item.read',
+    'warehouse.supplier.read',
+    'warehouse.location.read',
+    'warehouse.stock.read',
+    'warehouse.purchase.read',
+    'warehouse.purchase.create',
+    'warehouse.purchase.submit',
+    'warehouse.purchase.receive',
+  ],
   // Warehouse Manager has every row in the Actor Matrix ✔ except the
   // Finance-specific "Approve variance/adjustment (financial threshold)"
-  // column, which is not part of Epic V's scope (task-095-103).
+  // column, which is not part of Epic V/W's scope (task-095-114).
   WAREHOUSE_MANAGER: [
     'warehouse.item.read',
     'warehouse.item.manage',
@@ -219,6 +236,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.location.read',
     'warehouse.location.manage',
     'warehouse.stock.read',
+    'warehouse.purchase.read',
+    'warehouse.purchase.create',
+    'warehouse.purchase.submit',
+    'warehouse.purchase.approve',
+    'warehouse.purchase.cancel',
+    'warehouse.purchase.receive',
+    'warehouse.purchase.post',
   ],
 };
 

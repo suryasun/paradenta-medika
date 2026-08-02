@@ -100,7 +100,7 @@ export function createApp(config: ConfigService): Express {
   // Phase 2 modules are mounted here as each is implemented, reusing
   // authModule.authenticate / authModule.requirePermission for protected routes.
 
-  const warehouseRouter = buildWarehouseModule(auditService, authModule.authenticate, authModule.requirePermission);
+  const warehouseRouter = buildWarehouseModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, warehouseRouter);
 
   // Phase 3 modules are mounted here as each is implemented (Warehouse Epic V onward).
