@@ -386,10 +386,125 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
   };
 }
 
+// docs/03-sad/12-module-patient.md Section 16.1 required fields (fullName/
+// gender/dateOfBirth/phoneNumber/address). MRNs assigned directly in the
+// same MRN000001 format apps/backend's MedicalRecordNumberGenerator
+// produces, rather than going through CreatePatientUseCase, since a seed
+// script has no HTTP request/actor context to construct one. One patient
+// (Dewi Lestari) is seeded archived, to exercise the Patient Archive/
+// Restore action without needing to do it manually first.
+async function seedPatients() {
+  const patients: Array<{
+    mrn: string;
+    patientName: string;
+    gender: 'MALE' | 'FEMALE';
+    birthDate: string;
+    birthPlace: string;
+    phone: string;
+    email?: string;
+    identityNumber: string;
+    address: string;
+    active: boolean;
+  }> = [
+    {
+      mrn: 'MRN000001',
+      patientName: 'Siti Rahayu',
+      gender: 'FEMALE',
+      birthDate: '1992-03-14',
+      birthPlace: 'Jakarta',
+      phone: '0812-3456-7890',
+      email: 'siti.rahayu@example.local',
+      identityNumber: '3271014403920001',
+      address: 'Jl. Kemang Selatan No. 22, Jakarta Selatan',
+      active: true,
+    },
+    {
+      mrn: 'MRN000002',
+      patientName: 'Budi Santoso',
+      gender: 'MALE',
+      birthDate: '1988-11-02',
+      birthPlace: 'Bandung',
+      phone: '0813-1122-3344',
+      email: 'budi.santoso@example.local',
+      identityNumber: '3273020211880002',
+      address: 'Jl. Fatmawati Raya No. 8, Jakarta Selatan',
+      active: true,
+    },
+    {
+      mrn: 'MRN000003',
+      patientName: 'Rina Wulandari',
+      gender: 'FEMALE',
+      birthDate: '1995-07-27',
+      birthPlace: 'Surabaya',
+      phone: '0857-9988-1122',
+      identityNumber: '3271026707950003',
+      address: 'Jl. Radio Dalam No. 15, Jakarta Selatan',
+      active: true,
+    },
+    {
+      mrn: 'MRN000004',
+      patientName: 'Ahmad Fauzi',
+      gender: 'MALE',
+      birthDate: '1980-01-19',
+      birthPlace: 'Medan',
+      phone: '0821-4455-6677',
+      email: 'ahmad.fauzi@example.local',
+      identityNumber: '3271011901800004',
+      address: 'Jl. Cipete Raya No. 40, Jakarta Selatan',
+      active: true,
+    },
+    {
+      mrn: 'MRN000005',
+      patientName: 'Nabila Putri',
+      gender: 'FEMALE',
+      birthDate: '2001-05-30',
+      birthPlace: 'Tangerang',
+      phone: '0899-2233-4456',
+      identityNumber: '3671017005010005',
+      address: 'Jl. BSD Raya Utama No. 3, Tangerang Selatan',
+      active: true,
+    },
+    {
+      mrn: 'MRN000006',
+      patientName: 'Dewi Lestari',
+      gender: 'FEMALE',
+      birthDate: '2001-05-05',
+      birthPlace: 'Yogyakarta',
+      phone: '0899-2233-4455',
+      identityNumber: '3471014505010006',
+      address: 'Jl. Ampera Raya No. 12, Jakarta Selatan',
+      active: false,
+    },
+  ];
+
+  for (const patient of patients) {
+    await prisma.patient.upsert({
+      where: { medicalRecordNo: patient.mrn },
+      update: {},
+      create: {
+        medicalRecordNo: patient.mrn,
+        patientName: patient.patientName,
+        identityType: 'KTP',
+        identityNumber: patient.identityNumber,
+        birthPlace: patient.birthPlace,
+        birthDate: new Date(patient.birthDate),
+        gender: patient.gender,
+        phone: patient.phone,
+        email: patient.email,
+        address: patient.address,
+        active: patient.active,
+      },
+    });
+  }
+
+  return patients.length;
+}
+
 async function main() {
   const permissionCount = await seedPermissionsAndRoles();
   const userIdByUsername = await seedUsers();
   const masterDataCounts = await seedMasterData(userIdByUsername);
+  const patientCount = await seedPatients();
 
   // eslint-disable-next-line no-console
   console.log(`Seeded ${permissionCount} permissions and roles: ${['ADMINISTRATOR', ...Object.keys(ROLE_PERMISSIONS)].join(', ')}`);
@@ -397,6 +512,8 @@ async function main() {
   console.log(
     `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods.`,
   );
+  // eslint-disable-next-line no-console
+  console.log(`Seeded ${patientCount} patients (5 active, 1 archived).`);
   // eslint-disable-next-line no-console
   console.log('Login users:');
   for (const user of USERS) {
