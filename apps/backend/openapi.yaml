@@ -40,6 +40,7 @@ tags:
   - name: EMR
   - name: Billing
   - name: Reports
+  - name: Warehouse
 
 paths:
   # ---------------------------------------------------------------------
@@ -2150,6 +2151,164 @@ paths:
                                 code: { type: string, example: "reservation.today.count" }
                                 value: { type: number }
                                 currency: { type: string, example: "IDR" }
+
+  # ---------------------------------------------------------------------
+  # Warehouse - Foundation (docs/06-tasks/task-095.md..task-103.md, Epic V)
+  # Literal endpoint paths per docs/03-sad/18-module-warehouse.md Section 6.1.
+  # ---------------------------------------------------------------------
+  /warehouse/items:
+    get:
+      tags: [Warehouse]
+      summary: List items
+      x-permission: warehouse.item.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Warehouse]
+      summary: Create item
+      x-permission: warehouse.item.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, categoryId, unitId, minimumStock, isConsumable, isBatchTracked, isExpiryTracked]
+              properties:
+                code: { type: string, example: "MAT-COMP-001" }
+                name: { type: string, example: "Dental Composite Resin" }
+                categoryId: { type: string, format: uuid }
+                unitId: { type: string, format: uuid }
+                minimumStock: { type: string, example: "10.00" }
+                purchasePrice: { type: string }
+                sellingPrice: { type: string }
+                isConsumable: { type: boolean }
+                isBatchTracked: { type: boolean }
+                isExpiryTracked: { type: boolean }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: "ITEM_CODE_EXISTS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/items/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Warehouse]
+      summary: Item detail
+      x-permission: warehouse.item.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Warehouse]
+      summary: Update item (e.g. deactivate via isActive)
+      x-permission: warehouse.item.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "ITEM_TRACKING_FLAGS_LOCKED -- isBatchTracked/isExpiryTracked cannot change once the item has stock ledger entries", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/suppliers:
+    get:
+      tags: [Warehouse]
+      summary: List suppliers
+      x-permission: warehouse.supplier.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Warehouse]
+      summary: Create supplier
+      x-permission: warehouse.supplier.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code: { type: string }
+                name: { type: string }
+                picName: { type: string }
+                phone: { type: string }
+                address: { type: string }
+                taxNumber: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: "SUPPLIER_CODE_EXISTS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/warehouses:
+    get:
+      tags: [Warehouse]
+      summary: List warehouse locations
+      x-permission: warehouse.location.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Warehouse]
+      summary: Create warehouse location
+      x-permission: warehouse.location.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, code, name]
+              properties:
+                branchId: { type: string, format: uuid }
+                code: { type: string }
+                name: { type: string }
+                locationType: { type: string, example: "MAIN" }
+                address: { type: string }
+                managerUserId: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: "WAREHOUSE_LOCATION_CODE_EXISTS (duplicate code within the same branch)", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /warehouse/stocks:
+    get:
+      tags: [Warehouse]
+      summary: List stock balances (current/reserved/available/minimum/status)
+      x-permission: warehouse.stock.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Sort' }
+        - { $ref: '#/components/parameters/Order' }
+        - name: itemId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: warehouseId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+
+  /warehouse/stocks/{stockId}/ledger:
+    get:
+      tags: [Warehouse]
+      summary: Immutable stock ledger for one stock line (chronological, running balance)
+      x-permission: warehouse.stock.read
+      parameters:
+        - name: stockId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
 components:
   securitySchemes:

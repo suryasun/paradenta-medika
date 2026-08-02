@@ -114,6 +114,13 @@ const PERMISSION_KEYS = [
   'system.user.read',
   'system.user.role.manage',
   'system.user.session.revoke',
+  'warehouse.item.manage',
+  'warehouse.item.read',
+  'warehouse.location.manage',
+  'warehouse.location.read',
+  'warehouse.stock.read',
+  'warehouse.supplier.manage',
+  'warehouse.supplier.read',
 ];
 
 // Scoped to what each role's screens in apps/frontend actually call --
@@ -196,6 +203,23 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'masterdata.payment-method.read',
     'report.dashboard.operations.read',
   ],
+  // docs/03-sad/18-module-warehouse.md Section 4.1 Actor Matrix: Warehouse
+  // Staff can view stock/create-submit PO/receive/transfer/adjust/opname
+  // but NOT "Kelola item/warehouse" (manage item/supplier/location master
+  // data) -- that row shows only Warehouse Manager + Administrator.
+  WAREHOUSE_STAFF: ['warehouse.item.read', 'warehouse.supplier.read', 'warehouse.location.read', 'warehouse.stock.read'],
+  // Warehouse Manager has every row in the Actor Matrix ✔ except the
+  // Finance-specific "Approve variance/adjustment (financial threshold)"
+  // column, which is not part of Epic V's scope (task-095-103).
+  WAREHOUSE_MANAGER: [
+    'warehouse.item.read',
+    'warehouse.item.manage',
+    'warehouse.supplier.read',
+    'warehouse.supplier.manage',
+    'warehouse.location.read',
+    'warehouse.location.manage',
+    'warehouse.stock.read',
+  ],
 };
 
 function toPermissionName(key: string): string {
@@ -221,6 +245,8 @@ const USERS: SeededUser[] = [
   { username: 'doctor2', email: 'bayu.aji@parakita.local', password: TEST_PASSWORD, roleCode: 'DOCTOR' },
   { username: 'registration1', email: 'registration1@parakita.local', password: TEST_PASSWORD, roleCode: 'REGISTRATION' },
   { username: 'cashier1', email: 'cashier1@parakita.local', password: TEST_PASSWORD, roleCode: 'CASHIER' },
+  { username: 'warehouse_staff1', email: 'warehouse.staff1@parakita.local', password: TEST_PASSWORD, roleCode: 'WAREHOUSE_STAFF' },
+  { username: 'warehouse_manager1', email: 'warehouse.manager1@parakita.local', password: TEST_PASSWORD, roleCode: 'WAREHOUSE_MANAGER' },
 ];
 
 async function seedPermissionsAndRoles() {
@@ -557,6 +583,108 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     }
   }
 
+  // Warehouse Module (docs/03-sad/18-module-warehouse.md, Epic V Foundation):
+  // ItemCategory/Unit are the minimal FK targets the Item entity's own
+  // documented fields require (see prisma/schema.prisma comment above
+  // ItemCategory) -- no dedicated CRUD endpoint exists for either, so a
+  // small fixed reference set is seeded directly.
+  const itemCategories: Array<{ categoryCode: string; categoryName: string }> = [
+    { categoryCode: 'DENTAL-MAT', categoryName: 'Dental Material' },
+    { categoryCode: 'DENTAL-CONS', categoryName: 'Dental Consumable' },
+    { categoryCode: 'NON-MEDICAL', categoryName: 'Non-Medical Supply' },
+  ];
+  const itemCategoryIdByCode = new Map<string, string>();
+  for (const category of itemCategories) {
+    const row = await prisma.itemCategory.upsert({
+      where: { categoryCode: category.categoryCode },
+      update: {},
+      create: category,
+    });
+    itemCategoryIdByCode.set(category.categoryCode, row.id);
+  }
+
+  const units: Array<{ unitCode: string; unitName: string }> = [
+    { unitCode: 'PCS', unitName: 'Piece' },
+    { unitCode: 'BOX', unitName: 'Box' },
+    { unitCode: 'PACK', unitName: 'Pack' },
+  ];
+  const unitIdByCode = new Map<string, string>();
+  for (const unit of units) {
+    const row = await prisma.unit.upsert({ where: { unitCode: unit.unitCode }, update: {}, create: unit });
+    unitIdByCode.set(unit.unitCode, row.id);
+  }
+
+  // Sample Item/Supplier/WarehouseLocation for manual/live testing of
+  // Epic V's endpoints, mirroring the sample-data pattern already used for
+  // Treatments/PaymentMethods above.
+  await prisma.warehouseLocation.upsert({
+    where: { branchId_locationCode: { branchId: branchKemang.id, locationCode: 'WH-KMG-01' } },
+    update: {},
+    create: {
+      branchId: branchKemang.id,
+      locationCode: 'WH-KMG-01',
+      locationName: 'Kemang Main Warehouse',
+      locationType: 'MAIN',
+      address: branchKemang.address,
+    },
+  });
+
+  await prisma.supplier.upsert({
+    where: { supplierCode: 'SUP-001' },
+    update: {},
+    create: {
+      supplierCode: 'SUP-001',
+      supplierName: 'PT Dental Supply Nusantara',
+      picName: 'Rina Wijaya',
+      phone: '021-7000-1000',
+      address: 'Jl. Industri Dental No. 10, Jakarta',
+    },
+  });
+
+  const items: Array<{
+    itemCode: string;
+    itemName: string;
+    categoryCode: string;
+    unitCode: string;
+    minimumStock: number;
+    isBatchTracked: boolean;
+    isExpiryTracked: boolean;
+  }> = [
+    {
+      itemCode: 'MAT-COMP-001',
+      itemName: 'Dental Composite Resin',
+      categoryCode: 'DENTAL-MAT',
+      unitCode: 'PCS',
+      minimumStock: 10,
+      isBatchTracked: true,
+      isExpiryTracked: true,
+    },
+    {
+      itemCode: 'CONS-GLOVE-001',
+      itemName: 'Latex Examination Gloves (Box)',
+      categoryCode: 'DENTAL-CONS',
+      unitCode: 'BOX',
+      minimumStock: 20,
+      isBatchTracked: false,
+      isExpiryTracked: false,
+    },
+  ];
+  for (const item of items) {
+    await prisma.item.upsert({
+      where: { itemCode: item.itemCode },
+      update: {},
+      create: {
+        itemCode: item.itemCode,
+        itemName: item.itemName,
+        categoryId: itemCategoryIdByCode.get(item.categoryCode)!,
+        unitId: unitIdByCode.get(item.unitCode)!,
+        minimumStock: item.minimumStock,
+        isConsumable: true,
+        isBatchTracked: item.isBatchTracked,
+        isExpiryTracked: item.isExpiryTracked,
+      },
+    });
+  }
   return {
     clinics: 1,
     branches: 2,
@@ -567,6 +695,11 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     paymentMethods: paymentMethods.length,
     toothConditions: toothConditions.length,
     consentTemplates: consentTemplates.length,
+    itemCategories: itemCategories.length,
+    units: units.length,
+    warehouseItems: items.length,
+    warehouseSuppliers: 1,
+    warehouseLocations: 1,
   };
 }
 
@@ -695,6 +828,10 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log(
     `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.doctorSchedules} doctor schedules, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods, ${masterDataCounts.toothConditions} tooth conditions, ${masterDataCounts.consentTemplates} consent templates.`,
+  );
+  // eslint-disable-next-line no-console
+  console.log(
+    `Seeded Warehouse Module: ${masterDataCounts.itemCategories} item categories, ${masterDataCounts.units} units, ${masterDataCounts.warehouseItems} items, ${masterDataCounts.warehouseSuppliers} supplier, ${masterDataCounts.warehouseLocations} warehouse location.`,
   );
   // eslint-disable-next-line no-console
   console.log(`Seeded ${patientCount} patients (5 active, 1 archived).`);

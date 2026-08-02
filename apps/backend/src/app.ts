@@ -17,6 +17,7 @@ import { buildQueueModule } from './modules/queue/presentation/routes/queue.rout
 import { buildEmrModule, buildAttachmentFileRouter } from './modules/emr/presentation/routes/emr.routes';
 import { buildBillingModule } from './modules/billing/presentation/routes/billing.routes';
 import { buildReportsModule } from './modules/reports/presentation/routes/reports.routes';
+import { buildWarehouseModule } from './modules/warehouse/presentation/routes/warehouse.routes';
 import { eventBus } from './shared/events/EventBus';
 
 const API_V1_PREFIX = '/api/v1';
@@ -98,6 +99,11 @@ export function createApp(config: ConfigService): Express {
   // Phase 1 module composition is now complete (Epics J, A-I / task-001..059).
   // Phase 2 modules are mounted here as each is implemented, reusing
   // authModule.authenticate / authModule.requirePermission for protected routes.
+
+  const warehouseRouter = buildWarehouseModule(auditService, authModule.authenticate, authModule.requirePermission);
+  app.use(API_V1_PREFIX, warehouseRouter);
+
+  // Phase 3 modules are mounted here as each is implemented (Warehouse Epic V onward).
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);
