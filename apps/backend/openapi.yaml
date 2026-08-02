@@ -1,0 +1,1351 @@
+openapi: 3.0.3
+info:
+  title: Parakita API
+  description: >
+    Dental Clinic Management System — Phase 1 (Foundation/MVP). Generated from
+    the actual implemented routes/DTOs under src/modules/*/presentation, not
+    hand-invented — every path, permission code, and status code here mirrors
+    the corresponding *.routes.ts file. See docs/06-tasks/phase-1-documentation/
+    for the per-epic build record this spec documents.
+  version: 1.0.0
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: System - Users
+  - name: System - Roles
+  - name: Master Data - Clinics
+  - name: Master Data - Branches
+  - name: Master Data - Doctors
+  - name: Master Data - Treatment Categories
+  - name: Master Data - Treatments
+  - name: Master Data - Payment Methods
+  - name: Patient
+  - name: Reservation
+  - name: Queue
+  - name: EMR
+  - name: Billing
+  - name: Reports
+
+paths:
+  # ---------------------------------------------------------------------
+  # Auth (docs/06-tasks/task-007.md..task-014.md)
+  # ---------------------------------------------------------------------
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with username/email + password
+      security: []
+      x-rate-limit: "5/min"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: { type: string, description: "username or email" }
+                password: { type: string, format: password }
+                deviceName: { type: string }
+                deviceType: { type: string }
+                deviceId: { type: string }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          accessToken: { type: string }
+                          refreshToken: { type: string }
+                          expiresIn: { type: integer }
+                          user:
+                            type: object
+                            properties:
+                              id: { type: string, format: uuid }
+                              username: { type: string }
+                              email: { type: string, format: email }
+                          role: { type: string }
+                          roles: { type: array, items: { type: string } }
+                          permissions: { type: array, items: { type: string } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { description: "Invalid credentials (generic message, per AUTH-044)", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate access + refresh token
+      security: []
+      x-rate-limit: "20/min"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New token pair issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          accessToken: { type: string }
+                          refreshToken: { type: string }
+                          expiresIn: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current session and its refresh token
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change password (revokes all other sessions)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, format: password }
+                newPassword: { type: string, format: password }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a single-use, expiring password-reset token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier]
+              properties:
+                identifier: { type: string }
+      responses:
+        '200': { description: "Generic acknowledgement (does not reveal whether the identifier exists)", content: { application/json: { schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' } } } }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password using a valid reset token (revokes all sessions)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, format: password }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  # ---------------------------------------------------------------------
+  # System - Users (docs/06-tasks/task-015.md, task-016.md, task-019.md, task-020.md)
+  # ---------------------------------------------------------------------
+  /system/users:
+    get:
+      tags: [System - Users]
+      summary: List users
+      x-permission: system.user.read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [System - Users]
+      summary: Create user
+      x-permission: system.user.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [System - Users]
+      summary: User detail
+      x-permission: system.user.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [System - Users]
+      summary: Update user
+      x-permission: system.user.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /system/users/{userId}/activate:
+    post:
+      tags: [System - Users]
+      summary: Reactivate a deactivated user
+      x-permission: system.user.activate
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /system/users/{userId}/deactivate:
+    post:
+      tags: [System - Users]
+      summary: Deactivate a user (revokes active sessions)
+      x-permission: system.user.deactivate
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /system/users/{userId}/roles:
+    post:
+      tags: [System - Users]
+      summary: Assign one or more roles to a user
+      x-permission: system.user.role.manage
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleIds]
+              properties:
+                roleIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /system/users/{userId}/revoke-sessions:
+    post:
+      tags: [System - Users]
+      summary: Administrator force-logout (all devices, one device, or all sessions)
+      x-permission: system.user.session.revoke
+      parameters: [{ $ref: '#/components/parameters/UserId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionId: { type: string, format: uuid, description: "omit to revoke all sessions" }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
+  # System - Roles (docs/06-tasks/task-017.md, task-018.md)
+  # ---------------------------------------------------------------------
+  /system/roles:
+    get:
+      tags: [System - Roles]
+      summary: List roles
+      x-permission: system.role.read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [System - Roles]
+      summary: Create role
+      x-permission: system.role.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleCode, roleName]
+              properties:
+                roleCode: { type: string }
+                roleName: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system/permissions:
+    get:
+      tags: [System - Roles]
+      summary: List all permission codes
+      x-permission: system.permission.read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+
+  /system/roles/{roleId}/permissions:
+    patch:
+      tags: [System - Roles]
+      summary: Replace a role's permission set
+      x-permission: system.role.permission.manage
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissionIds]
+              properties:
+                permissionIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
+  # Master Data (docs/06-tasks/task-021.md..task-026.md) — six identically
+  # shaped CRUD resources (crudUseCaseFactory), documented once per resource.
+  # ---------------------------------------------------------------------
+  /clinics:
+    get:
+      tags: [Master Data - Clinics]
+      summary: List clinics
+      x-permission: masterdata.clinic.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Clinics]
+      summary: Create clinic
+      x-permission: masterdata.clinic.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /clinics/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Clinics]
+      summary: Clinic detail
+      x-permission: masterdata.clinic.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Clinics]
+      summary: Update clinic
+      x-permission: masterdata.clinic.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /branches:
+    get:
+      tags: [Master Data - Branches]
+      summary: List branches
+      x-permission: masterdata.branch.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Branches]
+      summary: Create branch
+      x-permission: masterdata.branch.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /branches/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Branches]
+      summary: Branch detail
+      x-permission: masterdata.branch.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Branches]
+      summary: Update branch
+      x-permission: masterdata.branch.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /doctors:
+    get:
+      tags: [Master Data - Doctors]
+      summary: List doctors
+      x-permission: masterdata.doctor.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Doctors]
+      summary: Create doctor
+      x-permission: masterdata.doctor.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /doctors/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Doctors]
+      summary: Doctor detail
+      x-permission: masterdata.doctor.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Doctors]
+      summary: Update doctor
+      x-permission: masterdata.doctor.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /treatment-categories:
+    get:
+      tags: [Master Data - Treatment Categories]
+      summary: List treatment categories
+      x-permission: masterdata.treatment-category.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Treatment Categories]
+      summary: Create treatment category
+      x-permission: masterdata.treatment-category.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /treatment-categories/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Treatment Categories]
+      summary: Treatment category detail
+      x-permission: masterdata.treatment-category.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Treatment Categories]
+      summary: Update treatment category
+      x-permission: masterdata.treatment-category.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /treatments:
+    get:
+      tags: [Master Data - Treatments]
+      summary: List treatments
+      x-permission: masterdata.treatment.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Treatments]
+      summary: Create treatment
+      x-permission: masterdata.treatment.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /treatments/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Treatments]
+      summary: Treatment detail
+      x-permission: masterdata.treatment.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Treatments]
+      summary: Update treatment (e.g. deactivate via isActive)
+      x-permission: masterdata.treatment.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /payment-methods:
+    get:
+      tags: [Master Data - Payment Methods]
+      summary: List payment methods
+      x-permission: masterdata.payment-method.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Payment Methods]
+      summary: Create payment method
+      x-permission: masterdata.payment-method.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+  /payment-methods/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Master Data - Payment Methods]
+      summary: Payment method detail
+      x-permission: masterdata.payment-method.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Payment Methods]
+      summary: Update payment method (e.g. deactivate via isActive)
+      x-permission: masterdata.payment-method.manage
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
+  # Patient (docs/06-tasks/task-001.md, task-027.md..task-030.md)
+  # ---------------------------------------------------------------------
+  /patients:
+    get:
+      tags: [Patient]
+      summary: List / search patients
+      x-permission: patient.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Patient]
+      summary: Register patient (generates Medical Record Number)
+      x-permission: patient.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patientName, gender, birthDate, phone, address]
+              properties:
+                patientName: { type: string }
+                identityType: { type: string, enum: [KTP, PASSPORT, SIM, OTHER] }
+                identityNumber: { type: string }
+                birthPlace: { type: string }
+                birthDate: { type: string, format: date }
+                gender: { type: string, enum: [MALE, FEMALE] }
+                phone: { type: string }
+                email: { type: string, format: email }
+                address: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /patients/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Patient]
+      summary: Patient detail
+      x-permission: patient.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Patient]
+      summary: Update patient
+      x-permission: patient.update
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /patients/{id}/archive:
+    patch:
+      tags: [Patient]
+      summary: Archive patient (soft, reversible)
+      x-permission: patient.archive
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /patients/{id}/restore:
+    patch:
+      tags: [Patient]
+      summary: Restore an archived patient
+      x-permission: patient.archive
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
+  # Reservation (docs/06-tasks/task-002.md, task-031.md..task-036.md)
+  # ---------------------------------------------------------------------
+  /reservations:
+    get:
+      tags: [Reservation]
+      summary: List / search reservations
+      x-permission: reservation.read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - name: doctorId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: reservationType
+          in: query
+          schema: { type: string }
+        - name: reservationSource
+          in: query
+          schema: { type: string }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Reservation]
+      summary: Create reservation (scheduled) or walk-in registration
+      description: >
+        A single endpoint backs both flows: WALK_IN is dispatched to
+        WalkInRegistrationUseCase when source or reservationType is
+        "WALK_IN" (no date/time required); otherwise CreateReservationUseCase
+        handles a scheduled appointment.
+      x-permission: reservation.create
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: "Double-booking or same-patient-same-day conflict", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /reservations/{id}:
+    parameters: [{ $ref: '#/components/parameters/Id' }]
+    get:
+      tags: [Reservation]
+      summary: Reservation detail
+      x-permission: reservation.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Reservation]
+      summary: Update reservation
+      x-permission: reservation.update
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservations/{id}/reschedule:
+    patch:
+      tags: [Reservation]
+      summary: Reschedule to a new date/time
+      x-permission: reservation.reschedule
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservations/{id}/cancel:
+    patch:
+      tags: [Reservation]
+      summary: Cancel reservation
+      x-permission: reservation.cancel
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservations/{id}/check-in:
+    patch:
+      tags: [Reservation]
+      summary: Check in patient (publishes PatientCheckedIn -> auto-creates Queue entry)
+      x-permission: reservation.check-in
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /doctors/{id}/availability:
+    get:
+      tags: [Reservation]
+      summary: Doctor availability for a date
+      x-permission: reservation.read
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /doctors/{id}/time-slots:
+    get:
+      tags: [Reservation]
+      summary: Bookable time slots for a doctor on a date
+      x-permission: reservation.read
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
+  # Queue (docs/06-tasks/task-037.md..task-047.md)
+  # ---------------------------------------------------------------------
+  /queues/dashboard:
+    get:
+      tags: [Queue]
+      summary: Queue dashboard (status/doctor summary, wait/service time)
+      x-permission: queue.dashboard.read
+      parameters:
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /queues:
+    get:
+      tags: [Queue]
+      summary: List / search queue entries
+      x-permission: queue.read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: doctorId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: visitDate
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Queue]
+      summary: Create queue entry (walk-in; reservation check-in creates one automatically)
+      x-permission: queue.create
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /queues/{id}:
+    get:
+      tags: [Queue]
+      summary: Queue entry detail
+      x-permission: queue.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /queues/{id}/call:
+    patch:
+      tags: [Queue]
+      summary: Call the next queue entry (WAITING -> CALLED)
+      x-permission: queue.call
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /queues/{id}/recall:
+    patch:
+      tags: [Queue]
+      summary: Recall (repeat) a CALLED entry's announcement
+      x-permission: queue.recall
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /queues/{id}/skip:
+    patch:
+      tags: [Queue]
+      summary: Skip a CALLED entry (CALLED -> SKIPPED)
+      x-permission: queue.skip
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /queues/{id}/start:
+    patch:
+      tags: [Queue]
+      summary: Start service (CALLED -> IN_SERVICE)
+      x-permission: queue.start
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /queues/{id}/complete:
+    patch:
+      tags: [Queue]
+      summary: Complete service (IN_SERVICE -> COMPLETED)
+      x-permission: queue.complete
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /queues/{id}/cancel:
+    patch:
+      tags: [Queue]
+      summary: Cancel a queue entry
+      x-permission: queue.cancel
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /queues/{id}/transfer:
+    patch:
+      tags: [Queue]
+      summary: Transfer a queue entry to a different doctor
+      x-permission: queue.transfer
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doctorId]
+              properties:
+                doctorId: { type: string, format: uuid }
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
+  # EMR (docs/06-tasks/task-048.md..task-053.md)
+  # ---------------------------------------------------------------------
+  /emr/visits:
+    post:
+      tags: [EMR]
+      summary: Open a Visit from a CALLED Queue entry
+      x-permission: emr.visit.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queueId]
+              properties:
+                queueId: { type: string, format: uuid }
+                chiefComplaint: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/visits/{id}:
+    get:
+      tags: [EMR]
+      summary: Visit detail (with vital signs, SOAP, diagnoses, treatments)
+      x-permission: emr.visit.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /emr/visits/{id}/vital-signs:
+    post:
+      tags: [EMR]
+      summary: Record vital signs (Visit must be open)
+      x-permission: emr.vital.record
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/visits/{id}/soap-note:
+    put:
+      tags: [EMR]
+      summary: Upsert the Visit's SOAP note (Subjective/Objective/Assessment/Plan)
+      x-permission: emr.soap.record
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subjective: { type: string }
+                objective: { type: string }
+                assessment: { type: string }
+                plan: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/visits/{id}/diagnoses:
+    post:
+      tags: [EMR]
+      summary: Record diagnosis entries (>=1 PRIMARY required)
+      x-permission: emr.diagnosis.record
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [diagnoses]
+              properties:
+                diagnoses:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [diagnosisType, diagnosisName]
+                    properties:
+                      diagnosisType: { type: string, enum: [PRIMARY, SECONDARY, DIFFERENTIAL] }
+                      diagnosisName: { type: string }
+                      notes: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/visits/{id}/treatments:
+    post:
+      tags: [EMR]
+      summary: Record a Treatment entry (price snapshotted from catalog at entry time)
+      x-permission: emr.treatment.record
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [treatmentId]
+              properties:
+                treatmentId: { type: string, format: uuid }
+                toothReference: { type: string }
+                quantity: { type: integer, minimum: 1, maximum: 100, default: 1 }
+                notes: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /emr/visits/{id}/close:
+    post:
+      tags: [EMR]
+      summary: Close Visit (requires complete SOAP + >=1 Treatment; publishes EMRFinished)
+      x-permission: emr.visit.close
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  # ---------------------------------------------------------------------
+  # Billing (docs/06-tasks/task-054.md..task-058.md)
+  # ---------------------------------------------------------------------
+  /billing/invoices:
+    get:
+      tags: [Billing]
+      summary: List invoices
+      x-permission: billing.invoice.read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - name: status
+          in: query
+          schema: { type: string, enum: [UNPAID, PARTIALLY_PAID, PAID, CLOSED] }
+        - name: patientId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Billing]
+      summary: Generate invoice from a completed Visit (also event-triggered by EMRFinished)
+      x-permission: billing.invoice.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visitId]
+              properties:
+                visitId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          invoiceId: { type: string, format: uuid }
+                          invoiceNumber: { type: string, example: "INV-20260801-000001" }
+        '409': { description: "Invoice already exists for this Visit", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /billing/invoices/{id}:
+    get:
+      tags: [Billing]
+      summary: Invoice detail (line items + payments)
+      x-permission: billing.invoice.read
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /billing/invoices/{id}/close:
+    post:
+      tags: [Billing]
+      summary: Close invoice (must be fully PAID; immutable thereafter)
+      x-permission: billing.invoice.close
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  /billing/payments:
+    post:
+      tags: [Billing]
+      summary: Record a payment (full/partial/split across payment methods)
+      x-permission: billing.payment.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceId, payments]
+              properties:
+                invoiceId: { type: string, format: uuid }
+                payments:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [paymentMethodId, amount]
+                    properties:
+                      paymentMethodId: { type: string, format: uuid }
+                      amount: { type: number }
+                      referenceNo: { type: string }
+                      note: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+
+  # ---------------------------------------------------------------------
+  # Reports (docs/06-tasks/task-059.md)
+  # ---------------------------------------------------------------------
+  /reports/dashboards/operations:
+    get:
+      tags: [Reports]
+      summary: Operations dashboard (today's reservations/queue/collections)
+      x-permission: report.dashboard.operations.read
+      parameters:
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          scope:
+                            type: object
+                            properties:
+                              branchIds: { type: array, items: { type: string, format: uuid } }
+                              timezone: { type: string, example: "Asia/Jakarta" }
+                          dataAsOf: { type: string, format: date-time }
+                          freshness: { type: string, enum: [fresh] }
+                          definitionVersion: { type: string, example: "1.0.0" }
+                          metrics:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                code: { type: string, example: "reservation.today.count" }
+                                value: { type: number }
+                                currency: { type: string, example: "IDR" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Search:
+      name: search
+      in: query
+      schema: { type: string }
+    Sort:
+      name: sort
+      in: query
+      description: "Only endpoint-specific allowed fields are honored; an unlisted field falls back to createdAt."
+      schema: { type: string, default: createdAt }
+    Order:
+      name: order
+      in: query
+      schema: { type: string, enum: [asc, desc], default: desc }
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  requestBodies:
+    GenericJson:
+      required: true
+      content:
+        application/json:
+          schema: { type: object }
+
+  schemas:
+    ApiSuccessEnvelope:
+      type: object
+      required: [success, message, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        message: { type: string }
+        data: {}
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+            totalPages: { type: integer }
+    ApiErrorEnvelope:
+      type: object
+      required: [success, code, message, errors]
+      properties:
+        success: { type: boolean, enum: [false] }
+        code: { type: string, example: "VALIDATION_ERROR" }
+        message: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+        correlationId: { type: string, format: uuid }
+
+  responses:
+    Ok:
+      description: Success
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+    Created:
+      description: Resource created
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+    PagedOk:
+      description: Paginated list
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+    ValidationError:
+      description: Request failed DTO validation (class-validator, whitelist + forbidNonWhitelisted)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    Unauthorized:
+      description: Missing, invalid, expired, or revoked token / inactive user (AUTH-080..084)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    Forbidden:
+      description: Authenticated but missing the required permission (AUTH-085)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    Conflict:
+      description: Resource conflict (e.g. duplicate identifier)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
+    BusinessRuleViolation:
+      description: Business rule violation (state-machine or domain validation failure)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiErrorEnvelope' }
