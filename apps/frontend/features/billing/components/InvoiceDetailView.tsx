@@ -30,7 +30,7 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">{invoice.invoiceNo}</h1>
+          <h1 className="text-foreground">{invoice.invoiceNo}</h1>
           <Badge tone={INVOICE_STATUS_TONE[invoice.status]}>{invoice.status}</Badge>
         </div>
         <div className="flex gap-2">

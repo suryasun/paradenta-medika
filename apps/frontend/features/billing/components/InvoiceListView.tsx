@@ -31,7 +31,7 @@ export function InvoiceListView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-foreground">Billing</h1>
+      <h1 className="text-foreground">Billing</h1>
 
       <div className="flex flex-wrap gap-3">
         <Select value={filters.status ?? ""} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined, page: 1 }))}>

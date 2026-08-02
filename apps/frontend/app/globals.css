@@ -1,13 +1,23 @@
 @import "tailwindcss";
 
 /*
- * Design tokens. docs/02-design/design-system.md documents that no visual
- * design system (colors/typography/spacing) exists in the source docs --
- * flagged as a Missing Documentation gap. Per the user's explicit decision
- * to proceed without a design pass, these are a pragmatic, reasonable
- * default (a clinical teal/blue palette + standard semantic status colors)
- * chosen by the implementer, not derived from any design spec. Replace here
- * if a real design system is authored later.
+ * Design tokens, reworked to match the structure documented in
+ * docs/02-design/design-system.md and docs/02-design/Parakita - Design
+ * System.dc.html: a 100-900 ramp per hue (Primary/Secondary/Success/
+ * Warning/Error/Info), 8/16/24% opacity variants of each hue's 500 shade
+ * for badges/tertiary buttons, Inter typography, and the documented
+ * spacing (4/8/12/16/20/24/28/32px -- already Tailwind's default 4px
+ * scale, so no override needed) and radius scale (xs 2 / sm 4 / md 6 /
+ * lg 8 / round 500px).
+ *
+ * The actual token values (hex colors) are NOT extracted from a real
+ * source: docs/02-design/design-system.md references components/
+ * fig-tokens.css and components/dental-tokens.css, neither of which
+ * exists in this repo. These are a best-effort clinical teal/blue
+ * palette built to the same *structure* the docs describe, not the
+ * literal values from the (missing) Figma-derived token files. No dark
+ * mode is implemented -- the mockup's theme toggle has no equivalent UI
+ * in the built app yet, so only light-mode values are defined.
  */
 :root {
   --background: #f8fafc;
@@ -16,18 +26,67 @@
   --border: #e2e8f0;
   --muted: #64748b;
 
-  --color-primary: #0f766e;
-  --color-primary-foreground: #ffffff;
-  --color-primary-hover: #115e59;
+  /* Primary (teal) */
+  --color-primary-100: #e3f5f3;
+  --color-primary-200: #bfe6e2;
+  --color-primary-300: #93d3cc;
+  --color-primary-400: #5cbbb1;
+  --color-primary-500: #2e9e93;
+  --color-primary-600: #167e74;
+  --color-primary-700: #0f6259;
+  --color-primary-800: #0b4a43;
+  --color-primary-900: #08332e;
 
-  --color-success: #16a34a;
-  --color-success-bg: #f0fdf4;
-  --color-warning: #d97706;
-  --color-warning-bg: #fffbeb;
-  --color-error: #dc2626;
-  --color-error-bg: #fef2f2;
-  --color-info: #2563eb;
-  --color-info-bg: #eff6ff;
+  /* Secondary (slate) */
+  --color-secondary-100: #f1f5f9;
+  --color-secondary-200: #e2e8f0;
+  --color-secondary-300: #cbd5e1;
+  --color-secondary-400: #94a3b8;
+  --color-secondary-500: #64748b;
+  --color-secondary-600: #475569;
+  --color-secondary-700: #334155;
+  --color-secondary-800: #1e293b;
+  --color-secondary-900: #0f172a;
+
+  /* Success (green) */
+  --color-success-100: #e7f8ed;
+  --color-success-500: #22a559;
+  --color-success-700: #106b37;
+
+  /* Warning (amber) */
+  --color-warning-100: #fff6e0;
+  --color-warning-500: #f5a623;
+  --color-warning-700: #a8660a;
+
+  /* Error (red) */
+  --color-error-100: #fdecec;
+  --color-error-500: #e13c3c;
+  --color-error-700: #971c1c;
+
+  /* Info (blue) */
+  --color-info-100: #e7f1fe;
+  --color-info-500: #2e82e8;
+  --color-info-700: #164c97;
+
+  /* Semantic aliases used by shared/utils/currency and existing components */
+  --color-primary: var(--color-primary-600);
+  --color-primary-foreground: #ffffff;
+  --color-primary-hover: var(--color-primary-700);
+  --color-success: var(--color-success-700);
+  --color-success-bg: var(--color-success-100);
+  --color-warning: var(--color-warning-700);
+  --color-warning-bg: var(--color-warning-100);
+  --color-error: var(--color-error-700);
+  --color-error-bg: var(--color-error-100);
+  --color-info: var(--color-info-700);
+  --color-info-bg: var(--color-info-100);
+
+  /* Radius scale: xs·2 / sm·4 / md·6 / lg·8 / round·500 */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-round: 500px;
 }
 
 @theme inline {
@@ -47,12 +106,43 @@
   --color-error-bg: var(--color-error-bg);
   --color-info: var(--color-info);
   --color-info-bg: var(--color-info-bg);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-inter);
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-round: var(--radius-round);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/*
+ * Typography scale (docs/02-design/Parakita - Design System.dc.html
+ * "01 · Foundations > Tipografi"): Display 32/700, H1 26/700, H2 22/700,
+ * H3 18/600, Subtitle 15/600, Body1 14/400 (the body default above),
+ * Body2 13/400, Caption 12/500 uppercase. Applied as base element rules
+ * so existing `<h1>`/`<h2>` page headers pick this up without every
+ * page needing its own font-size utility class.
+ */
+h1 {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+h2 {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
 }

@@ -78,7 +78,7 @@ export function AdminEntityListPage<T extends { id: string; isActive?: boolean }
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+        <h1 className="text-foreground">{title}</h1>
         <PermissionGuard permission={`${permissionPrefix}.manage`}>
           <Button onClick={() => setShowCreate(true)}>New {title.replace(/s$/, "")}</Button>
         </PermissionGuard>

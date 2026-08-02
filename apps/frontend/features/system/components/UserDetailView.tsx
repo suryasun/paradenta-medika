@@ -37,7 +37,7 @@ export function UserDetailView({ userId }: { userId: string }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">{user.username}</h1>
+          <h1 className="text-foreground">{user.username}</h1>
           <Badge tone={user.status === "ACTIVE" ? "success" : "neutral"}>{user.status}</Badge>
         </div>
         <div className="flex gap-2">

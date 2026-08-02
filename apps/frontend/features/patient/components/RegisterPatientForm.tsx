@@ -10,7 +10,7 @@ export function RegisterPatientForm() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-foreground">Register Patient</h1>
+      <h1 className="text-foreground">Register Patient</h1>
       <PatientForm
         mode="create"
         isSubmitting={createPatient.isPending}

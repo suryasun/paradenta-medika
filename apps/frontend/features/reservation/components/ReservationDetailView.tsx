@@ -39,7 +39,7 @@ export function ReservationDetailView({ reservationId }: { reservationId: string
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">{reservation.reservationNumber}</h1>
+          <h1 className="text-foreground">{reservation.reservationNumber}</h1>
           <Badge tone={RESERVATION_STATUS_TONE[reservation.status]}>{reservation.status}</Badge>
         </div>
         {canModify && (

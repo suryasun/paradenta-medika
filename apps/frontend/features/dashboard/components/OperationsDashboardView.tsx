@@ -29,7 +29,7 @@ export function OperationsDashboardView() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Operations Dashboard</h1>
+        <h1 className="text-foreground">Operations Dashboard</h1>
         <p className="text-sm text-muted">
           As of {new Date(data.dataAsOf).toLocaleString()} · {data.scope.timezone}
         </p>

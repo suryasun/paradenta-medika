@@ -71,7 +71,7 @@ export function ReservationListView() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">Reservations</h1>
+        <h1 className="text-foreground">Reservations</h1>
         <PermissionGuard permission="reservation.create">
           <Link href="/reservations/new">
             <Button>New Reservation</Button>

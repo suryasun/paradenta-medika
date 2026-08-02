@@ -42,7 +42,7 @@ export function VisitWorkspace({ visitId }: { visitId: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Visit {visit.visitNo}</h1>
+          <h1 className="text-foreground">Visit {visit.visitNo}</h1>
           <p className="text-sm text-muted">
             <Badge tone={VISIT_STATUS_TONE[visit.status]}>{visit.status}</Badge>
             {visit.chiefComplaint && <span className="ml-2">{visit.chiefComplaint}</span>}

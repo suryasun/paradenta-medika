@@ -18,7 +18,7 @@ export function EditPatientForm({ patientId }: { patientId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold text-foreground">Edit Patient</h1>
+      <h1 className="text-foreground">Edit Patient</h1>
       <PatientForm
         mode="edit"
         initialPatient={patient}

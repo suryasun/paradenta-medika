@@ -2,37 +2,19 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
 import { PermissionGuard } from "@/components/guards/PermissionGuard";
-import { useOpenVisit } from "@/features/emr/hooks/useOpenVisit";
-import { useQueues } from "../hooks/useQueues";
-import {
-  useCallQueue,
-  useCancelQueue,
-  useCompleteQueue,
-  useRecallQueue,
-  useSkipQueue,
-  useStartQueueService,
-} from "../hooks/useQueueMutations";
-import { AddToQueueModal } from "./AddToQueueModal";
-import { QueueReasonModal } from "./QueueReasonModal";
-import { TransferQueueModal } from "./TransferQueueModal";
 import { getApiErrorMessage } from "@/lib/api-client";
-import { ListQueueParams, QueueEntry } from "../types/queue.types";
+import { useQueues } from "../hooks/useQueues";
+import { AddToQueueModal } from "./AddToQueueModal";
+import { QueueCard } from "./QueueCard";
+import { QueueEntry } from "../types/queue.types";
 
-// docs/06-tasks/task-037.md..task-046.md. Per-status action visibility
-// mirrors apps/backend's queueTransitions.ts allowed-from table exactly
-// (WAITING: Call/Skip/Cancel/Transfer; CALLED: Start/Recall/Transfer;
-// SKIPPED: Call/Transfer; IN_SERVICE: Complete only) so staff never see a
-// button that would 422.
 export const QUEUE_STATUS_TONE: Record<QueueEntry["status"], "neutral" | "success" | "warning" | "error" | "info"> = {
   WAITING: "info",
   CALLED: "warning",
@@ -43,125 +25,28 @@ export const QUEUE_STATUS_TONE: Record<QueueEntry["status"], "neutral" | "succes
   SKIPPED: "neutral",
 };
 
-function QueueRow({ queue }: { queue: QueueEntry }) {
-  const [modal, setModal] = useState<"skip" | "cancel" | "transfer" | null>(null);
-  const callQueue = useCallQueue();
-  const recallQueue = useRecallQueue();
-  const startService = useStartQueueService();
-  const completeQueue = useCompleteQueue();
-  const skipQueue = useSkipQueue();
-  const cancelQueue = useCancelQueue();
-  const openVisit = useOpenVisit();
+const BOARD_COLUMNS: QueueEntry["status"][] = ["WAITING", "CALLED", "IN_SERVICE", "COMPLETED"];
 
-  return (
-    <>
-      <TableRow>
-        <TableCell className="font-medium">{queue.queueNumber}</TableCell>
-        <TableCell>{queue.queueType}</TableCell>
-        <TableCell>{queue.priority}</TableCell>
-        <TableCell>
-          <Badge tone={QUEUE_STATUS_TONE[queue.status]}>{queue.status}</Badge>
-        </TableCell>
-        <TableCell>
-          <div className="flex flex-wrap gap-2">
-            {queue.status === "WAITING" && (
-              <PermissionGuard permission="queue.call">
-                <Button variant="secondary" isLoading={callQueue.isPending} onClick={() => callQueue.mutate(queue.id)}>
-                  Call
-                </Button>
-              </PermissionGuard>
-            )}
-            {queue.status === "SKIPPED" && (
-              <PermissionGuard permission="queue.call">
-                <Button variant="secondary" isLoading={callQueue.isPending} onClick={() => callQueue.mutate(queue.id)}>
-                  Call
-                </Button>
-              </PermissionGuard>
-            )}
-            {queue.status === "CALLED" && (
-              <>
-                <PermissionGuard permission="queue.recall">
-                  <Button variant="secondary" isLoading={recallQueue.isPending} onClick={() => recallQueue.mutate(queue.id)}>
-                    Recall
-                  </Button>
-                </PermissionGuard>
-                <PermissionGuard permission="queue.start">
-                  <Button isLoading={startService.isPending} onClick={() => startService.mutate(queue.id)}>
-                    Start
-                  </Button>
-                </PermissionGuard>
-                <PermissionGuard permission="emr.visit.create">
-                  <Button variant="secondary" isLoading={openVisit.isPending} onClick={() => openVisit.mutate(queue.id)}>
-                    Open Visit
-                  </Button>
-                </PermissionGuard>
-              </>
-            )}
-            {queue.status === "IN_SERVICE" && (
-              <PermissionGuard permission="queue.complete">
-                <Button isLoading={completeQueue.isPending} onClick={() => completeQueue.mutate(queue.id)}>
-                  Complete
-                </Button>
-              </PermissionGuard>
-            )}
-            {queue.status === "WAITING" && (
-              <PermissionGuard permission="queue.skip">
-                <Button variant="secondary" onClick={() => setModal("skip")}>
-                  Skip
-                </Button>
-              </PermissionGuard>
-            )}
-            {queue.status === "WAITING" && (
-              <PermissionGuard permission="queue.cancel">
-                <Button variant="danger" onClick={() => setModal("cancel")}>
-                  Cancel
-                </Button>
-              </PermissionGuard>
-            )}
-            {["WAITING", "CALLED", "SKIPPED"].includes(queue.status) && (
-              <PermissionGuard permission="queue.transfer">
-                <Button variant="secondary" onClick={() => setModal("transfer")}>
-                  Transfer
-                </Button>
-              </PermissionGuard>
-            )}
-          </div>
-        </TableCell>
-      </TableRow>
-      {modal === "skip" && (
-        <QueueReasonModal
-          title="Skip Queue Entry"
-          submitLabel="Confirm Skip"
-          isSubmitting={skipQueue.isPending}
-          submitError={skipQueue.isError ? getApiErrorMessage(skipQueue.error) : undefined}
-          onClose={() => setModal(null)}
-          onSubmit={(reason) => skipQueue.mutate({ id: queue.id, reason }, { onSuccess: () => setModal(null) })}
-        />
-      )}
-      {modal === "cancel" && (
-        <QueueReasonModal
-          title="Cancel Queue Entry"
-          submitLabel="Confirm Cancel"
-          isSubmitting={cancelQueue.isPending}
-          submitError={cancelQueue.isError ? getApiErrorMessage(cancelQueue.error) : undefined}
-          onClose={() => setModal(null)}
-          onSubmit={(reason) => cancelQueue.mutate({ id: queue.id, reason }, { onSuccess: () => setModal(null) })}
-        />
-      )}
-      {modal === "transfer" && <TransferQueueModal queueId={queue.id} currentDoctorId={queue.doctorId} onClose={() => setModal(null)} />}
-    </>
-  );
-}
-
+// docs/02-design/Parakita - Key Screens.dc.html "isQueue": a 4-column
+// Kanban board (Waiting/Called/In Service/Completed), fetched without
+// pagination since a day's board is meant to be seen at a glance.
+// Cancelled/No-Show/Skipped are not board columns in the mockup either;
+// selecting one of those from the status filter switches to a flat grid
+// instead of the board, since the mockup describes those as a "Queue
+// History" concern (per docs/02-design/pages/queue.md), not the live board.
 export function QueueListView() {
-  const [filters, setFilters] = useState<ListQueueParams>({ page: 1, limit: 20 });
+  const [status, setStatus] = useState("");
+  const [visitDate, setVisitDate] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
-  const { data, isLoading, isError, error, refetch } = useQueues(filters);
+  const { data, isLoading, isError, error, refetch } = useQueues({ status: status || undefined, visitDate: visitDate || undefined, limit: 100 });
+
+  const items = data?.items ?? [];
+  const isBoardView = !status;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">Queue</h1>
+        <h1 className="text-foreground">Queue</h1>
         <div className="flex gap-2">
           <PermissionGuard permission="queue.dashboard.read">
             <Link href="/queue/dashboard">
@@ -175,45 +60,50 @@ export function QueueListView() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Select value={filters.status ?? ""} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined, page: 1 }))}>
-          <option value="">All statuses</option>
-          {Object.keys(QUEUE_STATUS_TONE).map((status) => (
-            <option key={status} value={status}>
-              {status}
+        <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Board (Waiting / Called / In Service / Completed)</option>
+          {Object.keys(QUEUE_STATUS_TONE).map((s) => (
+            <option key={s} value={s}>
+              {s}
             </option>
           ))}
         </Select>
-        <Input
-          type="date"
-          value={filters.visitDate ?? ""}
-          onChange={(e) => setFilters((f) => ({ ...f, visitDate: e.target.value || undefined, page: 1 }))}
-        />
+        <Input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
       </div>
 
       {isLoading && <LoadingState label="Loading queue..." />}
       {isError && <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />}
-      {!isLoading && !isError && data && data.items.length === 0 && (
+      {!isLoading && !isError && items.length === 0 && (
         <EmptyState title="Queue is empty" description="No entries match your current filters." />
       )}
-      {!isLoading && !isError && data && data.items.length > 0 && (
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableHeaderCell>Number</TableHeaderCell>
-              <TableHeaderCell>Type</TableHeaderCell>
-              <TableHeaderCell>Priority</TableHeaderCell>
-              <TableHeaderCell>Status</TableHeaderCell>
-              <TableHeaderCell>Actions</TableHeaderCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {data.items.map((queue) => (
-              <QueueRow key={queue.id} queue={queue} />
-            ))}
-          </TableBody>
-        </Table>
+
+      {!isLoading && !isError && items.length > 0 && isBoardView && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {BOARD_COLUMNS.map((column) => {
+            const columnItems = items.filter((item) => item.status === column);
+            return (
+              <div key={column}>
+                <div className="mb-2.5 text-xs font-bold uppercase tracking-wide text-muted">
+                  {column.replace("_", " ")} ({columnItems.length})
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  {columnItems.map((queue) => (
+                    <QueueCard key={queue.id} queue={queue} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
-      {data && <Pagination meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />}
+
+      {!isLoading && !isError && items.length > 0 && !isBoardView && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((queue) => (
+            <QueueCard key={queue.id} queue={queue} />
+          ))}
+        </div>
+      )}
 
       {showAddModal && <AddToQueueModal onClose={() => setShowAddModal(false)} />}
     </div>

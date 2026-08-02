@@ -40,7 +40,7 @@ export function PatientDetailView({ patientId }: { patientId: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">{patient.profile.fullName}</h1>
+          <h1 className="text-foreground">{patient.profile.fullName}</h1>
           <p className="text-sm text-muted">
             MRN {patient.medicalRecordNumber} · <Badge tone={patient.profile.status === "ACTIVE" ? "success" : "neutral"}>{patient.profile.status}</Badge>
           </p>

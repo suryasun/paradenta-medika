@@ -30,7 +30,7 @@ export function PatientListView() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-foreground">Patients</h1>
+        <h1 className="text-foreground">Patients</h1>
         <PermissionGuard permission="patient.create">
           <Link href="/patients/new">
             <Button>Register Patient</Button>
