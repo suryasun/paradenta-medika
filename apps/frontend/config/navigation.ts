@@ -90,6 +90,15 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Users", href: "/system/users", permission: "system.user.read" },
       { label: "Roles", href: "/system/roles", permission: "system.role.read" },
+      { label: "Audit Log", href: "/system/audit-logs", permission: "system.audit.read" },
+      { label: "Activity Log", href: "/system/activity-logs", permission: "system.activity.read" },
+      { label: "Operations Health", href: "/system/operations-health", permission: "system.health.read" },
+      { label: "Notifications", href: "/system/notifications", permission: "system.notification.read" },
+      { label: "Notification Templates", href: "/system/notification-templates", permission: "system.notification-template.read" },
+      { label: "System Parameters", href: "/system/parameters", permission: "system.parameter.read" },
+      { label: "Feature Flags", href: "/system/feature-flags", permission: "system.feature-flag.read" },
+      { label: "Menus", href: "/system/menus", permission: "system.menu.read" },
+      { label: "Background Jobs", href: "/system/jobs", permission: "system.job.read" },
     ],
   },
 ];
