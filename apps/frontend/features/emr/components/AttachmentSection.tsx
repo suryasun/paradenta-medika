@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Archive, Download, Eye, Plus, RotateCcw, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -54,13 +55,16 @@ export function AttachmentSection({ visitId, patientId, readOnly }: { visitId: s
     );
   }
 
-  if (isLoading) return <LoadingState label="Loading attachments..." />;
+  if (isLoading) return <LoadingState label="Loading attachments..." rows={3} columns={6} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!attachments || attachments.length === 0 ? (
-        <EmptyState title="No attachments uploaded yet" />
+        <EmptyState
+          title="No attachments uploaded yet"
+          description={!readOnly ? "Use the form below to upload the first file." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -82,7 +86,12 @@ export function AttachmentSection({ visitId, patientId, readOnly }: { visitId: s
                 <TableCell>v{attachment.currentVersion?.versionNumber ?? "-"}</TableCell>
                 <TableCell>{attachment.currentVersion ? formatFileSize(attachment.currentVersion.fileSize) : "-"}</TableCell>
                 <TableCell>
-                  <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setSelectedAttachmentId(attachment.id)}>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                    onClick={() => setSelectedAttachmentId(attachment.id)}
+                  >
+                    <Eye size={13} strokeWidth={1.75} aria-hidden="true" />
                     View
                   </button>
                 </TableCell>
@@ -117,6 +126,7 @@ export function AttachmentSection({ visitId, patientId, readOnly }: { visitId: s
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
             <Button type="submit" isLoading={uploadAttachment.isPending} disabled={!file}>
+              <Upload size={14} strokeWidth={1.75} aria-hidden="true" />
               Upload
             </Button>
             {uploadAttachment.isError && (
@@ -183,7 +193,7 @@ function AttachmentDetailModal({
 
   return (
     <Modal title="Attachment Detail" onClose={onClose}>
-      {isLoading && <LoadingState label="Loading attachment..." />}
+      {isLoading && <LoadingState label="Loading attachment..." rows={3} columns={1} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} />}
       {attachment && (
         <div className="flex flex-col gap-4">
@@ -202,11 +212,13 @@ function AttachmentDetailModal({
 
           <div className="flex gap-3">
             <Button type="button" variant="secondary" isLoading={downloadAttachment.isPending} onClick={handleDownload}>
+              <Download size={14} strokeWidth={1.75} aria-hidden="true" />
               Download
             </Button>
             {!readOnly && !attachment.archivedAt && (
               <PermissionGuard permission="emr.attachment.archive">
                 <Button type="button" variant="danger" isLoading={archiveAttachment.isPending} onClick={() => archiveAttachment.mutate(attachmentId)}>
+                  <Archive size={14} strokeWidth={1.75} aria-hidden="true" />
                   Archive
                 </Button>
               </PermissionGuard>
@@ -226,9 +238,10 @@ function AttachmentDetailModal({
                       <PermissionGuard permission="emr.attachment.restore">
                         <button
                           type="button"
-                          className="text-sm font-medium text-primary hover:underline"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                           onClick={() => restoreVersion.mutate(version.versionNumber)}
                         >
+                          <RotateCcw size={13} strokeWidth={1.75} aria-hidden="true" />
                           Restore
                         </button>
                       </PermissionGuard>
@@ -267,6 +280,7 @@ function AttachmentDetailModal({
                     <Input id="annotationY" label="Y" type="number" value={positionY} onChange={(e) => setPositionY(e.target.value)} className="w-20" />
                     <Input id="annotationText" label="Text (optional)" value={text} onChange={(e) => setText(e.target.value)} />
                     <Button type="submit" isLoading={annotateAttachment.isPending} disabled={!positionX || !positionY}>
+                      <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
                       Add
                     </Button>
                   </form>

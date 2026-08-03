@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { CalendarPlus } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -68,13 +69,16 @@ export function FollowUpSection({ visitId, readOnly }: { visitId: string; readOn
     );
   }
 
-  if (isLoading) return <LoadingState label="Loading follow ups..." />;
+  if (isLoading) return <LoadingState label="Loading follow ups..." rows={3} columns={4} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!followUps || followUps.length === 0 ? (
-        <EmptyState title="No follow ups scheduled yet" />
+        <EmptyState
+          title="No follow ups scheduled yet"
+          description={!readOnly ? "Use the form below to schedule the first one." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -163,6 +167,7 @@ export function FollowUpSection({ visitId, readOnly }: { visitId: string; readOn
               disabled={!followUpDate || (autoSchedule && (!doctorId || !startTime))}
               className="self-start"
             >
+              <CalendarPlus size={14} strokeWidth={1.75} aria-hidden="true" />
               Save Follow Up
             </Button>
           </form>

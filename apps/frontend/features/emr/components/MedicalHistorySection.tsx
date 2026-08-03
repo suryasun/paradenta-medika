@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Save } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -29,13 +30,16 @@ export function MedicalHistorySection({ patientId, readOnly }: { patientId: stri
     recordMedicalHistory.mutate({ category, description }, { onSuccess: () => setDescription("") });
   }
 
-  if (isLoading) return <LoadingState label="Loading medical history..." />;
+  if (isLoading) return <LoadingState label="Loading medical history..." rows={3} columns={2} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!history || history.length === 0 ? (
-        <EmptyState title="No medical history recorded yet" />
+        <EmptyState
+          title="No medical history recorded yet"
+          description={!readOnly ? "Use the form below to record the first entry." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -85,6 +89,7 @@ export function MedicalHistorySection({ patientId, readOnly }: { patientId: stri
               </p>
             )}
             <Button type="submit" isLoading={recordMedicalHistory.isPending} disabled={!description.trim()} className="self-start">
+              <Save size={14} strokeWidth={1.75} aria-hidden="true" />
               Save Medical History
             </Button>
           </form>

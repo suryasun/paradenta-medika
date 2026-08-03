@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { CalendarClock, Plus, Save } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -67,13 +68,16 @@ export function TreatmentPlanSection({ visitId, readOnly }: { visitId: string; r
     createTreatmentPlan.mutate(pending, { onSuccess: () => setPending([]) });
   }
 
-  if (isLoading) return <LoadingState label="Loading treatment plan..." />;
+  if (isLoading) return <LoadingState label="Loading treatment plan..." rows={3} columns={6} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!items || items.length === 0 ? (
-        <EmptyState title="No treatment plan items yet" />
+        <EmptyState
+          title="No treatment plan items yet"
+          description={!readOnly ? "Use the form below to add the first planned treatment." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -94,15 +98,16 @@ export function TreatmentPlanSection({ visitId, readOnly }: { visitId: string; r
                 <TableCell>
                   <Badge tone={PRIORITY_TONE[item.priority]}>{item.priority}</Badge>
                 </TableCell>
-                <TableCell>{formatCurrency(item.estimatedCost)}</TableCell>
-                <TableCell>{item.estimatedDurationMinute ? `${item.estimatedDurationMinute} min` : "-"}</TableCell>
+                <TableCell className="font-tabular">{formatCurrency(item.estimatedCost)}</TableCell>
+                <TableCell className="font-tabular">{item.estimatedDurationMinute ? `${item.estimatedDurationMinute} min` : "-"}</TableCell>
                 <TableCell>
                   <PermissionGuard permission="reservation.create">
                     <button
                       type="button"
-                      className="text-sm font-medium text-primary hover:underline"
+                      className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                       onClick={() => setScheduleItem(item)}
                     >
+                      <CalendarClock size={13} strokeWidth={1.75} aria-hidden="true" />
                       Schedule This
                     </button>
                   </PermissionGuard>
@@ -152,6 +157,7 @@ export function TreatmentPlanSection({ visitId, readOnly }: { visitId: string; r
                 className="min-w-32"
               />
               <Button type="button" variant="secondary" onClick={addPending} disabled={!treatmentId || !estimatedCost}>
+                <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
                 Add
               </Button>
             </div>
@@ -179,6 +185,7 @@ export function TreatmentPlanSection({ visitId, readOnly }: { visitId: string; r
               onClick={submitPending}
               className="self-start"
             >
+              <Save size={14} strokeWidth={1.75} aria-hidden="true" />
               Save Treatment Plan
             </Button>
           </div>

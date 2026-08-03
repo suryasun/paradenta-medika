@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
+import { Eraser, PenLine } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -39,13 +40,16 @@ export function ConsentSection({ visitId, patientId, readOnly }: { visitId: stri
     createConsent.mutate({ visitId, templateId, procedure }, { onSuccess: () => setProcedure("") });
   }
 
-  if (isLoading) return <LoadingState label="Loading consents..." />;
+  if (isLoading) return <LoadingState label="Loading consents..." rows={3} columns={5} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!consents || consents.length === 0 ? (
-        <EmptyState title="No consents recorded yet" />
+        <EmptyState
+          title="No consents recorded yet"
+          description={!readOnly ? "Use the form below to create the first consent for this patient." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -69,7 +73,12 @@ export function ConsentSection({ visitId, patientId, readOnly }: { visitId: stri
                 <TableCell>
                   {!consent.signedAt && !readOnly && (
                     <PermissionGuard permission="emr.consent.sign">
-                      <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setSigningConsentId(consent.id)}>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                        onClick={() => setSigningConsentId(consent.id)}
+                      >
+                        <PenLine size={13} strokeWidth={1.75} aria-hidden="true" />
                         Sign
                       </button>
                     </PermissionGuard>
@@ -191,6 +200,7 @@ function SignConsentModal({ patientId, consentId, onClose }: { patientId: string
             onPointerLeave={endDraw}
           />
           <Button type="button" variant="secondary" onClick={clearCanvas} className="self-start">
+            <Eraser size={14} strokeWidth={1.75} aria-hidden="true" />
             Clear
           </Button>
         </div>

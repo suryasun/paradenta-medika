@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Lock, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -70,29 +71,29 @@ export function PeriodontalAssessmentSection({
   const createAssessment = useCreatePeriodontalAssessment();
 
   if (assessmentId === null) {
+    const startAction = !readOnly ? (
+      <PermissionGuard permission="emr.periodontal.create">
+        <Button
+          isLoading={createAssessment.isPending}
+          onClick={() =>
+            createAssessment.mutate(
+              { visitId, patientId, doctorId },
+              { onSuccess: (assessment) => setAssessmentId(assessment.id) },
+            )
+          }
+        >
+          Start Periodontal Assessment
+        </Button>
+      </PermissionGuard>
+    ) : undefined;
+
     return (
       <div className="flex flex-col gap-3">
-        <EmptyState title="No periodontal assessment started for this visit yet" />
-        {!readOnly && (
-          <PermissionGuard permission="emr.periodontal.create">
-            <Button
-              isLoading={createAssessment.isPending}
-              onClick={() =>
-                createAssessment.mutate(
-                  { visitId, patientId, doctorId },
-                  { onSuccess: (assessment) => setAssessmentId(assessment.id) },
-                )
-              }
-              className="self-start"
-            >
-              Start Periodontal Assessment
-            </Button>
-            {createAssessment.isError && (
-              <p role="alert" className="text-sm text-error">
-                {getApiErrorMessage(createAssessment.error)}
-              </p>
-            )}
-          </PermissionGuard>
+        <EmptyState title="No periodontal assessment started for this visit yet" action={startAction} />
+        {createAssessment.isError && (
+          <p role="alert" className="text-sm text-error">
+            {getApiErrorMessage(createAssessment.error)}
+          </p>
         )}
       </div>
     );
@@ -110,7 +111,7 @@ function PeriodontalChart({ assessmentId, readOnly }: { assessmentId: string; re
   const deleteMeasurement = useDeletePeriodontalMeasurement(assessmentId);
   const lockAssessment = useLockPeriodontalAssessment(assessmentId);
 
-  if (isLoading) return <LoadingState label="Loading periodontal assessment..." />;
+  if (isLoading) return <LoadingState label="Loading periodontal assessment..." rows={4} columns={9} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
   if (!assessment) return null;
 
@@ -167,6 +168,7 @@ function PeriodontalChart({ assessmentId, readOnly }: { assessmentId: string; re
         {!readOnly && !locked && (
           <PermissionGuard permission="emr.periodontal.lock">
             <Button variant="secondary" isLoading={lockAssessment.isPending} onClick={() => lockAssessment.mutate()}>
+              <Lock size={14} strokeWidth={1.75} aria-hidden="true" />
               Lock Assessment
             </Button>
           </PermissionGuard>
@@ -174,7 +176,7 @@ function PeriodontalChart({ assessmentId, readOnly }: { assessmentId: string; re
       </div>
 
       {assessment.measurements.length === 0 ? (
-        <EmptyState title="No measurements recorded yet" />
+        <EmptyState title="No measurements recorded yet" description={!readOnly && !locked ? "Use the form below to record the first measurement." : undefined} />
       ) : (
         <Table>
           <TableHead>
@@ -209,16 +211,22 @@ function PeriodontalChart({ assessmentId, readOnly }: { assessmentId: string; re
                   <TableCell>
                     <div className="flex gap-3">
                       <PermissionGuard permission="emr.periodontal.measurement.update">
-                        <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => startEdit(measurement)}>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                          onClick={() => startEdit(measurement)}
+                        >
+                          <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
                           Edit
                         </button>
                       </PermissionGuard>
                       <PermissionGuard permission="emr.periodontal.measurement.delete">
                         <button
                           type="button"
-                          className="text-sm font-medium text-error hover:underline"
+                          className="inline-flex items-center gap-1 text-sm font-medium text-error hover:underline"
                           onClick={() => deleteMeasurement.mutate(measurement.id)}
                         >
+                          <Trash2 size={13} strokeWidth={1.75} aria-hidden="true" />
                           Delete
                         </button>
                       </PermissionGuard>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, Printer } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -37,13 +38,16 @@ export function PrescriptionSection({ visitId, patientId, readOnly }: { visitId:
     createPrescription.mutate(pending, { onSuccess: () => setPending([]) });
   }
 
-  if (isLoading) return <LoadingState label="Loading prescription history..." />;
+  if (isLoading) return <LoadingState label="Loading prescription history..." rows={3} columns={3} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!history || history.length === 0 ? (
-        <EmptyState title="No prescriptions recorded yet" />
+        <EmptyState
+          title="No prescriptions recorded yet"
+          description={!readOnly ? "Use the form below to build and save the first prescription." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -61,9 +65,10 @@ export function PrescriptionSection({ visitId, patientId, readOnly }: { visitId:
                 <TableCell>
                   <button
                     type="button"
-                    className="text-sm font-medium text-primary hover:underline"
+                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                     onClick={() => setPrintPrescriptionId(prescription.id)}
                   >
+                    <Printer size={13} strokeWidth={1.75} aria-hidden="true" />
                     Print
                   </button>
                 </TableCell>
@@ -100,6 +105,7 @@ export function PrescriptionSection({ visitId, patientId, readOnly }: { visitId:
                 className="min-w-32"
               />
               <Button type="button" variant="secondary" onClick={addPending}>
+                <Plus size={14} strokeWidth={1.75} aria-hidden="true" />
                 Add
               </Button>
             </div>
@@ -149,7 +155,7 @@ function PrescriptionPrintModal({ prescriptionId, onClose }: { prescriptionId: s
 
   return (
     <Modal title="Prescription" onClose={onClose}>
-      {isLoading && <LoadingState label="Loading prescription..." />}
+      {isLoading && <LoadingState label="Loading prescription..." rows={3} columns={5} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} />}
       {printData && (
         <div className="flex flex-col gap-4">
@@ -187,6 +193,7 @@ function PrescriptionPrintModal({ prescriptionId, onClose }: { prescriptionId: s
             </table>
           </div>
           <Button type="button" onClick={() => window.print()} className="self-start">
+            <Printer size={14} strokeWidth={1.75} aria-hidden="true" />
             Print
           </Button>
         </div>

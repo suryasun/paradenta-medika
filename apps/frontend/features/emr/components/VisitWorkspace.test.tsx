@@ -125,7 +125,7 @@ describe("VisitWorkspace", () => {
     expect(screen.getByText("No allergies recorded yet")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Odontogram" }));
-    expect(screen.getByText("No tooth conditions recorded yet")).toBeInTheDocument();
+    expect(screen.getByText(/click any tooth below to record one/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Treatment Plan" }));
     expect(screen.getByText("No treatment plan items yet")).toBeInTheDocument();

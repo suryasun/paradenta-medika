@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { FileCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -29,13 +30,16 @@ export function MedicalCertificateSection({ visitId, patientId, readOnly }: { vi
     issueCertificate.mutate({ certificateType, content }, { onSuccess: () => setContent("") });
   }
 
-  if (isLoading) return <LoadingState label="Loading medical certificates..." />;
+  if (isLoading) return <LoadingState label="Loading medical certificates..." rows={3} columns={4} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!certificates || certificates.length === 0 ? (
-        <EmptyState title="No medical certificates issued yet" />
+        <EmptyState
+          title="No medical certificates issued yet"
+          description={!readOnly ? "Use the form below to issue the first certificate." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -77,6 +81,7 @@ export function MedicalCertificateSection({ visitId, patientId, readOnly }: { vi
             </Select>
             <Textarea id="certificateContent" label="Content" value={content} onChange={(e) => setContent(e.target.value)} />
             <Button type="submit" isLoading={issueCertificate.isPending} disabled={!content.trim()} className="self-start">
+              <FileCheck size={14} strokeWidth={1.75} aria-hidden="true" />
               Issue Certificate
             </Button>
             {issueCertificate.isError && (

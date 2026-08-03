@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -41,13 +42,16 @@ export function AllergySection({ patientId, readOnly }: { patientId: string; rea
     );
   }
 
-  if (isLoading) return <LoadingState label="Loading allergies..." />;
+  if (isLoading) return <LoadingState label="Loading allergies..." rows={3} columns={4} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!allergies || allergies.length === 0 ? (
-        <EmptyState title="No allergies recorded yet" />
+        <EmptyState
+          title="No allergies recorded yet"
+          description={!readOnly ? "Use the form below to record the first allergy." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -93,6 +97,7 @@ export function AllergySection({ patientId, readOnly }: { patientId: string; rea
             </Select>
             <Input id="allergyReaction" label="Reaction" value={reaction} onChange={(e) => setReaction(e.target.value)} className="min-w-48" />
             <Button type="submit" isLoading={recordAllergy.isPending} disabled={!allergen.trim()}>
+              <ShieldAlert size={14} strokeWidth={1.75} aria-hidden="true" />
               Save Allergy
             </Button>
             {recordAllergy.isError && (

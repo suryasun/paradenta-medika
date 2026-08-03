@@ -40,12 +40,14 @@ describe("OdontogramSection", () => {
 
   afterEach(() => useAuthStore.getState().clearSession());
 
-  it("shows an empty state when no tooth conditions are recorded", async () => {
+  it("shows the interactive chart by default, with a hint when nothing is recorded yet", async () => {
     renderSection();
-    expect(await screen.findByText("No tooth conditions recorded yet")).toBeInTheDocument();
+    expect(await screen.findByText(/click any tooth below to record one/i)).toBeInTheDocument();
+    // The chart itself always renders -- e.g. tooth 16 is selectable even with zero entries.
+    expect(screen.getByRole("button", { name: "Tooth 16, No condition recorded" })).toBeInTheDocument();
   });
 
-  it("submits a new tooth condition entry", async () => {
+  it("selects a tooth and submits a new condition via the side panel", async () => {
     const user = userEvent.setup();
     mockedEmrService.recordToothCondition.mockResolvedValue({
       id: "o1",
@@ -59,9 +61,11 @@ describe("OdontogramSection", () => {
       createdBy: "u1",
     });
     renderSection();
-    await screen.findByText("No tooth conditions recorded yet");
+    await screen.findByRole("button", { name: "Tooth 16, No condition recorded" });
 
-    await user.selectOptions(screen.getByLabelText("Tooth (FDI)"), "16");
+    await user.click(screen.getByRole("button", { name: "Tooth 16, No condition recorded" }));
+    expect(await screen.findByRole("heading", { name: "Tooth 16" })).toBeInTheDocument();
+
     await user.type(screen.getByLabelText("Surface (e.g. O, MO, MOD)"), "O");
     await user.selectOptions(screen.getByLabelText("Condition"), "c1");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -71,7 +75,7 @@ describe("OdontogramSection", () => {
     );
   });
 
-  it("lists the current state and opens a per-tooth history modal", async () => {
+  it("shows the tooth's current condition in its accessible name and opens per-tooth history from the panel", async () => {
     const user = userEvent.setup();
     mockedEmrService.getCurrentOdontogram.mockResolvedValue([
       { id: "o1", visitId: "v1", patientId: "p1", toothNumber: 16, surface: "O", toothConditionId: "c1", note: null, createdAt: "2026-08-02T00:00:00.000Z", createdBy: "u1" },
@@ -81,17 +85,35 @@ describe("OdontogramSection", () => {
     ]);
     renderSection();
 
-    expect(await screen.findByRole("cell", { name: "16" })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "Healthy" })).toBeInTheDocument();
+    const tooth16 = await screen.findByRole("button", { name: "Tooth 16, Healthy" });
+    await user.click(tooth16);
 
     await user.click(screen.getByRole("button", { name: "View History" }));
     expect(await screen.findByRole("dialog", { name: "Tooth 16 History" })).toBeInTheDocument();
     await waitFor(() => expect(mockedEmrService.getToothHistory).toHaveBeenCalledWith("p1", 16));
   });
 
-  it("hides the entry form when read-only", async () => {
+  it("falls back to the accessible table view and shows the same data", async () => {
+    const user = userEvent.setup();
+    mockedEmrService.getCurrentOdontogram.mockResolvedValue([
+      { id: "o1", visitId: "v1", patientId: "p1", toothNumber: 16, surface: "O", toothConditionId: "c1", note: null, createdAt: "2026-08-02T00:00:00.000Z", createdBy: "u1" },
+    ]);
+    renderSection();
+    await screen.findByRole("button", { name: "Tooth 16, Healthy" });
+
+    await user.click(screen.getByRole("button", { name: "View as table" }));
+
+    expect(await screen.findByRole("cell", { name: "16" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Healthy" })).toBeInTheDocument();
+  });
+
+  it("hides the record form in the panel when read-only, but still allows viewing history", async () => {
+    const user = userEvent.setup();
     renderSection(true);
-    await screen.findByText("No tooth conditions recorded yet");
+    await user.click(await screen.findByRole("button", { name: "Tooth 16, No condition recorded" }));
+
+    expect(await screen.findByRole("heading", { name: "Tooth 16" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Condition")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View History" })).toBeInTheDocument();
   });
 });

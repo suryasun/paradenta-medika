@@ -27,7 +27,7 @@ export function ClinicalTimelineSection({ patientId }: { patientId: string }) {
 function TimelineSummaryPanel({ patientId }: { patientId: string }) {
   const { data: summary, isLoading, isError, error, refetch } = usePatientTimelineSummary(patientId);
 
-  if (isLoading) return <LoadingState label="Loading summary..." />;
+  if (isLoading) return <LoadingState label="Loading summary..." cards={4} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
   if (!summary) return null;
 
@@ -100,7 +100,7 @@ function TimelineFeed({ patientId }: { patientId: string }) {
         </Select>
       </div>
 
-      {isLoading && <LoadingState label="Loading timeline..." />}
+      {isLoading && <LoadingState label="Loading timeline..." rows={4} columns={3} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />}
       {!isLoading && !isError && (!events || events.length === 0) && <EmptyState title="No clinical events recorded yet" />}
       {!isLoading && !isError && events && events.length > 0 && (
@@ -127,7 +127,7 @@ function TimelineAttachmentGallery({ patientId }: { patientId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-foreground">Attachment Gallery</h2>
-      {isLoading && <LoadingState label="Loading attachments..." />}
+      {isLoading && <LoadingState label="Loading attachments..." cards={4} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />}
       {!isLoading && !isError && (!attachments || attachments.length === 0) && <EmptyState title="No attachments across any visit yet" />}
       {!isLoading && !isError && attachments && attachments.length > 0 && (

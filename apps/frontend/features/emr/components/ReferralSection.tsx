@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -30,13 +31,16 @@ export function ReferralSection({ visitId, readOnly }: { visitId: string; readOn
     );
   }
 
-  if (isLoading) return <LoadingState label="Loading referrals..." />;
+  if (isLoading) return <LoadingState label="Loading referrals..." rows={3} columns={3} />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
 
   return (
     <div className="flex flex-col gap-4">
       {!referrals || referrals.length === 0 ? (
-        <EmptyState title="No referrals recorded yet" />
+        <EmptyState
+          title="No referrals recorded yet"
+          description={!readOnly ? "Use the form below to refer this patient." : undefined}
+        />
       ) : (
         <Table>
           <TableHead>
@@ -76,6 +80,7 @@ export function ReferralSection({ visitId, readOnly }: { visitId: string; readOn
               </p>
             )}
             <Button type="submit" isLoading={createReferral.isPending} disabled={!reason.trim()} className="self-start">
+              <Send size={14} strokeWidth={1.75} aria-hidden="true" />
               Create Referral
             </Button>
           </form>
