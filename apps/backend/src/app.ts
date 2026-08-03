@@ -65,6 +65,7 @@ export function createApp(config: ConfigService): Express {
   const systemRouter = buildSystemModule(
     config,
     auditService,
+    eventBus,
     authModule.sessionRepository,
     authModule.authenticate,
     authModule.requirePermission,

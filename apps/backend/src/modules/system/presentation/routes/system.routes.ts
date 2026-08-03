@@ -49,6 +49,29 @@ import { TemplateRenderer } from '../../application/services/TemplateRenderer';
 import { NotificationTemplateRepository } from '../../infrastructure/repositories/NotificationTemplateRepository';
 import { NotificationRepository } from '../../infrastructure/repositories/NotificationRepository';
 import { NotificationController } from '../controllers/NotificationController';
+import { IEventBus } from '../../../../shared/events/EventBus';
+import { CreateSystemParameterRequestDto } from '../../application/dtos/SystemParameterRequestDto';
+import { ListSystemParameterQueryDto, ListFeatureFlagQueryDto } from '../../application/dtos/ApprovalWorkflowQueryDto';
+import { CreateChangeRequestDto, RollbackParameterDto } from '../../application/dtos/ConfigurationChangeRequestDto';
+import { CreateFeatureFlagRequestDto, UpdateFeatureFlagRequestDto } from '../../application/dtos/FeatureFlagRequestDto';
+import { CreateMenuRequestDto, UpdateMenuPermissionsRequestDto } from '../../application/dtos/MenuRequestDto';
+import { CreateParameterUseCase } from '../../application/use-cases/CreateParameterUseCase';
+import { ListParametersUseCase } from '../../application/use-cases/ListParametersUseCase';
+import { ListParameterVersionsUseCase } from '../../application/use-cases/ListParameterVersionsUseCase';
+import { CreateConfigurationChangeRequestUseCase } from '../../application/use-cases/CreateConfigurationChangeRequestUseCase';
+import { ApproveConfigurationChangeRequestUseCase } from '../../application/use-cases/ApproveConfigurationChangeRequestUseCase';
+import { RollbackParameterUseCase } from '../../application/use-cases/RollbackParameterUseCase';
+import { CreateFeatureFlagUseCase } from '../../application/use-cases/CreateFeatureFlagUseCase';
+import { ListFeatureFlagsUseCase } from '../../application/use-cases/ListFeatureFlagsUseCase';
+import { UpdateFeatureFlagUseCase } from '../../application/use-cases/UpdateFeatureFlagUseCase';
+import { CreateMenuUseCase } from '../../application/use-cases/CreateMenuUseCase';
+import { ListMenusUseCase } from '../../application/use-cases/ListMenusUseCase';
+import { UpdateMenuPermissionsUseCase } from '../../application/use-cases/UpdateMenuPermissionsUseCase';
+import { SystemParameterRepository } from '../../infrastructure/repositories/SystemParameterRepository';
+import { ConfigurationChangeRequestRepository } from '../../infrastructure/repositories/ConfigurationChangeRequestRepository';
+import { FeatureFlagRepository } from '../../infrastructure/repositories/FeatureFlagRepository';
+import { MenuRepository } from '../../infrastructure/repositories/MenuRepository';
+import { ApprovalWorkflowController } from '../controllers/ApprovalWorkflowController';
 
 /**
  * docs/06-tasks/task-015.md..task-020.md composition root, wired against
@@ -57,6 +80,7 @@ import { NotificationController } from '../controllers/NotificationController';
 export function buildSystemModule(
   config: ConfigService,
   auditService: IAuditService,
+  eventBus: IEventBus,
   sessionRepository: ISessionRepository,
   authenticate: RequestHandler,
   requirePermission: (code: string) => RequestHandler,
@@ -107,6 +131,26 @@ export function buildSystemModule(
     new PreviewNotificationTemplateUseCase(notificationTemplateRepository, templateRenderer),
     new ListNotificationsUseCase(notificationRepository),
     new MarkNotificationReadUseCase(notificationRepository),
+  );
+
+  // docs/06-tasks/task-200.md..task-206.md (Epic AK).
+  const systemParameterRepository = new SystemParameterRepository();
+  const changeRequestRepository = new ConfigurationChangeRequestRepository();
+  const featureFlagRepository = new FeatureFlagRepository();
+  const menuRepository = new MenuRepository();
+  const approvalWorkflowController = new ApprovalWorkflowController(
+    new CreateParameterUseCase(systemParameterRepository, auditService),
+    new ListParametersUseCase(systemParameterRepository),
+    new ListParameterVersionsUseCase(systemParameterRepository),
+    new CreateConfigurationChangeRequestUseCase(changeRequestRepository, auditService),
+    new ApproveConfigurationChangeRequestUseCase(changeRequestRepository, systemParameterRepository, auditService, eventBus),
+    new RollbackParameterUseCase(systemParameterRepository, changeRequestRepository, auditService),
+    new CreateFeatureFlagUseCase(featureFlagRepository, auditService),
+    new ListFeatureFlagsUseCase(featureFlagRepository),
+    new UpdateFeatureFlagUseCase(featureFlagRepository, auditService),
+    new CreateMenuUseCase(menuRepository, auditService),
+    new ListMenusUseCase(menuRepository),
+    new UpdateMenuPermissionsUseCase(menuRepository, permissionRepository, auditService),
   );
 
   const router = Router();
@@ -178,6 +222,76 @@ export function buildSystemModule(
     notificationController.listNotifications,
   );
   router.post('/system/notifications/:notificationId/read', requirePermission('system.notification.read'), notificationController.markRead);
+
+  // docs/06-tasks/task-200.md..task-204.md (Epic AK, UC-SYS-003). No
+  // literal Section 6.4-style permission table exists for these endpoints
+  // (unlike Finance/Warehouse/Reporting's own Section 8.1 tables) --
+  // extrapolated `system.parameter.*`/`system.config-request.*` names.
+  router.get(
+    '/system/parameters',
+    requirePermission('system.parameter.read'),
+    validateQuery(ListSystemParameterQueryDto),
+    approvalWorkflowController.listParameters,
+  );
+  router.post(
+    '/system/parameters',
+    requirePermission('system.parameter.manage'),
+    validateBody(CreateSystemParameterRequestDto),
+    approvalWorkflowController.createParameter,
+  );
+  router.get(
+    '/system/parameters/:parameterKey/versions',
+    requirePermission('system.parameter.read'),
+    validateQuery(ListQueryDto),
+    approvalWorkflowController.listParameterVersions,
+  );
+  router.post(
+    '/system/parameters/:parameterKey/change-requests',
+    requirePermission('system.config-request.create'),
+    validateBody(CreateChangeRequestDto),
+    approvalWorkflowController.createChangeRequest,
+  );
+  router.post(
+    '/system/configuration-change-requests/:requestId/approve',
+    requirePermission('system.config-request.approve'),
+    approvalWorkflowController.approveChangeRequest,
+  );
+  router.post(
+    '/system/parameters/:parameterKey/rollback',
+    requirePermission('system.config-request.create'),
+    validateBody(RollbackParameterDto),
+    approvalWorkflowController.rollbackParameter,
+  );
+
+  // docs/06-tasks/task-205.md (Epic AK, UC-SYS-004).
+  router.get(
+    '/system/feature-flags',
+    requirePermission('system.feature-flag.read'),
+    validateQuery(ListFeatureFlagQueryDto),
+    approvalWorkflowController.listFeatureFlags,
+  );
+  router.post(
+    '/system/feature-flags',
+    requirePermission('system.feature-flag.manage'),
+    validateBody(CreateFeatureFlagRequestDto),
+    approvalWorkflowController.createFeatureFlag,
+  );
+  router.patch(
+    '/system/feature-flags/:flagKey',
+    requirePermission('system.feature-flag.manage'),
+    validateBody(UpdateFeatureFlagRequestDto),
+    approvalWorkflowController.updateFeatureFlag,
+  );
+
+  // docs/06-tasks/task-206.md (Epic AK).
+  router.get('/system/menus', requirePermission('system.menu.read'), validateQuery(ListQueryDto), approvalWorkflowController.listMenus);
+  router.post('/system/menus', requirePermission('system.menu.manage'), validateBody(CreateMenuRequestDto), approvalWorkflowController.createMenu);
+  router.patch(
+    '/system/menus/:menuId/permissions',
+    requirePermission('system.menu.manage'),
+    validateBody(UpdateMenuPermissionsRequestDto),
+    approvalWorkflowController.updateMenuPermissions,
+  );
 
   return router;
 }

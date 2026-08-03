@@ -75,6 +75,7 @@ model Permission {
   description    String? @db.Text
 
   rolePermissions RolePermission[]
+  menuPermissions MenuPermission[]
 
   @@index([module])
   @@map("permissions")
@@ -2924,4 +2925,148 @@ model Notification {
   @@index([recipientUserId])
   @@index([status])
   @@map("system_notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Approval Workflow (docs/03-sad/21-module-system.md Section 4.4 UC-SYS-003,
+// Section 4.5 UC-SYS-004, Epic AK task-200-206).
+// ---------------------------------------------------------------------------
+
+enum SystemParameterValueType {
+  STRING
+  INTEGER
+  DECIMAL
+  BOOLEAN
+  ENUM
+  DATE
+  DURATION
+  JSON
+  SECRET_REF
+}
+
+/// Section 5.3 system_parameters: "One resolved active value per key/
+/// scope/time" -- rows are append-only (Section 3.4 rule 5: "rollback
+/// creates a new effective version referencing prior version, not
+/// destructive edit"), so the highest `version` for a given (key,
+/// scopeType, scopeId) IS the version history; no separate
+/// `system_parameter_versions` table is needed (the SAD's own `*` marks
+/// that table as a recommended, not mandatory, extension).
+model SystemParameter {
+  id            String                   @id @default(uuid()) @db.Char(36)
+  key           String                   @db.VarChar(150)
+  scopeType     String                   @default("GLOBAL") @map("scope_type") @db.VarChar(20)
+  scopeId       String?                  @map("scope_id") @db.Char(36)
+  valueType     SystemParameterValueType @map("value_type")
+  value         String                   @map("value") @db.Text
+  version       Int                      @default(1)
+  isHighRisk    Boolean                  @default(false) @map("is_high_risk")
+  effectiveFrom DateTime                 @default(now()) @map("effective_from")
+  changeReason  String?                  @map("change_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  @@unique([key, scopeType, scopeId, version])
+  @@index([key])
+  @@map("system_parameters")
+}
+
+enum ConfigChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Section 4.4 UC-SYS-003 steps 2-4: schema/semantic-validated proposal
+/// that a *different* user must approve before it becomes an actual
+/// SystemParameter version (Section 8.2's maker-checker requirement for
+/// high-risk config).
+model ConfigurationChangeRequest {
+  id                        String                     @id @default(uuid()) @db.Char(36)
+  parameterKey              String                     @map("parameter_key") @db.VarChar(150)
+  scopeType                 String                     @default("GLOBAL") @map("scope_type") @db.VarChar(20)
+  scopeId                   String?                    @map("scope_id") @db.Char(36)
+  proposedValueType         SystemParameterValueType   @map("proposed_value_type")
+  proposedValue             String                     @map("proposed_value") @db.Text
+  reason                    String?                    @map("reason") @db.Text
+  isRollback                Boolean                    @default(false) @map("is_rollback")
+  rollbackFromVersion       Int?                       @map("rollback_from_version")
+  status                    ConfigChangeRequestStatus  @default(PENDING)
+
+  requestedBy    String    @map("requested_by") @db.Char(36)
+  approvedBy     String?   @map("approved_by") @db.Char(36)
+  approvedAt     DateTime? @map("approved_at")
+  rejectedBy     String?   @map("rejected_by") @db.Char(36)
+  rejectedAt     DateTime? @map("rejected_at")
+  rejectionReason String?  @map("rejection_reason") @db.Text
+  resultingVersion Int?    @map("resulting_version")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([parameterKey])
+  @@index([status])
+  @@map("system_configuration_change_requests")
+}
+
+/// Section 3.2 FeatureFlag: "Enabling a flag exposes a capability only to
+/// users who already pass its API/domain permission" -- `targetScope` is
+/// metadata for who a flag is rolled out to, never an authorization
+/// substitute (SYS_FLAG_AUTH_BYPASS_FORBIDDEN, enforced at the
+/// application layer, not by this table's shape).
+model FeatureFlag {
+  id             String    @id @default(uuid()) @db.Char(36)
+  flagKey        String    @unique @map("flag_key") @db.VarChar(100)
+  ownerModule    String    @map("owner_module") @db.VarChar(50)
+  targetScope    String?   @map("target_scope") @db.VarChar(200)
+  enabled        Boolean   @default(false)
+  riskClass      String    @default("standard") @map("risk_class") @db.VarChar(20)
+  effectiveFrom  DateTime? @map("effective_from")
+  effectiveUntil DateTime? @map("effective_until")
+  reviewDate     DateTime? @map("review_date")
+  description    String?   @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  @@map("system_feature_flags")
+}
+
+/// Section 3.2 Menu: "navigation metadata with hierarchy/order/icon/
+/// route and menu-permission mapping. API authorization remains
+/// independent from menu visibility" -- MenuPermission only controls
+/// whether a menu item is *shown*; it never grants the underlying
+/// permission itself.
+model Menu {
+  id       String  @id @default(uuid()) @db.Char(36)
+  menuKey  String  @unique @map("menu_key") @db.VarChar(100)
+  label    String  @db.VarChar(150)
+  route    String? @db.VarChar(200)
+  parentId String? @map("parent_id") @db.Char(36)
+  icon     String? @db.VarChar(50)
+  order    Int     @default(0)
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  parent          Menu?            @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children        Menu[]           @relation("MenuHierarchy")
+  menuPermissions MenuPermission[]
+
+  @@index([parentId])
+  @@map("system_menus")
+}
+
+model MenuPermission {
+  id           String @id @default(uuid()) @db.Char(36)
+  menuId       String @map("menu_id") @db.Char(36)
+  permissionId String @map("permission_id") @db.Char(36)
+
+  menu       Menu       @relation(fields: [menuId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([menuId, permissionId])
+  @@map("system_menu_permissions")
 }

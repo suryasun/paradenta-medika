@@ -67,3 +67,98 @@ export class NotificationNotOwnedException extends AuthorizationException {
     super('This notification does not belong to the requester', 'SYS_NOTIFICATION_NOT_OWNED');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Approval Workflow (docs/03-sad/21-module-system.md UC-SYS-003/UC-SYS-004,
+// Epic AK task-200-206). Codes marked "literal" appear in Section 6.4;
+// others are extrapolated by the same convention already used above.
+// ---------------------------------------------------------------------------
+
+/** Literal Section 6.4: "SYS_SECRET_VALUE_FORBIDDEN | 422 | Raw secret value supplied instead of reference." */
+export class SecretValueForbiddenException extends BusinessException {
+  constructor() {
+    super('SYS_SECRET_VALUE_FORBIDDEN', 'Raw secret values are not accepted; supply a secret reference for valueType SECRET_REF');
+  }
+}
+
+/** Literal Section 6.4: "SYS_CONFIG_SCHEMA_INVALID | 422 | Value does not match typed schema." */
+export class ConfigSchemaInvalidException extends BusinessException {
+  constructor(reason: string) {
+    super('SYS_CONFIG_SCHEMA_INVALID', `Value does not match the declared schema: ${reason}`);
+  }
+}
+
+export class SystemParameterNotFoundException extends NotFoundException {
+  constructor() {
+    super('System parameter not found');
+  }
+}
+
+/** Literal Section 6.4: "SYS_CONFIG_VERSION_CONFLICT | 409 | Effective version conflict." */
+export class ConfigVersionConflictException extends ConflictException {
+  constructor() {
+    super('Another change was activated for this parameter/scope after this request was proposed', 'SYS_CONFIG_VERSION_CONFLICT');
+  }
+}
+
+export class ConfigurationChangeRequestNotFoundException extends NotFoundException {
+  constructor() {
+    super('Configuration change request not found');
+  }
+}
+
+export class ConfigurationChangeRequestNotPendingException extends BusinessException {
+  constructor() {
+    super('SYS_CONFIG_REQUEST_NOT_PENDING', 'This change request has already been approved or rejected');
+  }
+}
+
+/** Literal Section 6.4: "SYS_CONFIG_APPROVAL_REQUIRED | 403 | High-risk config needs approval." Reused here for the specific self-approval case per task-203's own AC. */
+export class ConfigApprovalRequiredException extends AuthorizationException {
+  constructor() {
+    super('The requester of this change cannot also approve it', 'SYS_CONFIG_APPROVAL_REQUIRED');
+  }
+}
+
+export class RollbackReasonRequiredException extends BusinessException {
+  constructor() {
+    super('SYS_ROLLBACK_REASON_REQUIRED', 'A reason is required to roll back a parameter');
+  }
+}
+
+/** Literal Section 6.4: "SYS_FLAG_AUTH_BYPASS_FORBIDDEN | 422 | Flag attempts to replace authorization." */
+export class FlagAuthBypassForbiddenException extends BusinessException {
+  constructor() {
+    super('SYS_FLAG_AUTH_BYPASS_FORBIDDEN', 'A feature flag cannot grant a permission the requester does not already have');
+  }
+}
+
+export class FlagReviewDateRequiredException extends BusinessException {
+  constructor() {
+    super('SYS_FLAG_REVIEW_DATE_REQUIRED', 'Critical-risk feature flags require an expiry/review date');
+  }
+}
+
+export class FeatureFlagNotFoundException extends NotFoundException {
+  constructor() {
+    super('Feature flag not found');
+  }
+}
+
+export class FeatureFlagKeyExistsException extends ConflictException {
+  constructor() {
+    super('Feature flag key already exists', 'SYS_FLAG_KEY_EXISTS');
+  }
+}
+
+export class MenuNotFoundException extends NotFoundException {
+  constructor() {
+    super('Menu not found');
+  }
+}
+
+export class MenuKeyExistsException extends ConflictException {
+  constructor() {
+    super('Menu key already exists', 'SYS_MENU_KEY_EXISTS');
+  }
+}

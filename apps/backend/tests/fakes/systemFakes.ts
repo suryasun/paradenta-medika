@@ -1,4 +1,29 @@
-import { ActivityLog, AuditLog, Notification, NotificationTemplate, Permission, Role, User } from '@prisma/client';
+import {
+  ActivityLog,
+  AuditLog,
+  ConfigurationChangeRequest,
+  FeatureFlag,
+  Menu,
+  Notification,
+  NotificationTemplate,
+  Permission,
+  Role,
+  SystemParameter,
+  User,
+} from '@prisma/client';
+import { CreateSystemParameterInput, ISystemParameterRepository, SystemParameterListFilter } from '../../src/modules/system/domain/repositories/ISystemParameterRepository';
+import {
+  ChangeRequestListFilter,
+  CreateChangeRequestInput,
+  IConfigurationChangeRequestRepository,
+} from '../../src/modules/system/domain/repositories/IConfigurationChangeRequestRepository';
+import {
+  CreateFeatureFlagInput,
+  FeatureFlagListFilter,
+  IFeatureFlagRepository,
+  UpdateFeatureFlagInput,
+} from '../../src/modules/system/domain/repositories/IFeatureFlagRepository';
+import { CreateMenuInput, IMenuRepository, MenuWithPermissionIds } from '../../src/modules/system/domain/repositories/IMenuRepository';
 import {
   CreateNotificationTemplateInput,
   INotificationTemplateRepository,
@@ -341,5 +366,203 @@ export class FakeNotificationProviderAdapter implements INotificationProviderAda
       return { success: false, errorSafeMessage: 'Simulated provider failure' };
     }
     return { success: true };
+  }
+}
+
+export class FakeSystemParameterRepository implements ISystemParameterRepository {
+  parameters = new Map<string, SystemParameter>();
+
+  async create(input: CreateSystemParameterInput): Promise<SystemParameter> {
+    const scopeId = input.scopeId ?? null;
+    const existingVersions = [...this.parameters.values()].filter((p) => p.key === input.key && p.scopeType === input.scopeType && p.scopeId === scopeId);
+    const version = existingVersions.length ? Math.max(...existingVersions.map((p) => p.version)) + 1 : 1;
+    const parameter: SystemParameter = {
+      id: nextId('param'),
+      key: input.key,
+      scopeType: input.scopeType,
+      scopeId,
+      valueType: input.valueType,
+      value: input.value,
+      version,
+      isHighRisk: input.isHighRisk ?? false,
+      effectiveFrom: input.effectiveFrom ?? new Date(),
+      changeReason: input.changeReason ?? null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+    } as SystemParameter;
+    this.parameters.set(parameter.id, parameter);
+    return parameter;
+  }
+
+  async list(query: ListQueryDto, filter: SystemParameterListFilter): Promise<PagedResult<SystemParameter>> {
+    const filtered = [...this.parameters.values()].filter(
+      (p) => (!filter.key || p.key === filter.key) && (!filter.scopeType || p.scopeType === filter.scopeType) && (!filter.scopeId || p.scopeId === filter.scopeId),
+    );
+    return paginate(filtered, query);
+  }
+
+  async findLatest(key: string, scopeType: string, scopeId?: string): Promise<SystemParameter | null> {
+    const versions = [...this.parameters.values()].filter((p) => p.key === key && p.scopeType === scopeType && p.scopeId === (scopeId ?? null));
+    if (!versions.length) return null;
+    return versions.reduce((latest, p) => (p.version > latest.version ? p : latest));
+  }
+
+  async findVersions(key: string, query: ListQueryDto): Promise<PagedResult<SystemParameter>> {
+    const versions = [...this.parameters.values()].filter((p) => p.key === key).sort((a, b) => b.version - a.version);
+    return paginate(versions, query);
+  }
+
+  async findByKeyAndVersion(key: string, scopeType: string, scopeId: string | undefined, version: number): Promise<SystemParameter | null> {
+    return (
+      [...this.parameters.values()].find(
+        (p) => p.key === key && p.scopeType === scopeType && p.scopeId === (scopeId ?? null) && p.version === version,
+      ) ?? null
+    );
+  }
+}
+
+export class FakeConfigurationChangeRequestRepository implements IConfigurationChangeRequestRepository {
+  requests = new Map<string, ConfigurationChangeRequest>();
+
+  async create(input: CreateChangeRequestInput): Promise<ConfigurationChangeRequest> {
+    const request: ConfigurationChangeRequest = {
+      id: nextId('cr'),
+      parameterKey: input.parameterKey,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId ?? null,
+      proposedValueType: input.proposedValueType,
+      proposedValue: input.proposedValue,
+      reason: input.reason ?? null,
+      isRollback: input.isRollback ?? false,
+      rollbackFromVersion: input.rollbackFromVersion ?? null,
+      status: 'PENDING',
+      requestedBy: input.requestedBy,
+      approvedBy: null,
+      approvedAt: null,
+      rejectedBy: null,
+      rejectedAt: null,
+      rejectionReason: null,
+      resultingVersion: null,
+      createdAt: new Date(),
+    } as ConfigurationChangeRequest;
+    this.requests.set(request.id, request);
+    return request;
+  }
+
+  async findById(id: string): Promise<ConfigurationChangeRequest | null> {
+    return this.requests.get(id) ?? null;
+  }
+
+  async list(query: ListQueryDto, filter: ChangeRequestListFilter): Promise<PagedResult<ConfigurationChangeRequest>> {
+    const filtered = [...this.requests.values()].filter(
+      (r) =>
+        (!filter.parameterKey || r.parameterKey === filter.parameterKey) &&
+        (filter.scopeType === undefined || r.scopeType === filter.scopeType) &&
+        (filter.scopeId === undefined || r.scopeId === filter.scopeId) &&
+        (!filter.status || r.status === filter.status),
+    );
+    return paginate(filtered, query);
+  }
+
+  async markApproved(id: string, approvedBy: string, approvedAt: Date, resultingVersion: number): Promise<ConfigurationChangeRequest> {
+    const request = this.requests.get(id);
+    if (!request) throw new Error('not found');
+    request.status = 'APPROVED';
+    request.approvedBy = approvedBy;
+    request.approvedAt = approvedAt;
+    request.resultingVersion = resultingVersion;
+    return request;
+  }
+}
+
+export class FakeFeatureFlagRepository implements IFeatureFlagRepository {
+  flags = new Map<string, FeatureFlag>();
+
+  async create(input: CreateFeatureFlagInput): Promise<FeatureFlag> {
+    const flag: FeatureFlag = {
+      id: nextId('flag'),
+      flagKey: input.flagKey,
+      ownerModule: input.ownerModule,
+      targetScope: input.targetScope ?? null,
+      enabled: input.enabled ?? false,
+      riskClass: input.riskClass ?? 'standard',
+      effectiveFrom: input.effectiveFrom ?? null,
+      effectiveUntil: input.effectiveUntil ?? null,
+      reviewDate: input.reviewDate ?? null,
+      description: input.description ?? null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+    } as FeatureFlag;
+    this.flags.set(flag.flagKey, flag);
+    return flag;
+  }
+
+  async list(query: ListQueryDto, filter: FeatureFlagListFilter): Promise<PagedResult<FeatureFlag>> {
+    const filtered = [...this.flags.values()].filter(
+      (f) => (!filter.ownerModule || f.ownerModule === filter.ownerModule) && (filter.enabled === undefined || f.enabled === filter.enabled),
+    );
+    return paginate(filtered, query);
+  }
+
+  async findByKey(flagKey: string): Promise<FeatureFlag | null> {
+    return this.flags.get(flagKey) ?? null;
+  }
+
+  async update(flagKey: string, input: UpdateFeatureFlagInput): Promise<FeatureFlag> {
+    const flag = this.flags.get(flagKey);
+    if (!flag) throw new Error('not found');
+    if (input.targetScope !== undefined) flag.targetScope = input.targetScope;
+    if (input.enabled !== undefined) flag.enabled = input.enabled;
+    if (input.effectiveFrom !== undefined) flag.effectiveFrom = input.effectiveFrom;
+    if (input.effectiveUntil !== undefined) flag.effectiveUntil = input.effectiveUntil;
+    if (input.reviewDate !== undefined) flag.reviewDate = input.reviewDate;
+    if (input.description !== undefined) flag.description = input.description;
+    flag.updatedBy = input.updatedBy;
+    flag.updatedAt = new Date();
+    return flag;
+  }
+}
+
+export class FakeMenuRepository implements IMenuRepository {
+  menus = new Map<string, Menu>();
+  permissionsByMenu = new Map<string, string[]>();
+
+  async create(input: CreateMenuInput): Promise<Menu> {
+    const menu: Menu = {
+      id: nextId('menu'),
+      menuKey: input.menuKey,
+      label: input.label,
+      route: input.route ?? null,
+      parentId: input.parentId ?? null,
+      icon: input.icon ?? null,
+      order: input.order ?? 0,
+      isActive: true,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+    } as Menu;
+    this.menus.set(menu.id, menu);
+    return menu;
+  }
+
+  async list(query: ListQueryDto): Promise<PagedResult<MenuWithPermissionIds>> {
+    const items = [...this.menus.values()].map((menu) => ({ ...menu, permissionIds: this.permissionsByMenu.get(menu.id) ?? [] }));
+    return paginate(items, query);
+  }
+
+  async findById(id: string): Promise<Menu | null> {
+    return this.menus.get(id) ?? null;
+  }
+
+  async findByKey(menuKey: string): Promise<Menu | null> {
+    return [...this.menus.values()].find((m) => m.menuKey === menuKey) ?? null;
+  }
+
+  async replacePermissions(menuId: string, permissionIds: string[]): Promise<MenuWithPermissionIds> {
+    this.permissionsByMenu.set(menuId, permissionIds);
+    const menu = this.menus.get(menuId);
+    if (!menu) throw new Error('not found');
+    return { ...menu, permissionIds };
   }
 }

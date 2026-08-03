@@ -505,6 +505,242 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ---------------------------------------------------------------------
+  # System - Approval Workflow (docs/06-tasks/task-200.md..task-206.md,
+  # Epic AK, UC-SYS-003/UC-SYS-004). No literal Section 6.4-style
+  # permission table exists for these endpoints -- extrapolated
+  # `system.parameter.*`/`system.config-request.*`/`system.feature-flag.*`/
+  # `system.menu.*` names.
+  # ---------------------------------------------------------------------
+  /system/parameters:
+    get:
+      tags: [System]
+      summary: List system parameters (latest and historical versions)
+      x-permission: system.parameter.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { name: key, in: query, schema: { type: string } }
+        - { name: scopeType, in: query, schema: { type: string, enum: [GLOBAL, BRANCH] } }
+        - { name: scopeId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [System]
+      summary: "Create a system parameter (append-only versioned; secret values must be a secret reference)"
+      x-permission: system.parameter.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, valueType, value]
+              properties:
+                key: { type: string, example: "warehouse.expiry.warning_days" }
+                scope:
+                  type: object
+                  properties:
+                    type: { type: string, enum: [global, branch] }
+                    id: { type: string, format: uuid }
+                valueType: { type: string, enum: [STRING, INTEGER, DECIMAL, BOOLEAN, ENUM, DATE, DURATION, JSON, SECRET_REF] }
+                value: {}
+                effectiveFrom: { type: string, format: date-time }
+                isHighRisk: { type: boolean }
+                reason: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "SYS_CONFIG_SCHEMA_INVALID / SYS_SECRET_VALUE_FORBIDDEN", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/parameters/{parameterKey}/versions:
+    get:
+      tags: [System]
+      summary: "Immutable version history of a parameter (strictly ordered, never edited)"
+      x-permission: system.parameter.read
+      parameters:
+        - { name: parameterKey, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+
+  /system/parameters/{parameterKey}/change-requests:
+    post:
+      tags: [System]
+      summary: "Propose a new parameter value (UC-SYS-003 'High risk?' branch -- requires independent approval before it activates)"
+      x-permission: system.config-request.create
+      parameters: [{ name: parameterKey, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valueType, value]
+              properties:
+                scope:
+                  type: object
+                  properties:
+                    type: { type: string, enum: [global, branch] }
+                    id: { type: string, format: uuid }
+                valueType: { type: string, enum: [STRING, INTEGER, DECIMAL, BOOLEAN, ENUM, DATE, DURATION, JSON, SECRET_REF] }
+                value: {}
+                reason: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: "SYS_CONFIG_VERSION_CONFLICT -- an equivalent pending proposal already exists", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "SYS_CONFIG_SCHEMA_INVALID / SYS_SECRET_VALUE_FORBIDDEN", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/configuration-change-requests/{requestId}/approve:
+    post:
+      tags: [System]
+      summary: "Approve a pending change request (independent approver required), activating a new parameter version and publishing system.configuration.changed.v1"
+      x-permission: system.config-request.approve
+      parameters: [{ name: requestId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: "SYS_CONFIG_APPROVAL_REQUIRED -- the requester cannot also approve", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /system/parameters/{parameterKey}/rollback:
+    post:
+      tags: [System]
+      summary: "Roll back to a previously validated version (creates a new pending change request from that version's value; same approval gate as a normal proposal)"
+      x-permission: system.config-request.create
+      parameters: [{ name: parameterKey, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, reason]
+              properties:
+                scope:
+                  type: object
+                  properties:
+                    type: { type: string, enum: [global, branch] }
+                    id: { type: string, format: uuid }
+                version: { type: integer }
+                reason: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SYS_CONFIG_VERSION_CONFLICT", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/feature-flags:
+    get:
+      tags: [System]
+      summary: List feature flags
+      x-permission: system.feature-flag.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { name: ownerModule, in: query, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [System]
+      summary: "Create a feature flag (critical-risk flags require a review date; cannot describe an authorization bypass)"
+      x-permission: system.feature-flag.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [flagKey, ownerModule]
+              properties:
+                flagKey: { type: string }
+                ownerModule: { type: string }
+                targetScope: { type: string }
+                enabled: { type: boolean }
+                riskClass: { type: string, enum: [standard, critical] }
+                effectiveFrom: { type: string, format: date-time }
+                effectiveUntil: { type: string, format: date-time }
+                reviewDate: { type: string, format: date-time }
+                description: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "SYS_FLAG_AUTH_BYPASS_FORBIDDEN / SYS_FLAG_REVIEW_DATE_REQUIRED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/feature-flags/{flagKey}:
+    patch:
+      tags: [System]
+      summary: Update a feature flag
+      x-permission: system.feature-flag.manage
+      parameters: [{ name: flagKey, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetScope: { type: string }
+                enabled: { type: boolean }
+                effectiveFrom: { type: string, format: date-time }
+                effectiveUntil: { type: string, format: date-time }
+                reviewDate: { type: string, format: date-time }
+                description: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "SYS_FLAG_AUTH_BYPASS_FORBIDDEN / SYS_FLAG_REVIEW_DATE_REQUIRED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/menus:
+    get:
+      tags: [System]
+      summary: List menus (with their mapped permission ids)
+      x-permission: system.menu.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [System]
+      summary: Create a menu item
+      x-permission: system.menu.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [menuKey, label]
+              properties:
+                menuKey: { type: string }
+                label: { type: string }
+                route: { type: string }
+                parentId: { type: string, format: uuid }
+                icon: { type: string }
+                order: { type: integer }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /system/menus/{menuId}/permissions:
+    patch:
+      tags: [System]
+      summary: "Replace a menu's mapped permission set (visibility only -- never an authorization grant)"
+      x-permission: system.menu.manage
+      parameters: [{ name: menuId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissionIds]
+              properties:
+                permissionIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "SYS_PERMISSION_ASSIGNMENT_INVALID", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # ---------------------------------------------------------------------
   # Master Data (docs/06-tasks/task-021.md..task-026.md) — six identically
   # shaped CRUD resources (crudUseCaseFactory), documented once per resource.
   # ---------------------------------------------------------------------
