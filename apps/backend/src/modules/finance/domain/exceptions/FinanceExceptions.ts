@@ -113,3 +113,85 @@ export class FinancialPeriodOverlapException extends BusinessException {
     super('FIN_PERIOD_OVERLAP', 'This period overlaps an existing open or locked period for the branch');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Cash Account & Cash Transfer (docs/03-sad/17-module-finance.md
+// UC-FIN-004, Epic AD task-153-155).
+// ---------------------------------------------------------------------------
+
+export class CashAccountNotFoundException extends NotFoundException {
+  constructor() {
+    super('Cash account not found');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_ACCOUNT_MAPPING_MISSING" (422) -- the linked ledger account is missing, inactive, or not postable. */
+export class AccountMappingMissingException extends BusinessException {
+  constructor() {
+    super('FIN_ACCOUNT_MAPPING_MISSING', 'The configured posting account is missing, inactive, or not postable');
+  }
+}
+
+/**
+ * No literal Section 6.6 code for transferring a cash account to itself
+ * -- extrapolated by the same `WHS_SOURCE_DESTINATION_SAME` naming
+ * convention already established in the Warehouse module for the
+ * identical gap. UC-FIN-004: "between two distinct active cash accounts
+ * in the same branch."
+ */
+export class CashTransferSourceDestinationSameException extends BusinessException {
+  constructor() {
+    super('FIN_CASH_TRANSFER_SOURCE_DESTINATION_SAME', 'Transfer source and destination cash account must be different');
+  }
+}
+
+/** UC-FIN-004: transfers move between "two distinct active cash accounts in the same branch" -- cross-branch transfer (which requires Finance Manager approval and inter-branch clearing accounts per UC-FIN-004's own text) is out of this epic's scope. */
+export class CashTransferCrossBranchException extends BusinessException {
+  constructor() {
+    super('FIN_CASH_TRANSFER_CROSS_BRANCH', 'Cross-branch cash transfers are not supported by this endpoint');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Expense (docs/03-sad/17-module-finance.md UC-FIN-003, Epic AD
+// task-156-161).
+// ---------------------------------------------------------------------------
+
+export class ExpenseNotFoundException extends NotFoundException {
+  constructor() {
+    super('Expense not found');
+  }
+}
+
+/**
+ * No literal Section 6.6 code covers a wrong-status expense action
+ * (Update/Submit requiring draft, Approve/Reject requiring submitted) --
+ * extrapolated by the same `WHS_*_INVALID_STATUS`/`FIN_JOURNAL_INVALID_
+ * STATUS` naming convention already established for the identical gap.
+ */
+export class ExpenseNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('FIN_EXPENSE_INVALID_STATUS', `Expense must be in ${expected} status for this action`);
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 8.2: "Expense requester cannot approve their own expense." */
+export class ExpenseSegregationOfDutiesException extends AuthorizationException {
+  constructor() {
+    super('The requester of this expense cannot also approve it', 'FIN_SEGREGATION_OF_DUTIES');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_EXPENSE_NOT_APPROVED" (409) -- expense cannot be paid yet. */
+export class ExpenseNotApprovedException extends ConflictException {
+  constructor() {
+    super('This expense has not been approved and cannot be paid', 'FIN_EXPENSE_NOT_APPROVED');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 3.3 Expense invariant: "paid amount cannot exceed approved amount." No literal Section 6.6 code -- extrapolated. */
+export class ExpensePaymentExceedsApprovedException extends BusinessException {
+  constructor() {
+    super('FIN_EXPENSE_PAYMENT_EXCEEDS_APPROVED', 'Payment amount cannot exceed the approved amount');
+  }
+}

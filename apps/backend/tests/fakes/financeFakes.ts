@@ -1,4 +1,4 @@
-import { Account, FinancialPeriod, Journal, JournalLine } from '@prisma/client';
+import { Account, CashAccount, Expense, FinancialPeriod, Journal, JournalLine } from '@prisma/client';
 import {
   AccountListFilter,
   CreateAccountInput,
@@ -7,9 +7,11 @@ import {
 } from '../../src/modules/finance/domain/repositories/IAccountRepository';
 import {
   CreateJournalInput,
+  CreatePostedJournalInput,
   IJournalRepository,
   JournalListFilter,
   JournalWithLines,
+  PostedJournalLine,
   ReplaceJournalLinesInput,
 } from '../../src/modules/finance/domain/repositories/IJournalRepository';
 import {
@@ -17,6 +19,17 @@ import {
   FinancialPeriodListFilter,
   IFinancialPeriodRepository,
 } from '../../src/modules/finance/domain/repositories/IFinancialPeriodRepository';
+import {
+  CashAccountListFilter,
+  CreateCashAccountInput,
+  ICashAccountRepository,
+} from '../../src/modules/finance/domain/repositories/ICashAccountRepository';
+import {
+  CreateExpenseInput,
+  ExpenseListFilter,
+  IExpenseRepository,
+  UpdateExpenseInput,
+} from '../../src/modules/finance/domain/repositories/IExpenseRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -234,6 +247,55 @@ export class FakeJournalRepository implements IJournalRepository {
     return reversal;
   }
 
+  async createPosted(input: CreatePostedJournalInput): Promise<JournalWithLines> {
+    const journal: JournalWithLines = {
+      id: nextFakeUuid(),
+      journalNo: input.journalNo,
+      branchId: input.branchId,
+      journalDate: input.journalDate,
+      referenceType: input.referenceType ?? null,
+      referenceId: input.referenceId ?? null,
+      postingType: input.postingType ?? null,
+      description: input.description,
+      status: 'POSTED',
+      postedAt: new Date(),
+      postedBy: input.postedBy,
+      voidedAt: null,
+      voidedBy: null,
+      voidReason: null,
+      reversalOfId: null,
+      reverseReason: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+      lines: [],
+    } as JournalWithLines;
+    journal.lines = this.buildLines(input.lines, journal.id);
+    this.journals.set(journal.id, journal);
+    return journal;
+  }
+
+  async listPostedLinesByAccount(accountId: string, query: ListQueryDto): Promise<PagedResult<PostedJournalLine>> {
+    const all = [...this.journals.values()]
+      .filter((j) => j.status === 'POSTED')
+      .flatMap((j) =>
+        j.lines
+          .filter((l) => l.accountId === accountId)
+          .map((l) => ({
+            journalId: j.id,
+            journalNo: j.journalNo ?? '',
+            journalDate: j.journalDate,
+            debit: Number(l.debit),
+            credit: Number(l.credit),
+            description: l.description,
+          })),
+      )
+      .sort((a, b) => b.journalDate.getTime() - a.journalDate.getTime());
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
   async count(): Promise<number> {
     return this.journals.size;
   }
@@ -298,5 +360,154 @@ export class FakeFinancialPeriodRepository implements IFinancialPeriodRepository
         (p) => p.branchId === branchId && p.status === 'OPEN' && p.startDate.getTime() <= date.getTime() && p.endDate.getTime() >= date.getTime(),
       ) ?? null
     );
+  }
+}
+
+export class FakeCashAccountRepository implements ICashAccountRepository {
+  cashAccounts = new Map<string, CashAccount>();
+
+  async create(input: CreateCashAccountInput): Promise<CashAccount> {
+    const cashAccount: CashAccount = {
+      id: nextFakeUuid(),
+      branchId: input.branchId,
+      code: input.code,
+      name: input.name,
+      accountType: input.accountType,
+      ledgerAccountId: input.ledgerAccountId,
+      accountNumber: input.accountNumber ?? null,
+      currentBalance: 0 as never,
+      isActive: true,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+    } as CashAccount;
+    this.cashAccounts.set(cashAccount.id, cashAccount);
+    return cashAccount;
+  }
+
+  async list(query: ListQueryDto, filter: CashAccountListFilter): Promise<PagedResult<CashAccount>> {
+    const all = [...this.cashAccounts.values()].filter(
+      (c) =>
+        (!filter.branchId || c.branchId === filter.branchId) &&
+        (!filter.accountType || c.accountType === filter.accountType) &&
+        (filter.isActive === undefined || c.isActive === filter.isActive),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async findById(id: string): Promise<CashAccount | null> {
+    return this.cashAccounts.get(id) ?? null;
+  }
+
+  async findByBranchAndCode(branchId: string, code: string): Promise<CashAccount | null> {
+    return [...this.cashAccounts.values()].find((c) => c.branchId === branchId && c.code === code) ?? null;
+  }
+
+  async adjustBalance(id: string, delta: number): Promise<CashAccount> {
+    const cashAccount = this.cashAccounts.get(id);
+    if (!cashAccount) throw new Error('not found');
+    cashAccount.currentBalance = (Number(cashAccount.currentBalance) + delta) as never;
+    return cashAccount;
+  }
+}
+
+export class FakeExpenseRepository implements IExpenseRepository {
+  expenses = new Map<string, Expense>();
+
+  async create(input: CreateExpenseInput): Promise<Expense> {
+    const expense: Expense = {
+      id: nextFakeUuid(),
+      expenseNo: input.expenseNo,
+      branchId: input.branchId,
+      expenseDate: input.expenseDate,
+      category: input.category,
+      expenseAccountId: input.expenseAccountId,
+      amount: input.amount as never,
+      approvedAmount: null,
+      paidAmount: null,
+      payeeName: input.payeeName ?? null,
+      description: input.description ?? null,
+      evidenceUrl: input.evidenceUrl ?? null,
+      status: 'DRAFT',
+      submittedAt: null,
+      approvedBy: null,
+      approvedAt: null,
+      rejectedBy: null,
+      rejectedAt: null,
+      rejectionReason: null,
+      paidBy: null,
+      paidAt: null,
+      paymentJournalId: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+    } as Expense;
+    this.expenses.set(expense.id, expense);
+    return expense;
+  }
+
+  async list(query: ListQueryDto, filter: ExpenseListFilter): Promise<PagedResult<Expense>> {
+    const all = [...this.expenses.values()].filter(
+      (e) =>
+        (!filter.branchId || e.branchId === filter.branchId) &&
+        (!filter.category || e.category === filter.category) &&
+        (!filter.status || e.status === filter.status),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async findById(id: string): Promise<Expense | null> {
+    return this.expenses.get(id) ?? null;
+  }
+
+  async update(id: string, input: UpdateExpenseInput): Promise<Expense> {
+    const expense = this.expenses.get(id);
+    if (!expense) throw new Error('not found');
+    if (input.expenseDate !== undefined) expense.expenseDate = input.expenseDate;
+    if (input.category !== undefined) expense.category = input.category;
+    if (input.expenseAccountId !== undefined) expense.expenseAccountId = input.expenseAccountId;
+    if (input.amount !== undefined) expense.amount = input.amount as never;
+    if (input.payeeName !== undefined) expense.payeeName = input.payeeName;
+    if (input.description !== undefined) expense.description = input.description;
+    if (input.evidenceUrl !== undefined) expense.evidenceUrl = input.evidenceUrl;
+    expense.updatedBy = input.updatedBy;
+    expense.updatedAt = new Date();
+    return expense;
+  }
+
+  async updateStatus(
+    id: string,
+    status: Expense['status'],
+    fields: Partial<{
+      submittedAt: Date;
+      approvedBy: string;
+      approvedAt: Date;
+      approvedAmount: number;
+      rejectedBy: string;
+      rejectedAt: Date;
+      rejectionReason: string;
+      paidBy: string;
+      paidAt: Date;
+      paidAmount: number;
+      paymentJournalId: string;
+    }>,
+  ): Promise<Expense> {
+    const expense = this.expenses.get(id);
+    if (!expense) throw new Error('not found');
+    expense.status = status;
+    Object.assign(expense, fields);
+    return expense;
+  }
+
+  async count(): Promise<number> {
+    return this.expenses.size;
+  }
+
+  async findByNumber(expenseNo: string): Promise<Expense | null> {
+    return [...this.expenses.values()].find((e) => e.expenseNo === expenseNo) ?? null;
   }
 }

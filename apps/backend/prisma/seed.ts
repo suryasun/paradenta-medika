@@ -70,6 +70,13 @@ const PERMISSION_KEYS = [
   'emr.vital.record',
   'finance.account.manage',
   'finance.account.read',
+  'finance.cash.manage',
+  'finance.cash.read',
+  'finance.cash.transfer',
+  'finance.expense.approve',
+  'finance.expense.create',
+  'finance.expense.pay',
+  'finance.expense.read',
   'finance.journal.create',
   'finance.journal.post',
   'finance.journal.read',
@@ -317,6 +324,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   // isn't its own matrix row -- period.manage follows "Close/reopen
   // period" being Manager-only, and period.read is harmless/useful for
   // both roles to check valid posting dates.
+  // task-153-161 (Epic AD): "Create/submit expense ✔" and "Pay expense
+  // ✔" both include Staff per the Actor Matrix; "Approve expense" is
+  // Manager-only. Cash account create/manage isn't its own matrix row --
+  // follows the same Manager-only tier as COA mapping; cash.transfer
+  // (which posts a journal, not unlike Create manual journal) is granted
+  // to both.
   FINANCE_STAFF: [
     'finance.account.read',
     'finance.journal.read',
@@ -324,6 +337,11 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.journal.update',
     'finance.journal.void',
     'finance.period.read',
+    'finance.cash.read',
+    'finance.cash.transfer',
+    'finance.expense.read',
+    'finance.expense.create',
+    'finance.expense.pay',
   ],
   FINANCE_MANAGER: [
     'finance.account.read',
@@ -336,6 +354,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.journal.reverse',
     'finance.period.read',
     'finance.period.manage',
+    'finance.cash.read',
+    'finance.cash.manage',
+    'finance.cash.transfer',
+    'finance.expense.read',
+    'finance.expense.create',
+    'finance.expense.approve',
+    'finance.expense.pay',
   ],
 };
 

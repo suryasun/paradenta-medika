@@ -9,6 +9,17 @@ import { CreateJournalRequestDto, ReverseJournalRequestDto, UpdateJournalRequest
 import { ListJournalQueryDto } from '../../application/dtos/JournalQueryDto';
 import { CreateFinancialPeriodRequestDto } from '../../application/dtos/FinancialPeriodRequestDto';
 import { ListFinancialPeriodQueryDto } from '../../application/dtos/FinancialPeriodQueryDto';
+import { CreateCashAccountRequestDto } from '../../application/dtos/CashAccountRequestDto';
+import { ListCashAccountQueryDto } from '../../application/dtos/CashAccountQueryDto';
+import { CreateCashTransferRequestDto } from '../../application/dtos/CashTransferRequestDto';
+import {
+  CreateExpenseRequestDto,
+  PayExpenseRequestDto,
+  RejectExpenseRequestDto,
+  UpdateExpenseRequestDto,
+} from '../../application/dtos/ExpenseRequestDto';
+import { ListExpenseQueryDto } from '../../application/dtos/ExpenseQueryDto';
+import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { CreateAccountUseCase } from '../../application/use-cases/CreateAccountUseCase';
 import { ListAccountsUseCase } from '../../application/use-cases/ListAccountsUseCase';
 import { UpdateAccountUseCase } from '../../application/use-cases/UpdateAccountUseCase';
@@ -22,13 +33,31 @@ import { ReverseJournalUseCase } from '../../application/use-cases/ReverseJourna
 import { VoidJournalUseCase } from '../../application/use-cases/VoidJournalUseCase';
 import { CreatePeriodUseCase } from '../../application/use-cases/CreatePeriodUseCase';
 import { ListPeriodsUseCase } from '../../application/use-cases/ListPeriodsUseCase';
+import { CreateCashAccountUseCase } from '../../application/use-cases/CreateCashAccountUseCase';
+import { ListCashAccountsUseCase } from '../../application/use-cases/ListCashAccountsUseCase';
+import { GetCashAccountMovementsUseCase } from '../../application/use-cases/GetCashAccountMovementsUseCase';
+import { CreateCashTransferUseCase } from '../../application/use-cases/CreateCashTransferUseCase';
+import { CreateExpenseUseCase } from '../../application/use-cases/CreateExpenseUseCase';
+import { ListExpensesUseCase } from '../../application/use-cases/ListExpensesUseCase';
+import { GetExpenseUseCase } from '../../application/use-cases/GetExpenseUseCase';
+import { UpdateExpenseUseCase } from '../../application/use-cases/UpdateExpenseUseCase';
+import { SubmitExpenseUseCase } from '../../application/use-cases/SubmitExpenseUseCase';
+import { ApproveExpenseUseCase } from '../../application/use-cases/ApproveExpenseUseCase';
+import { RejectExpenseUseCase } from '../../application/use-cases/RejectExpenseUseCase';
+import { PayExpenseUseCase } from '../../application/use-cases/PayExpenseUseCase';
 import { JournalNumberGenerator } from '../../application/services/JournalNumberGenerator';
+import { ExpenseNumberGenerator } from '../../application/services/ExpenseNumberGenerator';
 import { AccountRepository } from '../../infrastructure/repositories/AccountRepository';
 import { JournalRepository } from '../../infrastructure/repositories/JournalRepository';
 import { FinancialPeriodRepository } from '../../infrastructure/repositories/FinancialPeriodRepository';
+import { CashAccountRepository } from '../../infrastructure/repositories/CashAccountRepository';
+import { ExpenseRepository } from '../../infrastructure/repositories/ExpenseRepository';
 import { AccountController } from '../controllers/AccountController';
 import { JournalController } from '../controllers/JournalController';
 import { FinancialPeriodController } from '../controllers/FinancialPeriodController';
+import { CashAccountController } from '../controllers/CashAccountController';
+import { CashTransferController } from '../controllers/CashTransferController';
+import { ExpenseController } from '../controllers/ExpenseController';
 
 /**
  * docs/06-tasks/task-143.md..task-152.md (Epic AB Finance Foundation +
@@ -46,6 +75,8 @@ export function buildFinanceModule(
   const accountRepository = new AccountRepository();
   const journalRepository = new JournalRepository();
   const financialPeriodRepository = new FinancialPeriodRepository();
+  const cashAccountRepository = new CashAccountRepository();
+  const expenseRepository = new ExpenseRepository();
 
   const accountController = new AccountController(
     new CreateAccountUseCase(accountRepository, auditService),
@@ -67,6 +98,40 @@ export function buildFinanceModule(
   const financialPeriodController = new FinancialPeriodController(
     new CreatePeriodUseCase(financialPeriodRepository, auditService),
     new ListPeriodsUseCase(financialPeriodRepository),
+  );
+
+  const cashAccountController = new CashAccountController(
+    new CreateCashAccountUseCase(cashAccountRepository, accountRepository, auditService),
+    new ListCashAccountsUseCase(cashAccountRepository),
+    new GetCashAccountMovementsUseCase(cashAccountRepository, journalRepository),
+  );
+
+  const cashTransferController = new CashTransferController(
+    new CreateCashTransferUseCase(
+      cashAccountRepository,
+      journalRepository,
+      financialPeriodRepository,
+      new JournalNumberGenerator(journalRepository),
+      auditService,
+    ),
+  );
+
+  const expenseController = new ExpenseController(
+    new CreateExpenseUseCase(expenseRepository, accountRepository, new ExpenseNumberGenerator(expenseRepository), auditService),
+    new ListExpensesUseCase(expenseRepository),
+    new GetExpenseUseCase(expenseRepository),
+    new UpdateExpenseUseCase(expenseRepository, accountRepository, auditService),
+    new SubmitExpenseUseCase(expenseRepository, auditService),
+    new ApproveExpenseUseCase(expenseRepository, auditService),
+    new RejectExpenseUseCase(expenseRepository, auditService),
+    new PayExpenseUseCase(
+      expenseRepository,
+      cashAccountRepository,
+      journalRepository,
+      financialPeriodRepository,
+      new JournalNumberGenerator(journalRepository),
+      auditService,
+    ),
   );
 
   const router = Router();
@@ -133,6 +198,70 @@ export function buildFinanceModule(
     requirePermission('finance.period.manage'),
     validateBody(CreateFinancialPeriodRequestDto),
     financialPeriodController.create,
+  );
+
+  // docs/06-tasks/task-153.md..task-155.md (Epic AD, UC-FIN-004). Literal
+  // `finance.cash.*` Section 8.1 verbs.
+  router.get(
+    '/finance/cash-accounts',
+    requirePermission('finance.cash.read'),
+    validateQuery(ListCashAccountQueryDto),
+    cashAccountController.list,
+  );
+  router.post(
+    '/finance/cash-accounts',
+    requirePermission('finance.cash.manage'),
+    validateBody(CreateCashAccountRequestDto),
+    cashAccountController.create,
+  );
+  router.get(
+    '/finance/cash-accounts/:cashAccountId/movements',
+    requirePermission('finance.cash.read'),
+    validateQuery(ListQueryDto),
+    cashAccountController.movements,
+  );
+  router.post(
+    '/finance/cash-transfers',
+    requirePermission('finance.cash.transfer'),
+    validateBody(CreateCashTransferRequestDto),
+    cashTransferController.create,
+  );
+
+  // docs/06-tasks/task-156.md..task-161.md (Epic AD, UC-FIN-003). No
+  // literal `finance.expense.*` catalog entry names a "create/update"
+  // verb split from "read" beyond what Section 8.1 already lists
+  // (`finance.expense.read`, `create`, `approve`, `pay`, `cancel`) --
+  // Update/Submit reuse `create` (same convention as PO/Journal's own
+  // "the permission that lets you draft it lets you edit your own draft"
+  // precedent); Reject reuses `approve` (same maker-checker tier as
+  // Approve, per Section 8.1's grouping).
+  router.get('/finance/expenses', requirePermission('finance.expense.read'), validateQuery(ListExpenseQueryDto), expenseController.list);
+  router.post(
+    '/finance/expenses',
+    requirePermission('finance.expense.create'),
+    validateBody(CreateExpenseRequestDto),
+    expenseController.create,
+  );
+  router.get('/finance/expenses/:expenseId', requirePermission('finance.expense.read'), expenseController.detail);
+  router.patch(
+    '/finance/expenses/:expenseId',
+    requirePermission('finance.expense.create'),
+    validateBody(UpdateExpenseRequestDto),
+    expenseController.update,
+  );
+  router.post('/finance/expenses/:expenseId/submit', requirePermission('finance.expense.create'), expenseController.submit);
+  router.post('/finance/expenses/:expenseId/approve', requirePermission('finance.expense.approve'), expenseController.approve);
+  router.post(
+    '/finance/expenses/:expenseId/reject',
+    requirePermission('finance.expense.approve'),
+    validateBody(RejectExpenseRequestDto),
+    expenseController.reject,
+  );
+  router.post(
+    '/finance/expenses/:expenseId/pay',
+    requirePermission('finance.expense.pay'),
+    validateBody(PayExpenseRequestDto),
+    expenseController.pay,
   );
 
   return router;

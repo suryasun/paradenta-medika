@@ -38,6 +38,20 @@ export interface JournalListFilter {
   accountId?: string;
 }
 
+export interface CreatePostedJournalInput extends CreateJournalInput {
+  journalNo: string;
+  postedBy: string;
+}
+
+export interface PostedJournalLine {
+  journalId: string;
+  journalNo: string;
+  journalDate: Date;
+  debit: number;
+  credit: number;
+  description: string | null;
+}
+
 export interface IJournalRepository {
   create(input: CreateJournalInput): Promise<JournalWithLines>;
   list(query: ListQueryDto, filter: JournalListFilter): Promise<PagedResult<JournalWithLines>>;
@@ -51,6 +65,18 @@ export interface IJournalRepository {
     original: JournalWithLines,
     input: { journalNo: string; journalDate: Date; reason: string; actorUserId: string },
   ): Promise<JournalWithLines>;
+  /**
+   * Creates a journal that is already `POSTED`, for system-generated
+   * postings (Cash Transfer, Expense Payment) -- `createdBy` stays the
+   * originating human actor for audit, while `postedBy` is a `system:*`
+   * sentinel, so `PostJournalUseCase`'s maker-checker guard (creator !=
+   * poster) never applies to these, per Section 8.2: "System-generated
+   * journals are posted by service identity, but the originating user
+   * and source event remain audit fields."
+   */
+  createPosted(input: CreatePostedJournalInput): Promise<JournalWithLines>;
+  /** Posted journal lines against a given account, most recent first -- backs Cash Account Movements (task-154). */
+  listPostedLinesByAccount(accountId: string, query: ListQueryDto): Promise<PagedResult<PostedJournalLine>>;
   count(): Promise<number>;
   findByNumber(journalNo: string): Promise<Journal | null>;
 }

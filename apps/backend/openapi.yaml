@@ -3239,6 +3239,236 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '422': { description: "FIN_PERIOD_OVERLAP", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
+  # ---------------------------------------------------------------------
+  # Finance -- Cash & Expense (docs/06-tasks/task-153.md..task-161.md,
+  # docs/03-sad/17-module-finance.md Section 6.3, UC-FIN-003/UC-FIN-004)
+  # ---------------------------------------------------------------------
+  /finance/cash-accounts:
+    get:
+      tags: [Finance]
+      summary: List cash/bank accounts
+      x-permission: finance.cash.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: accountType
+          in: query
+          schema: { type: string, enum: [cash, bank, clearing] }
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Finance]
+      summary: Create a cash/bank account, linked to a postable ledger account
+      x-permission: finance.cash.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, code, name, accountType, ledgerAccountId]
+              properties:
+                branchId: { type: string, format: uuid }
+                code: { type: string, example: "CASH-1" }
+                name: { type: string, example: "Kas Kecil" }
+                accountType: { type: string, enum: [cash, bank, clearing] }
+                ledgerAccountId: { type: string, format: uuid }
+                accountNumber: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "FIN_ACCOUNT_MAPPING_MISSING", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/cash-accounts/{cashAccountId}/movements:
+    get:
+      tags: [Finance]
+      summary: Cash account movement history (posted journal lines against its linked ledger account only)
+      x-permission: finance.cash.read
+      parameters:
+        - { name: cashAccountId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /finance/cash-transfers:
+    post:
+      tags: [Finance]
+      summary: Transfer between two distinct active cash accounts in the same branch -- posts an already-posted system journal and updates both balances
+      x-permission: finance.cash.transfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transferDate, sourceCashAccountId, destinationCashAccountId, amount]
+              properties:
+                transferDate: { type: string, format: date }
+                sourceCashAccountId: { type: string, format: uuid }
+                destinationCashAccountId: { type: string, format: uuid }
+                amount: { type: number }
+                description: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "FIN_PERIOD_CLOSED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "FIN_CASH_TRANSFER_SOURCE_DESTINATION_SAME or FIN_CASH_TRANSFER_CROSS_BRANCH", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/expenses:
+    get:
+      tags: [Finance]
+      summary: List expenses
+      x-permission: finance.expense.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, SUBMITTED, APPROVED, REJECTED, PAID, CANCELLED] }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Finance]
+      summary: Create a draft expense
+      x-permission: finance.expense.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, expenseDate, category, expenseAccountId, amount]
+              properties:
+                branchId: { type: string, format: uuid }
+                expenseDate: { type: string, format: date }
+                category: { type: string, example: "utility" }
+                expenseAccountId: { type: string, format: uuid }
+                amount: { type: number }
+                payeeName: { type: string }
+                description: { type: string }
+                evidenceUrl: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "FIN_ACCOUNT_NOT_POSTABLE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/expenses/{expenseId}:
+    get:
+      tags: [Finance]
+      summary: Expense detail
+      x-permission: finance.expense.read
+      parameters: [{ name: expenseId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Finance]
+      summary: Update a draft expense (rejected once submitted/approved/paid)
+      x-permission: finance.expense.create
+      parameters: [{ name: expenseId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_EXPENSE_INVALID_STATUS or FIN_ACCOUNT_NOT_POSTABLE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/expenses/{expenseId}/submit:
+    post:
+      tags: [Finance]
+      summary: Submit a draft expense for approval
+      x-permission: finance.expense.create
+      parameters: [{ name: expenseId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_EXPENSE_INVALID_STATUS -- must be draft", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/expenses/{expenseId}/approve:
+    post:
+      tags: [Finance]
+      summary: Approve a submitted expense (maker-checker -- approver cannot be the requester)
+      x-permission: finance.expense.approve
+      parameters: [{ name: expenseId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approvedAmount: { type: number }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: "FIN_SEGREGATION_OF_DUTIES", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_EXPENSE_INVALID_STATUS -- must be submitted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/expenses/{expenseId}/reject:
+    post:
+      tags: [Finance]
+      summary: Reject a submitted expense (mandatory reason)
+      x-permission: finance.expense.approve
+      parameters: [{ name: expenseId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_EXPENSE_INVALID_STATUS -- must be submitted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/expenses/{expenseId}/pay:
+    post:
+      tags: [Finance]
+      summary: Pay an approved expense -- posts a system journal debiting the expense account and crediting the chosen cash account
+      x-permission: finance.expense.pay
+      parameters: [{ name: expenseId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cashAccountId, paymentDate, amount]
+              properties:
+                cashAccountId: { type: string, format: uuid }
+                paymentDate: { type: string, format: date }
+                amount: { type: number }
+                referenceNo: { type: string, example: "BKK-20260731-001" }
+                note: { type: string, example: "Pembayaran listrik" }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "FIN_EXPENSE_NOT_APPROVED or FIN_PERIOD_CLOSED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "FIN_EXPENSE_PAYMENT_EXCEEDS_APPROVED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
 components:
   securitySchemes:
     bearerAuth:

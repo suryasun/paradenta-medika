@@ -223,6 +223,8 @@ model Branch {
   financeAccounts    Account[]
   journals           Journal[]
   financialPeriods   FinancialPeriod[]
+  cashAccounts       CashAccount[]
+  expenses           Expense[]
 
   @@map("branches")
 }
@@ -2286,10 +2288,12 @@ model Account {
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by") @db.Char(36)
 
-  branch   Branch?       @relation(fields: [branchId], references: [id])
-  parent   Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children Account[]     @relation("AccountHierarchy")
-  lines    JournalLine[]
+  branch       Branch?       @relation(fields: [branchId], references: [id])
+  parent       Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children     Account[]     @relation("AccountHierarchy")
+  lines        JournalLine[]
+  cashAccounts CashAccount[]
+  expenses     Expense[]
 
   @@unique([branchId, code])
   @@index([parentId])
@@ -2351,6 +2355,7 @@ model Journal {
   lines      JournalLine[]
   reversalOf Journal?      @relation("JournalReversal", fields: [reversalOfId], references: [id])
   reversedBy Journal?      @relation("JournalReversal")
+  expense    Expense?
 
   @@unique([referenceType, referenceId, postingType], name: "idempotency_key")
   @@index([branchId, journalDate, status])
@@ -2417,6 +2422,109 @@ model FinancialPeriod {
   @@index([branchId, startDate, endDate])
   @@index([status])
   @@map("financial_periods")
+}
+
+// ---------------------------------------------------------------------------
+// Finance Module: Cash & Expense (docs/03-sad/17-module-finance.md
+// UC-FIN-003/UC-FIN-004, Epic AD task-153-161). Table names follow the
+// SAD's own literal Section 5.1 dictionary (`cash_accounts`, `expenses`),
+// the same implementer's-choice permission already exercised throughout
+// this phase. No separate `cash_movements` table: task-154's own Backend
+// Scope sources cash-account movement history directly from posted
+// `JournalLine`s filtered by the account's `ledgerAccountId`, not from a
+// dedicated ledger table -- a simpler design than SAD Section 3.2/5.2's
+// aspirational `CashMovement` aggregate, taken per this project's task-
+// spec-over-SAD priority. No `expense_categories` table either: no task
+// in 156-161 builds it, and task-156's own Backend Scope models
+// `category` as a plain field on Expense, not a FK.
+// ---------------------------------------------------------------------------
+
+enum CashAccountType {
+  CASH
+  BANK
+  CLEARING
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2: "cash_accounts holds
+/// branch_id, code, name, account_type, ledger_account_id, masked
+/// account_number, is_active." `currentBalance` is added per task-153's
+/// own Backend Scope ("CashAccount entity (branchId, name, linked
+/// finance_accounts.accountId, currentBalance)") though the SAD's field
+/// list doesn't list it -- a cached running balance, updated only by
+/// Cash Transfer/Pay Expense, that Daily Closing (Epic AE) will use to
+/// derive its "expected balance."
+model CashAccount {
+  id              String          @id @default(uuid()) @db.Char(36)
+  branchId        String          @map("branch_id") @db.Char(36)
+  code            String          @db.VarChar(30)
+  name            String          @db.VarChar(150)
+  accountType     CashAccountType @map("account_type")
+  ledgerAccountId String          @map("ledger_account_id") @db.Char(36)
+  accountNumber   String?         @map("account_number") @db.VarChar(100)
+  currentBalance  Decimal         @default(0) @map("current_balance") @db.Decimal(18, 2)
+  isActive        Boolean         @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch        Branch  @relation(fields: [branchId], references: [id])
+  ledgerAccount Account @relation(fields: [ledgerAccountId], references: [id])
+
+  @@unique([branchId, code])
+  @@index([ledgerAccountId])
+  @@map("cash_accounts")
+}
+
+enum FinanceExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2 `expenses`. `category` is
+/// a plain string (see module-level note above); `expenseAccountId` is
+/// the postable expense account debited on payment.
+model Expense {
+  id               String               @id @default(uuid()) @db.Char(36)
+  expenseNo        String               @unique @map("expense_no") @db.VarChar(40)
+  branchId         String               @map("branch_id") @db.Char(36)
+  expenseDate      DateTime             @map("expense_date") @db.Date
+  category         String               @db.VarChar(30)
+  expenseAccountId String               @map("expense_account_id") @db.Char(36)
+  amount           Decimal              @db.Decimal(18, 2)
+  approvedAmount   Decimal?             @map("approved_amount") @db.Decimal(18, 2)
+  paidAmount       Decimal?             @map("paid_amount") @db.Decimal(18, 2)
+  payeeName        String?              @map("payee_name") @db.VarChar(150)
+  description      String?              @db.Text
+  evidenceUrl      String?              @map("evidence_url") @db.VarChar(500)
+  status           FinanceExpenseStatus @default(DRAFT)
+
+  submittedAt      DateTime? @map("submitted_at")
+  approvedBy       String?   @map("approved_by") @db.Char(36)
+  approvedAt       DateTime? @map("approved_at")
+  rejectedBy       String?   @map("rejected_by") @db.Char(36)
+  rejectedAt       DateTime? @map("rejected_at")
+  rejectionReason  String?   @map("rejection_reason") @db.Text
+  paidBy           String?   @map("paid_by") @db.Char(36)
+  paidAt           DateTime? @map("paid_at")
+  paymentJournalId String?   @unique @map("payment_journal_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch         Branch   @relation(fields: [branchId], references: [id])
+  expenseAccount Account  @relation(fields: [expenseAccountId], references: [id])
+  paymentJournal Journal? @relation(fields: [paymentJournalId], references: [id])
+
+  @@index([branchId, expenseDate, status])
+  @@map("expenses")
 }
 
 model AuditLog {

@@ -4,9 +4,11 @@ import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { PagedResult, sanitizeSortField } from '../../../../shared/http/pagination';
 import {
   CreateJournalInput,
+  CreatePostedJournalInput,
   IJournalRepository,
   JournalListFilter,
   JournalWithLines,
+  PostedJournalLine,
   ReplaceJournalLinesInput,
 } from '../../domain/repositories/IJournalRepository';
 
@@ -145,6 +147,57 @@ export class JournalRepository implements IJournalRepository {
 
       return reversal;
     });
+  }
+
+  async createPosted(input: CreatePostedJournalInput): Promise<JournalWithLines> {
+    return prisma.journal.create({
+      data: {
+        journalNo: input.journalNo,
+        branchId: input.branchId,
+        journalDate: input.journalDate,
+        description: input.description,
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+        postingType: input.postingType,
+        status: 'POSTED',
+        postedAt: new Date(),
+        postedBy: input.postedBy,
+        createdBy: input.createdBy,
+        lines: {
+          create: input.lines.map((line) => ({
+            accountId: line.accountId,
+            debit: line.debit,
+            credit: line.credit,
+            description: line.description,
+            costCenterId: line.costCenterId,
+          })),
+        },
+      },
+      include: INCLUDE,
+    });
+  }
+
+  async listPostedLinesByAccount(accountId: string, query: ListQueryDto): Promise<PagedResult<PostedJournalLine>> {
+    const where: Prisma.JournalLineWhereInput = { accountId, journal: { status: 'POSTED' } };
+    const [rows, total] = await Promise.all([
+      prisma.journalLine.findMany({
+        where,
+        include: { journal: true },
+        orderBy: { journal: { journalDate: 'desc' } },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.journalLine.count({ where }),
+    ]);
+    const items: PostedJournalLine[] = rows.map((line) => ({
+      journalId: line.journal.id,
+      journalNo: line.journal.journalNo ?? '',
+      journalDate: line.journal.journalDate,
+      debit: Number(line.debit),
+      credit: Number(line.credit),
+      description: line.description,
+    }));
+    return { items, total };
   }
 
   async count(): Promise<number> {
