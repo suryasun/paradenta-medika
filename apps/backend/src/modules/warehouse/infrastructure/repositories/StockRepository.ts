@@ -47,6 +47,10 @@ export class StockRepository implements IStockRepository {
     return prisma.stockTransaction.count();
   }
 
+  async findByReference(referenceType: string, referenceId: string): Promise<StockTransaction[]> {
+    return prisma.stockTransaction.findMany({ where: { referenceType, referenceId } });
+  }
+
   /**
    * docs/03-sad/18-module-warehouse.md Section 3.5 Rules 1-2: locks the
    * balance row (optimistic `version` check, one of the two SAD-allowed

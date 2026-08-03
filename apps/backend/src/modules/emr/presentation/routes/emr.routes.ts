@@ -90,6 +90,8 @@ import { VitalSignRepository } from '../../infrastructure/repositories/VitalSign
 import { SoapNoteRepository } from '../../infrastructure/repositories/SoapNoteRepository';
 import { VisitDiagnosisRepository } from '../../infrastructure/repositories/VisitDiagnosisRepository';
 import { VisitTreatmentRepository } from '../../infrastructure/repositories/VisitTreatmentRepository';
+import { ItemRepository } from '../../../warehouse/infrastructure/repositories/ItemRepository';
+import { WarehouseLocationRepository } from '../../../warehouse/infrastructure/repositories/WarehouseLocationRepository';
 import { MedicalHistoryRepository } from '../../infrastructure/repositories/MedicalHistoryRepository';
 import { AllergyRepository } from '../../infrastructure/repositories/AllergyRepository';
 import { OdontogramRepository } from '../../infrastructure/repositories/OdontogramRepository';
@@ -153,6 +155,8 @@ export function buildEmrModule(
   const soapNoteRepository = new SoapNoteRepository();
   const diagnosisRepository = new VisitDiagnosisRepository();
   const visitTreatmentRepository = new VisitTreatmentRepository();
+  const itemRepository = new ItemRepository();
+  const warehouseLocationRepository = new WarehouseLocationRepository();
   const queueRepository = new QueueRepository();
   const treatmentRepository = new TreatmentRepository();
   const visitNumberGenerator = new VisitNumberGenerator(visitRepository);
@@ -197,8 +201,8 @@ export function buildEmrModule(
     new RecordVitalSignUseCase(visitRepository, vitalSignRepository, auditService),
     new RecordSoapNoteUseCase(visitRepository, soapNoteRepository, auditService),
     new RecordDiagnosisUseCase(visitRepository, diagnosisRepository, auditService),
-    new RecordTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, auditService),
-    new CloseVisitUseCase(visitRepository, soapNoteRepository, visitTreatmentRepository, auditService, eventBus),
+    new RecordTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, auditService),
+    new CloseVisitUseCase(visitRepository, soapNoteRepository, visitTreatmentRepository, warehouseLocationRepository, auditService, eventBus),
   );
 
   const medicalHistoryController = new MedicalHistoryController(

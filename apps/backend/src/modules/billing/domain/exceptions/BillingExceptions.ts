@@ -58,3 +58,9 @@ export class PaymentMethodNotActiveException extends BusinessException {
     super('PAYMENT_METHOD_NOT_ACTIVE', 'Payment Method is not active');
   }
 }
+
+export class PaymentNotFoundException extends NotFoundException {
+  constructor() {
+    super('Payment not found');
+  }
+}

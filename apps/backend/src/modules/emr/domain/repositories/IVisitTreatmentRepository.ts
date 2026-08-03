@@ -1,4 +1,9 @@
-import { VisitTreatment } from '@prisma/client';
+import { VisitTreatment, VisitTreatmentMaterial } from '@prisma/client';
+
+export interface CreateVisitTreatmentMaterialInput {
+  itemId: string;
+  quantity: number;
+}
 
 export interface CreateVisitTreatmentInput {
   visitId: string;
@@ -9,6 +14,12 @@ export interface CreateVisitTreatmentInput {
   subtotal: number;
   notes?: string;
   createdBy: string;
+  /** docs/03-sad/15-module-emr.md Section 23 "Material Used" (task-136, Epic Z): ad-hoc per-procedure materials. */
+  materials?: CreateVisitTreatmentMaterialInput[];
+}
+
+export interface VisitTreatmentWithMaterials extends VisitTreatment {
+  materials: VisitTreatmentMaterial[];
 }
 
 export interface DoctorFeeSourceLine {
@@ -24,6 +35,8 @@ export interface DoctorFeeSourceLine {
 export interface IVisitTreatmentRepository {
   create(input: CreateVisitTreatmentInput): Promise<VisitTreatment>;
   findByVisitId(visitId: string): Promise<VisitTreatment[]>;
+  /** docs/06-tasks/task-136.md: used by CloseVisitUseCase to publish per-treatment material-consumption events. */
+  findByVisitIdWithMaterials(visitId: string): Promise<VisitTreatmentWithMaterials[]>;
   countByVisitId(visitId: string): Promise<number>;
   /**
    * docs/06-tasks/task-166.md (Finance, Epic AE): unsettled doctor-fee

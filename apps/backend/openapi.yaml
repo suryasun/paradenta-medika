@@ -1673,6 +1673,15 @@ paths:
                 toothReference: { type: string }
                 quantity: { type: integer, minimum: 1, maximum: 100, default: 1 }
                 notes: { type: string }
+                materials:
+                  type: array
+                  description: docs/03-sad/15-module-emr.md Section 23 "Material Used" (task-136, Epic Z) -- ad-hoc, per-procedure Warehouse items consumed. Each itemId must be an existing, consumable Warehouse item.
+                  items:
+                    type: object
+                    required: [itemId, quantity]
+                    properties:
+                      itemId: { type: string, format: uuid }
+                      quantity: { type: number, minimum: 0.01 }
       responses:
         '201': { $ref: '#/components/responses/Created' }
         '422': { $ref: '#/components/responses/BusinessRuleViolation' }
@@ -1680,7 +1689,7 @@ paths:
   /emr/visits/{id}/close:
     post:
       tags: [EMR]
-      summary: Close Visit (requires complete SOAP + >=1 Treatment; publishes EMRFinished)
+      summary: Close Visit (requires complete SOAP + >=1 Treatment; publishes EMRFinished, and emr.treatment-material-finalized.v1 per treatment entry with recorded materials)
       x-permission: emr.visit.close
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:

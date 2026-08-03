@@ -26,7 +26,7 @@ export class GetVisitDetailUseCase {
       this.vitalSignRepository.findByVisitId(visitId),
       this.soapNoteRepository.findByVisitId(visitId),
       this.diagnosisRepository.findByVisitId(visitId),
-      this.visitTreatmentRepository.findByVisitId(visitId),
+      this.visitTreatmentRepository.findByVisitIdWithMaterials(visitId),
     ]);
 
     return toVisitDetailResponse(visit, vitalSigns, soapNote, diagnoses, treatmentEntries);

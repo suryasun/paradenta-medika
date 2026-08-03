@@ -263,3 +263,46 @@ export class BatchNotActiveException extends BusinessException {
     super('WHS_BATCH_INVALID_STATUS', 'Only an active batch can be quarantined');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Automatic Stock Update (docs/03-sad/18-module-warehouse.md UC-WHS-003,
+// Section 6.5 literal error codes where they exist; Epic Z task-136).
+// ---------------------------------------------------------------------------
+
+/**
+ * docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_BATCH_EXPIRED" (422,
+ * per task-136's own AC). Raised only when FEFO allocation cannot be
+ * satisfied from non-expired active batches but expired stock exists --
+ * distinct from genuine `WHS_STOCK_INSUFFICIENT` where no stock exists at
+ * all, expired or not.
+ */
+export class BatchExpiredException extends BusinessException {
+  constructor() {
+    super('WHS_BATCH_EXPIRED', 'Remaining batch stock for this item has expired and cannot be consumed');
+  }
+}
+
+/**
+ * No literal Section 6.5 code for selecting a non-consumable item as
+ * treatment material -- `is_consumable` (Section 5.2) exists precisely to
+ * flag items that must never be selected here (e.g. capital equipment).
+ * Extrapolated by the same `WHS_ITEM_*` naming convention as
+ * `ITEM_CODE_EXISTS`/`ITEM_TRACKING_FLAGS_LOCKED`.
+ */
+export class ItemNotConsumableException extends BusinessException {
+  constructor() {
+    super('WHS_ITEM_NOT_CONSUMABLE', 'This item is not flagged as consumable and cannot be recorded as treatment material');
+  }
+}
+
+/**
+ * docs/03-sad/18-module-warehouse.md Section 6.5: "WHS_DUPLICATE_MOVEMENT"
+ * (409) -- redelivery of an already-processed
+ * `emr.treatment-material-finalized.v1` event for the same VisitTreatment
+ * must not double-consume stock (task-136 AC: idempotent redelivery).
+ */
+export class MaterialConsumptionAlreadyProcessedException extends ConflictException {
+  constructor() {
+    super('Materials for this treatment have already been consumed', 'WHS_DUPLICATE_MOVEMENT');
+  }
+}

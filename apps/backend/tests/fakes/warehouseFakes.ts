@@ -223,6 +223,14 @@ export class FakeWarehouseLocationRepository implements IWarehouseLocationReposi
       [...this.locations.values()].find((l) => l.branchId === branchId && l.locationCode === locationCode && !l.deletedAt) ?? null
     );
   }
+
+  async findMainByBranchId(branchId: string): Promise<WarehouseLocation | null> {
+    return (
+      [...this.locations.values()]
+        .filter((l) => l.branchId === branchId && !l.deletedAt && l.isActive)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0] ?? null
+    );
+  }
 }
 
 export class FakeStockRepository implements IStockRepository {
@@ -257,6 +265,10 @@ export class FakeStockRepository implements IStockRepository {
 
   async countTransactions(): Promise<number> {
     return this.transactions.length;
+  }
+
+  async findByReference(referenceType: string, referenceId: string): Promise<StockTransaction[]> {
+    return this.transactions.filter((t) => t.referenceType === referenceType && t.referenceId === referenceId);
   }
 
   async applyStockMovement(input: ApplyStockMovementInput): Promise<StockTransaction> {
@@ -930,6 +942,21 @@ export class FakeBatchRepository implements IBatchRepository {
     batch.status = 'QUARANTINED';
     batch.quarantinedBy = quarantinedBy;
     batch.quarantinedAt = quarantinedAt;
+    return batch;
+  }
+
+  async findActiveByWarehouseAndItem(warehouseId: string, itemId: string): Promise<ItemBatch[]> {
+    return [...this.batches.values()].filter(
+      (b) => b.warehouseId === warehouseId && b.itemId === itemId && b.status === 'ACTIVE' && Number(b.remainingQuantity) > 0,
+    );
+  }
+
+  async decrementRemaining(id: string, quantity: number): Promise<ItemBatch> {
+    const batch = this.batches.get(id);
+    if (!batch) throw new Error('not found');
+    const newRemaining = Number(batch.remainingQuantity) - quantity;
+    batch.remainingQuantity = newRemaining as never;
+    batch.status = newRemaining <= 0 ? 'DEPLETED' : batch.status;
     return batch;
   }
 }

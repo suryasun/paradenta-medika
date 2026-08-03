@@ -845,11 +845,34 @@ model VisitTreatment {
   createdAt      DateTime @default(now()) @map("created_at")
   createdBy      String?  @map("created_by") @db.Char(36)
 
-  visit     Visit     @relation(fields: [visitId], references: [id])
-  treatment Treatment @relation(fields: [treatmentId], references: [id])
+  visit     Visit                    @relation(fields: [visitId], references: [id])
+  treatment Treatment                @relation(fields: [treatmentId], references: [id])
+  materials VisitTreatmentMaterial[]
 
   @@index([visitId])
   @@map("visit_treatments")
+}
+
+/// docs/03-sad/15-module-emr.md Section 23 "Procedure Management" literal
+/// Recorded Information field "Material Used" -- previously unimplemented.
+/// Ad-hoc per-procedure capture (user-confirmed design, not a fixed BOM/
+/// recipe): each VisitTreatment optionally lists the Warehouse items/
+/// quantities it actually consumed. Consumed via
+/// `emr.treatment-material-finalized.v1` on Visit close (task-136, Epic Z).
+model VisitTreatmentMaterial {
+  id               String   @id @default(uuid()) @db.Char(36)
+  visitTreatmentId String   @map("visit_treatment_id") @db.Char(36)
+  itemId           String   @map("item_id") @db.Char(36)
+  quantity         Decimal  @db.Decimal(18, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+  createdBy        String?  @map("created_by") @db.Char(36)
+
+  visitTreatment VisitTreatment @relation(fields: [visitTreatmentId], references: [id])
+  item           Item           @relation(fields: [itemId], references: [id])
+
+  @@index([visitTreatmentId])
+  @@index([itemId])
+  @@map("visit_treatment_materials")
 }
 
 // ---------------------------------------------------------------------------
@@ -1657,17 +1680,18 @@ model Item {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  category             ItemCategory          @relation(fields: [categoryId], references: [id])
-  unit                 Unit                  @relation(fields: [unitId], references: [id])
-  stocks               WarehouseStock[]
-  stockTransactions    StockTransaction[]
-  purchaseOrderItems   PurchaseOrderItem[]
-  goodsReceiptItems    GoodsReceiptItem[]
-  stockTransferItems   StockTransferItem[]
-  stockAdjustmentItems StockAdjustmentItem[]
-  stockReservations    StockReservation[]
-  stockOpnameItems     StockOpnameItem[]
-  itemBatches          ItemBatch[]
+  category                ItemCategory             @relation(fields: [categoryId], references: [id])
+  unit                    Unit                     @relation(fields: [unitId], references: [id])
+  stocks                  WarehouseStock[]
+  stockTransactions       StockTransaction[]
+  purchaseOrderItems      PurchaseOrderItem[]
+  goodsReceiptItems       GoodsReceiptItem[]
+  stockTransferItems      StockTransferItem[]
+  stockAdjustmentItems    StockAdjustmentItem[]
+  stockReservations       StockReservation[]
+  stockOpnameItems        StockOpnameItem[]
+  itemBatches             ItemBatch[]
+  visitTreatmentMaterials VisitTreatmentMaterial[]
 
   @@index([categoryId])
   @@index([isActive])

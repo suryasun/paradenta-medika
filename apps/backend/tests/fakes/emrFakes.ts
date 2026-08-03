@@ -20,6 +20,7 @@ import {
   Visit,
   VisitDiagnosis,
   VisitTreatment,
+  VisitTreatmentMaterial,
   VitalSign,
 } from '@prisma/client';
 import { CreateOdontogramEntryInput, IOdontogramRepository } from '../../src/modules/emr/domain/repositories/IOdontogramRepository';
@@ -68,6 +69,7 @@ import {
   CreateVisitTreatmentInput,
   DoctorFeeSourceLine,
   IVisitTreatmentRepository,
+  VisitTreatmentWithMaterials,
 } from '../../src/modules/emr/domain/repositories/IVisitTreatmentRepository';
 import { CreateMedicalHistoryInput, IMedicalHistoryRepository } from '../../src/modules/emr/domain/repositories/IMedicalHistoryRepository';
 import { CreateAllergyInput, IAllergyRepository } from '../../src/modules/emr/domain/repositories/IAllergyRepository';
@@ -217,6 +219,7 @@ export class FakeVisitDiagnosisRepository implements IVisitDiagnosisRepository {
 
 export class FakeVisitTreatmentRepository implements IVisitTreatmentRepository {
   entries = new Map<string, VisitTreatment>();
+  materials = new Map<string, VisitTreatmentMaterial[]>();
 
   async create(input: CreateVisitTreatmentInput): Promise<VisitTreatment> {
     const entry: VisitTreatment = {
@@ -232,11 +235,28 @@ export class FakeVisitTreatmentRepository implements IVisitTreatmentRepository {
       createdBy: input.createdBy,
     } as VisitTreatment;
     this.entries.set(entry.id, entry);
+    if (input.materials && input.materials.length > 0) {
+      this.materials.set(
+        entry.id,
+        input.materials.map((m) => ({
+          id: nextFakeUuid(),
+          visitTreatmentId: entry.id,
+          itemId: m.itemId,
+          quantity: m.quantity as never,
+          createdAt: new Date(),
+          createdBy: input.createdBy,
+        }) as VisitTreatmentMaterial),
+      );
+    }
     return entry;
   }
 
   async findByVisitId(visitId: string): Promise<VisitTreatment[]> {
     return [...this.entries.values()].filter((e) => e.visitId === visitId);
+  }
+
+  async findByVisitIdWithMaterials(visitId: string): Promise<VisitTreatmentWithMaterials[]> {
+    return (await this.findByVisitId(visitId)).map((e) => ({ ...e, materials: this.materials.get(e.id) ?? [] }));
   }
 
   async countByVisitId(visitId: string): Promise<number> {

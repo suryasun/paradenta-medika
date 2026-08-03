@@ -47,4 +47,11 @@ export class WarehouseLocationRepository implements IWarehouseLocationRepository
   async findByBranchAndCode(branchId: string, locationCode: string): Promise<WarehouseLocation | null> {
     return prisma.warehouseLocation.findFirst({ where: { branchId, locationCode, deletedAt: null } });
   }
+
+  async findMainByBranchId(branchId: string): Promise<WarehouseLocation | null> {
+    return prisma.warehouseLocation.findFirst({
+      where: { branchId, deletedAt: null, isActive: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
 }

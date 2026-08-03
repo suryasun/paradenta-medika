@@ -70,6 +70,7 @@ import { GetMovementsReportUseCase } from '../../application/use-cases/GetMoveme
 import { GetPurchasesReportUseCase } from '../../application/use-cases/GetPurchasesReportUseCase';
 import { GetExpiryReportUseCase } from '../../application/use-cases/GetExpiryReportUseCase';
 import { GetOpnamesReportUseCase } from '../../application/use-cases/GetOpnamesReportUseCase';
+import { ConsumeMaterialUseCase } from '../../application/use-cases/ConsumeMaterialUseCase';
 import { PurchaseOrderNumberGenerator } from '../../application/services/PurchaseOrderNumberGenerator';
 import { GoodsReceiptNumberGenerator } from '../../application/services/GoodsReceiptNumberGenerator';
 import { StockTransactionNumberGenerator } from '../../application/services/StockTransactionNumberGenerator';
@@ -100,6 +101,7 @@ import { StockReservationController } from '../controllers/StockReservationContr
 import { StockOpnameController } from '../controllers/StockOpnameController';
 import { BatchController } from '../controllers/BatchController';
 import { WarehouseReportController } from '../controllers/WarehouseReportController';
+import { TREATMENT_MATERIAL_FINALIZED_EVENT, TreatmentMaterialFinalizedPayload } from '../../../emr/domain/events/EmrEvents';
 
 /**
  * docs/06-tasks/task-095.md..task-114.md (Epic V Warehouse Foundation +
@@ -124,6 +126,49 @@ export function buildWarehouseModule(
   const stockOpnameRepository = new StockOpnameRepository();
   const batchRepository = new BatchRepository();
   const warehouseReportRepository = new WarehouseReportRepository();
+
+  /**
+   * docs/06-tasks/task-136.md (Epic Z, UC-WHS-003). Subscribes to EMR's
+   * `emr.treatment-material-finalized.v1`, mirroring Billing's own
+   * subscription to EMRFinished (billing.routes.ts). Wrapped in try/catch
+   * for the same reason: Warehouse is downstream of EMR, so a stock
+   * shortage or expired-batch failure here must never propagate back
+   * through the shared event bus and fail the Visit-closing transaction
+   * that triggered it -- instead it's logged and surfaced as
+   * `warehouse.material-consumption-failed.v1` for EMR/Notification to
+   * pick up if they choose to subscribe (not built in this task's scope).
+   */
+  const consumeMaterialUseCase = new ConsumeMaterialUseCase(
+    stockRepository,
+    itemRepository,
+    batchRepository,
+    new StockTransactionNumberGenerator(stockRepository),
+    auditService,
+    eventBus,
+  );
+  eventBus.subscribe<TreatmentMaterialFinalizedPayload>(TREATMENT_MATERIAL_FINALIZED_EVENT, async (payload) => {
+    try {
+      await consumeMaterialUseCase.execute({
+        visitId: payload.visitId,
+        treatmentId: payload.treatmentId,
+        visitTreatmentId: payload.visitTreatmentId,
+        warehouseId: payload.warehouseId,
+        materials: payload.materials,
+        occurredAt: payload.occurredAt,
+        actorUserId: 'system:material-consume',
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to consume materials for VisitTreatment', payload.visitTreatmentId, error);
+      await eventBus.publish('warehouse.material-consumption-failed.v1', {
+        visitId: payload.visitId,
+        treatmentId: payload.treatmentId,
+        visitTreatmentId: payload.visitTreatmentId,
+        warehouseId: payload.warehouseId,
+        reason: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
 
   const itemController = new ItemController(
     new CreateItemUseCase(itemRepository, auditService),

@@ -1,4 +1,5 @@
 import { SoapNote, Visit, VisitDiagnosis, VisitTreatment, VitalSign } from '@prisma/client';
+import { VisitTreatmentWithMaterials } from '../../domain/repositories/IVisitTreatmentRepository';
 import {
   DiagnosisResponseDto,
   SoapNoteResponseDto,
@@ -57,7 +58,7 @@ function toDiagnosisResponse(diagnosis: VisitDiagnosis): DiagnosisResponseDto {
   };
 }
 
-function toTreatmentEntryResponse(entry: VisitTreatment): TreatmentEntryResponseDto {
+function toTreatmentEntryResponse(entry: VisitTreatment & { materials?: Array<{ itemId: string; quantity: unknown }> }): TreatmentEntryResponseDto {
   return {
     id: entry.id,
     treatmentId: entry.treatmentId,
@@ -66,6 +67,7 @@ function toTreatmentEntryResponse(entry: VisitTreatment): TreatmentEntryResponse
     unitPrice: Number(entry.unitPrice),
     subtotal: Number(entry.subtotal),
     notes: entry.notes,
+    materials: (entry.materials ?? []).map((m) => ({ itemId: m.itemId, quantity: Number(m.quantity) })),
   };
 }
 
@@ -74,7 +76,7 @@ export function toVisitDetailResponse(
   vitalSigns: VitalSign[],
   soapNote: SoapNote | null,
   diagnoses: VisitDiagnosis[],
-  treatmentEntries: VisitTreatment[],
+  treatmentEntries: VisitTreatmentWithMaterials[],
 ): VisitDetailResponseDto {
   return {
     ...toVisitResponse(visit),

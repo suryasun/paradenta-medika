@@ -75,4 +75,24 @@ export class BatchRepository implements IBatchRepository {
       data: { status: 'QUARANTINED', quarantinedBy, quarantinedAt },
     });
   }
+
+  async findActiveByWarehouseAndItem(warehouseId: string, itemId: string): Promise<ItemBatch[]> {
+    return prisma.itemBatch.findMany({
+      where: { warehouseId, itemId, status: 'ACTIVE', remainingQuantity: { gt: 0 } },
+    });
+  }
+
+  async decrementRemaining(id: string, quantity: number): Promise<ItemBatch> {
+    return prisma.$transaction(async (tx) => {
+      const batch = await tx.itemBatch.findUniqueOrThrow({ where: { id } });
+      const newRemaining = Number(batch.remainingQuantity) - quantity;
+      return tx.itemBatch.update({
+        where: { id },
+        data: {
+          remainingQuantity: newRemaining,
+          status: newRemaining <= 0 ? 'DEPLETED' : batch.status,
+        },
+      });
+    });
+  }
 }

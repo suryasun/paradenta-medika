@@ -1,6 +1,11 @@
 import { VisitTreatment } from '@prisma/client';
 import { prisma } from '../../../../shared/infrastructure/prisma';
-import { CreateVisitTreatmentInput, DoctorFeeSourceLine, IVisitTreatmentRepository } from '../../domain/repositories/IVisitTreatmentRepository';
+import {
+  CreateVisitTreatmentInput,
+  DoctorFeeSourceLine,
+  IVisitTreatmentRepository,
+  VisitTreatmentWithMaterials,
+} from '../../domain/repositories/IVisitTreatmentRepository';
 
 const FINALIZED_VISIT_STATUSES = ['COMPLETED', 'LOCKED', 'ARCHIVED'] as const;
 
@@ -16,12 +21,24 @@ export class VisitTreatmentRepository implements IVisitTreatmentRepository {
         subtotal: input.subtotal,
         notes: input.notes,
         createdBy: input.createdBy,
+        materials:
+          input.materials && input.materials.length > 0
+            ? { create: input.materials.map((m) => ({ itemId: m.itemId, quantity: m.quantity, createdBy: input.createdBy })) }
+            : undefined,
       },
     });
   }
 
   async findByVisitId(visitId: string): Promise<VisitTreatment[]> {
     return prisma.visitTreatment.findMany({ where: { visitId }, orderBy: { createdAt: 'asc' } });
+  }
+
+  async findByVisitIdWithMaterials(visitId: string): Promise<VisitTreatmentWithMaterials[]> {
+    return prisma.visitTreatment.findMany({
+      where: { visitId },
+      include: { materials: true },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   async countByVisitId(visitId: string): Promise<number> {

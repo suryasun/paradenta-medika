@@ -39,6 +39,11 @@ export interface DiagnosisResponseDto {
   notes: string | null;
 }
 
+export interface TreatmentMaterialResponseDto {
+  itemId: string;
+  quantity: number;
+}
+
 export interface TreatmentEntryResponseDto {
   id: string;
   treatmentId: string;
@@ -47,6 +52,7 @@ export interface TreatmentEntryResponseDto {
   unitPrice: number;
   subtotal: number;
   notes: string | null;
+  materials: TreatmentMaterialResponseDto[];
 }
 
 export interface VisitDetailResponseDto extends VisitResponseDto {

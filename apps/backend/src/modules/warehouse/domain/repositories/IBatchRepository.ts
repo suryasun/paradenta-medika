@@ -26,4 +26,15 @@ export interface IBatchRepository {
   findById(id: string): Promise<ItemBatch | null>;
   list(query: ListQueryDto, filter: BatchListFilter): Promise<PagedResult<ItemBatch>>;
   markQuarantined(id: string, quarantinedBy: string, quarantinedAt: Date): Promise<ItemBatch>;
+  /**
+   * docs/06-tasks/task-136.md; UC-WHS-003 step 2 (FEFO). All `ACTIVE`
+   * batches for this warehouse/item regardless of expiry -- the caller
+   * (ConsumeMaterialUseCase) separates expired-vs-valid and sorts by
+   * expiryDate ascending itself, since FEFO's "no-expiry-tracked items sort
+   * last" rule isn't expressible as a plain Prisma orderBy without a raw
+   * query.
+   */
+  findActiveByWarehouseAndItem(warehouseId: string, itemId: string): Promise<ItemBatch[]>;
+  /** Decrements `remainingQuantity`; transitions the batch to `DEPLETED` once it reaches zero. */
+  decrementRemaining(id: string, quantity: number): Promise<ItemBatch>;
 }

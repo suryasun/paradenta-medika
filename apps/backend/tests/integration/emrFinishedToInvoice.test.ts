@@ -4,6 +4,7 @@ import { CloseVisitUseCase } from '../../src/modules/emr/application/use-cases/C
 import { GenerateInvoiceUseCase } from '../../src/modules/billing/application/use-cases/GenerateInvoiceUseCase';
 import { InvoiceNumberGenerator } from '../../src/modules/billing/application/services/InvoiceNumberGenerator';
 import { FakeSoapNoteRepository, FakeTreatmentRepository, FakeVisitRepository, FakeVisitTreatmentRepository } from '../fakes/emrFakes';
+import { FakeWarehouseLocationRepository } from '../fakes/warehouseFakes';
 import { FakeInvoiceItemRepository, FakeInvoiceRepository } from '../fakes/billingFakes';
 import { FakeAuditService } from '../fakes/authFakes';
 
@@ -31,7 +32,15 @@ describe('EMR Finished -> Generate Invoice integration (task-052 / task-054 seam
       await generateInvoiceUseCase.execute({ visitId: payload.visitId, actorUserId: 'system:emr-finished' });
     });
 
-    const closeVisitUseCase = new CloseVisitUseCase(visitRepository, soapNoteRepository, visitTreatmentRepository, auditService, eventBus);
+    const warehouseLocationRepository = new FakeWarehouseLocationRepository();
+    const closeVisitUseCase = new CloseVisitUseCase(
+      visitRepository,
+      soapNoteRepository,
+      visitTreatmentRepository,
+      warehouseLocationRepository,
+      auditService,
+      eventBus,
+    );
 
     const visit = await visitRepository.create({ visitNo: 'VIS000001', patientId: 'p1', doctorId: 'd1', branchId: 'b1', queueId: 'q1', createdBy: 'doc-1' });
     await soapNoteRepository.upsert({ visitId: visit.id, subjective: 'a', objective: 'b', assessment: 'c', plan: 'd', updatedBy: 'doc-1' });

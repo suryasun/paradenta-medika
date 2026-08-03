@@ -66,4 +66,12 @@ export interface IStockRepository {
   countTransactions(): Promise<number>;
   applyStockMovement(input: ApplyStockMovementInput): Promise<StockTransaction>;
   applyReservation(input: ApplyReservationInput): Promise<StockTransaction>;
+  /**
+   * docs/06-tasks/task-136.md idempotent-redelivery AC: application-layer
+   * duplicate check (the `idempotency_key` unique index treats a null
+   * `batchId` as distinct per MySQL NULL semantics, per this file's own
+   * doc-comment on that index, so non-batch-tracked items need this
+   * explicit lookup instead of relying on the DB constraint alone).
+   */
+  findByReference(referenceType: string, referenceId: string): Promise<StockTransaction[]>;
 }

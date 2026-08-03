@@ -1,7 +1,13 @@
 import { IEventBus } from '../../../../shared/events/EventBus';
 import { AuditContext, IAuditService } from '../../../system/domain/services/IAuditService';
+import { IWarehouseLocationRepository } from '../../../warehouse/domain/repositories/IWarehouseLocationRepository';
 import { MinimumDocumentationException, VisitAlreadyCompletedException, VisitNotFoundException } from '../../domain/exceptions/EmrExceptions';
-import { EMR_FINISHED_EVENT, EmrFinishedPayload } from '../../domain/events/EmrEvents';
+import {
+  EMR_FINISHED_EVENT,
+  EmrFinishedPayload,
+  TREATMENT_MATERIAL_FINALIZED_EVENT,
+  TreatmentMaterialFinalizedPayload,
+} from '../../domain/events/EmrEvents';
 import { ISoapNoteRepository } from '../../domain/repositories/ISoapNoteRepository';
 import { IVisitRepository } from '../../domain/repositories/IVisitRepository';
 import { IVisitTreatmentRepository } from '../../domain/repositories/IVisitTreatmentRepository';
@@ -21,12 +27,24 @@ export interface CloseVisitInput {
  * "SOAP wajib diisi sebelum Visit ditutup"; this task's own text names
  * Treatment as the other minimum requirement). Publishes EMRFinished,
  * which task-054 (Generate Invoice, Epic H) subscribes to.
+ *
+ * Also publishes `emr.treatment-material-finalized.v1` per completed
+ * VisitTreatment that recorded materials (task-136, Epic Z), once the
+ * warehouse location for the visit's branch can be resolved. Per
+ * docs/03-sad/18-module-warehouse.md UC-WHS-003 ("Kegagalan kekurangan
+ * stok tidak boleh mengubah EMR secara langsung"), a missing warehouse
+ * location or a downstream consumption failure must never block or
+ * mutate the Visit-closing outcome -- consistent with EMRFinished's own
+ * existing pattern of not wrapping this in try/catch here, and instead
+ * relying on each subscriber (Warehouse's own subscription in
+ * warehouse.routes.ts) to guard itself.
  */
 export class CloseVisitUseCase {
   constructor(
     private readonly visitRepository: IVisitRepository,
     private readonly soapNoteRepository: ISoapNoteRepository,
     private readonly visitTreatmentRepository: IVisitTreatmentRepository,
+    private readonly warehouseLocationRepository: IWarehouseLocationRepository,
     private readonly auditService: IAuditService,
     private readonly eventBus: IEventBus,
   ) {}
@@ -68,6 +86,28 @@ export class CloseVisitUseCase {
       occurredAt: new Date().toISOString(),
     };
     await this.eventBus.publish(EMR_FINISHED_EVENT, eventPayload);
+
+    const treatmentEntries = await this.visitTreatmentRepository.findByVisitIdWithMaterials(input.visitId);
+    const entriesWithMaterials = treatmentEntries.filter((entry) => entry.materials.length > 0);
+    if (entriesWithMaterials.length > 0) {
+      const warehouseLocation = await this.warehouseLocationRepository.findMainByBranchId(completed.branchId);
+      if (warehouseLocation) {
+        const occurredAt = new Date().toISOString();
+        for (const entry of entriesWithMaterials) {
+          const materialPayload: TreatmentMaterialFinalizedPayload = {
+            event: TREATMENT_MATERIAL_FINALIZED_EVENT,
+            visitId: completed.id,
+            treatmentId: entry.treatmentId,
+            visitTreatmentId: entry.id,
+            branchId: completed.branchId,
+            warehouseId: warehouseLocation.id,
+            materials: entry.materials.map((m) => ({ itemId: m.itemId, quantity: Number(m.quantity) })),
+            occurredAt,
+          };
+          await this.eventBus.publish(TREATMENT_MATERIAL_FINALIZED_EVENT, materialPayload);
+        }
+      }
+    }
 
     return toVisitResponse(completed);
   }
