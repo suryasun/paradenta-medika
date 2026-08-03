@@ -112,4 +112,44 @@ describe("AdminEntityListPage (generic Master Data CRUD engine)", () => {
     expect(screen.queryByLabelText("Widget Code")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Widget Name")).toBeInTheDocument();
   });
+
+  it("edits a non-createOnly field inline without opening the modal", async () => {
+    const user = userEvent.setup();
+    const service = {
+      list: jest.fn().mockResolvedValue({ items: [{ id: "w1", widgetCode: "W1", widgetName: "First Widget", isActive: true }] }),
+      create: jest.fn(),
+      update: jest.fn().mockResolvedValue({ id: "w1", widgetCode: "W1", widgetName: "Renamed Widget", isActive: true }),
+    };
+
+    renderPage(service);
+    await screen.findByText("First Widget");
+
+    await user.click(screen.getByRole("button", { name: "Edit Widget Name for W1" }));
+    const input = screen.getByLabelText("Widget Name for W1");
+    await user.clear(input);
+    await user.type(input, "Renamed Widget");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(service.update).toHaveBeenCalledWith("w1", { widgetName: "Renamed Widget" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("reverts an inline edit on Escape without calling update", async () => {
+    const user = userEvent.setup();
+    const service = {
+      list: jest.fn().mockResolvedValue({ items: [{ id: "w1", widgetCode: "W1", widgetName: "First Widget", isActive: true }] }),
+      create: jest.fn(),
+      update: jest.fn(),
+    };
+
+    renderPage(service);
+    await screen.findByText("First Widget");
+
+    await user.click(screen.getByRole("button", { name: "Edit Widget Name for W1" }));
+    await user.type(screen.getByLabelText("Widget Name for W1"), " extra");
+    await user.keyboard("{Escape}");
+
+    expect(await screen.findByText("First Widget")).toBeInTheDocument();
+    expect(service.update).not.toHaveBeenCalled();
+  });
 });

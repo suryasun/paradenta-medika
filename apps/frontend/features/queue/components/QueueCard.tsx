@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { DragEvent, useState } from "react";
+import { GripVertical } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PermissionGuard } from "@/components/guards/PermissionGuard";
+import { useDoctors } from "@/features/master-data/hooks/useDoctors";
 import { useOpenVisit } from "@/features/emr/hooks/useOpenVisit";
 import { getApiErrorMessage } from "@/lib/api-client";
 import {
@@ -13,6 +16,7 @@ import {
   useSkipQueue,
   useStartQueueService,
 } from "../hooks/useQueueMutations";
+import { QUEUE_STATUS_TONE } from "../lib/status";
 import { QueueEntry } from "../types/queue.types";
 import { QueueReasonModal } from "./QueueReasonModal";
 import { TransferQueueModal } from "./TransferQueueModal";
@@ -28,11 +32,26 @@ const STATUS_ACCENT: Record<QueueEntry["status"], string> = {
 };
 
 // docs/02-design/Parakita - Key Screens.dc.html "isQueue" board: a ticket
-// card with a left accent border colored by status. The mockup's mocked
-// data shows patient/doctor names; apps/backend's QueueResponseDto only
-// carries patientId/doctorId (no denormalized name), so the card shows
-// queue number/type/priority/time instead of fabricating a name lookup.
-export function QueueCard({ queue }: { queue: QueueEntry }) {
+// card with a left accent border colored by status. apps/backend's
+// QueueResponseDto only carries patientId/doctorId (no denormalized
+// name); doctor name is resolved client-side via Master Data's own
+// already-fetched Doctor list (same join pattern reservation.md's list
+// view uses) -- patient name has no equivalent cheap bulk lookup and
+// stays a flagged, out-of-scope backend gap (queue.md §2.1).
+//
+// docs/02-design/design-system.md §11.2: the card is draggable between
+// board columns as an *accelerator* -- every existing button action below
+// (Call/Recall/Start/.../Transfer) is untouched and remains the full
+// non-drag equivalent, per ui-guidelines.md §9.4.
+export function QueueCard({
+  queue,
+  onDragStart,
+  onDragEnd,
+}: {
+  queue: QueueEntry;
+  onDragStart?: (queue: QueueEntry) => void;
+  onDragEnd?: () => void;
+}) {
   const [modal, setModal] = useState<"skip" | "cancel" | "transfer" | null>(null);
   const callQueue = useCallQueue();
   const recallQueue = useRecallQueue();
@@ -41,21 +60,39 @@ export function QueueCard({ queue }: { queue: QueueEntry }) {
   const skipQueue = useSkipQueue();
   const cancelQueue = useCancelQueue();
   const openVisit = useOpenVisit();
+  const { data: doctorsData } = useDoctors();
+  const doctorName = doctorsData?.items.find((d) => d.id === queue.doctorId)?.fullName;
+
+  function handleDragStart(event: DragEvent<HTMLDivElement>) {
+    event.dataTransfer.setData("text/plain", queue.id);
+    event.dataTransfer.effectAllowed = "move";
+    onDragStart?.(queue);
+  }
 
   return (
     <div
       role="group"
       aria-label={queue.queueNumber}
-      className="rounded-md border border-border bg-surface p-3.5"
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
+      className="cursor-grab rounded-md border border-border bg-surface p-3.5 transition-[transform,box-shadow] duration-[100ms] ease-out hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing"
       style={{ borderLeft: `3px solid ${STATUS_ACCENT[queue.status]}` }}
     >
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm font-bold text-foreground">{queue.queueNumber}</span>
-        <span className="text-[11px] font-medium text-muted">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="flex items-center gap-1 text-sm font-bold text-foreground">
+          <GripVertical size={13} strokeWidth={1.75} className="shrink-0 text-muted" aria-hidden="true" />
+          {queue.queueNumber}
+        </span>
+        <span className="font-tabular text-[11px] font-medium text-muted">
           {new Date(queue.checkedInAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </span>
       </div>
-      <div className="mt-1 text-[13px] text-foreground">{queue.queueType}</div>
+      <div className="mt-1.5">
+        <Badge tone={QUEUE_STATUS_TONE[queue.status]}>{queue.status.replace("_", " ")}</Badge>
+      </div>
+      {doctorName && <div className="mt-1.5 text-[13px] text-foreground">{doctorName}</div>}
+      <div className="mt-0.5 text-[13px] text-muted">{queue.queueType}</div>
       <div className="mt-0.5 text-[11px] text-muted">{queue.priority}</div>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">

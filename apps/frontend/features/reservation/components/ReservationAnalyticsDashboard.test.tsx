@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReservationAnalyticsDashboard } from "./ReservationAnalyticsDashboard";
 import { reservationService } from "../services/reservation.service";
@@ -48,8 +49,24 @@ describe("ReservationAnalyticsDashboard", () => {
     expect(screen.getAllByText("10").length).toBeGreaterThan(0);
     expect(screen.getByText("70.0%")).toBeInTheDocument(); // conversion rate
     expect(screen.getByText("40.0%")).toBeInTheDocument(); // walk-in ratio
-    expect(screen.getByText("drg. Amelia Putri")).toBeInTheDocument();
     expect(screen.getByText("Range: 2026-07-03 to 2026-08-02")).toBeInTheDocument();
+  });
+
+  it("shows the doctor name via the Recharts tooltip/table (View as table toggle)", async () => {
+    const user = userEvent.setup();
+    mockedReservationService.analytics.mockResolvedValue(ANALYTICS);
+    renderDashboard();
+
+    await screen.findByText("Doctor Utilization");
+    // Recharts' <ResponsiveContainer> only renders real SVG content with
+    // real layout dimensions, which jsdom doesn't provide -- exercising
+    // the "View as table" toggle (ui-guidelines.md §9.5's own
+    // accessibility requirement) both sidesteps that and tests real,
+    // meaningful behavior of the feature this pass added.
+    const toggles = screen.getAllByRole("button", { name: "View as table" });
+    await user.click(toggles[2]); // Doctor Utilization is the 3rd TrendChart on the page
+
+    expect(await screen.findByText("drg. Amelia Putri")).toBeInTheDocument();
   });
 
   it("shows an empty state for a metric with no data in range", async () => {

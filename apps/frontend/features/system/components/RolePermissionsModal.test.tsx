@@ -53,4 +53,10 @@ describe("RolePermissionsModal", () => {
 
     await waitFor(() => expect(mockedRoleService.assignPermissions).toHaveBeenCalledWith("r1", ["p1", "p3"]));
   });
+
+  it("warns that current permissions aren't shown, since the backend has no read endpoint for them", async () => {
+    renderModal(ROLE);
+
+    expect(await screen.findByText(/current permissions aren.t available/i)).toBeInTheDocument();
+  });
 });

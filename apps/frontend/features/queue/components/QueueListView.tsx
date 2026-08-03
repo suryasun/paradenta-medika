@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { DragEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -10,20 +10,15 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Select } from "@/components/ui/Select";
 import { PermissionGuard } from "@/components/guards/PermissionGuard";
 import { getApiErrorMessage } from "@/lib/api-client";
+import { cn } from "@/utils/cn";
 import { useQueues } from "../hooks/useQueues";
+import { useCallQueue, useCompleteQueue, useStartQueueService } from "../hooks/useQueueMutations";
+import { isValidDragTransition, QUEUE_STATUS_TONE } from "../lib/status";
 import { AddToQueueModal } from "./AddToQueueModal";
 import { QueueCard } from "./QueueCard";
 import { QueueEntry } from "../types/queue.types";
 
-export const QUEUE_STATUS_TONE: Record<QueueEntry["status"], "neutral" | "success" | "warning" | "error" | "info"> = {
-  WAITING: "info",
-  CALLED: "warning",
-  IN_SERVICE: "warning",
-  COMPLETED: "success",
-  CANCELLED: "error",
-  NO_SHOW: "error",
-  SKIPPED: "neutral",
-};
+export { QUEUE_STATUS_TONE };
 
 const BOARD_COLUMNS: QueueEntry["status"][] = ["WAITING", "CALLED", "IN_SERVICE", "COMPLETED"];
 
@@ -34,19 +29,48 @@ const BOARD_COLUMNS: QueueEntry["status"][] = ["WAITING", "CALLED", "IN_SERVICE"
 // selecting one of those from the status filter switches to a flat grid
 // instead of the board, since the mockup describes those as a "Queue
 // History" concern (per docs/02-design/pages/queue.md), not the live board.
+//
+// docs/02-design/design-system.md §11.2: board columns are drop targets
+// for QueueCard's drag source. A drop only commits (dashed-border
+// highlight while hovering) when it matches a valid forward transition
+// (../lib/status.ts) -- an invalid target never highlights and never
+// accepts the drop, so an invalid transition is prevented client-side
+// rather than attempted and rejected server-side.
 export function QueueListView() {
   const [status, setStatus] = useState("");
   const [visitDate, setVisitDate] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [draggedEntry, setDraggedEntry] = useState<QueueEntry | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<QueueEntry["status"] | null>(null);
   const { data, isLoading, isError, error, refetch } = useQueues({ status: status || undefined, visitDate: visitDate || undefined, limit: 100 });
+
+  const callQueue = useCallQueue();
+  const startService = useStartQueueService();
+  const completeQueue = useCompleteQueue();
 
   const items = data?.items ?? [];
   const isBoardView = !status;
 
+  function handleDragOver(event: DragEvent<HTMLDivElement>, column: QueueEntry["status"]) {
+    if (draggedEntry && isValidDragTransition(draggedEntry.status, column)) {
+      event.preventDefault();
+      setDragOverColumn(column);
+    }
+  }
+
+  function handleDrop(column: QueueEntry["status"]) {
+    setDragOverColumn(null);
+    if (!draggedEntry || !isValidDragTransition(draggedEntry.status, column)) return;
+    if (column === "CALLED") callQueue.mutate(draggedEntry.id);
+    else if (column === "IN_SERVICE") startService.mutate(draggedEntry.id);
+    else if (column === "COMPLETED") completeQueue.mutate(draggedEntry.id);
+    setDraggedEntry(null);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-foreground">Queue</h1>
+        <h1 className="font-display text-foreground">Queue</h1>
         <div className="flex gap-2">
           <PermissionGuard permission="queue.dashboard.read">
             <Link href="/queue/dashboard">
@@ -58,6 +82,10 @@ export function QueueListView() {
           </PermissionGuard>
         </div>
       </div>
+
+      {isBoardView && items.length > 0 && (
+        <p className="text-xs text-muted">Drag a ticket to the next column, or use its action buttons — both do the same thing.</p>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -71,7 +99,7 @@ export function QueueListView() {
         <Input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
       </div>
 
-      {isLoading && <LoadingState label="Loading queue..." />}
+      {isLoading && <LoadingState label="Loading queue..." cards={4} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />}
       {!isLoading && !isError && items.length === 0 && (
         <EmptyState title="Queue is empty" description="No entries match your current filters." />
@@ -82,13 +110,31 @@ export function QueueListView() {
           {BOARD_COLUMNS.map((column) => {
             const columnItems = items.filter((item) => item.status === column);
             return (
-              <div key={column}>
-                <div className="mb-2.5 text-xs font-bold uppercase tracking-wide text-muted">
+              <div
+                key={column}
+                data-testid={`queue-column-${column}`}
+                onDragOver={(e) => handleDragOver(e, column)}
+                onDragLeave={() => setDragOverColumn((c) => (c === column ? null : c))}
+                onDrop={() => handleDrop(column)}
+                className={cn(
+                  "rounded-lg border-2 border-dashed p-1.5 transition-colors duration-[180ms]",
+                  dragOverColumn === column ? "border-primary bg-[var(--color-primary-100)]" : "border-transparent",
+                )}
+              >
+                <div className="mb-2.5 px-1 text-xs font-bold uppercase tracking-wide text-muted">
                   {column.replace("_", " ")} ({columnItems.length})
                 </div>
                 <div className="flex flex-col gap-2.5">
                   {columnItems.map((queue) => (
-                    <QueueCard key={queue.id} queue={queue} />
+                    <QueueCard
+                      key={queue.id}
+                      queue={queue}
+                      onDragStart={setDraggedEntry}
+                      onDragEnd={() => {
+                        setDraggedEntry(null);
+                        setDragOverColumn(null);
+                      }}
+                    />
                   ))}
                 </div>
               </div>

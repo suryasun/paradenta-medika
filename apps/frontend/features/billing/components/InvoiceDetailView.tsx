@@ -58,19 +58,19 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
       <div className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-surface p-4 sm:grid-cols-4">
         <div>
           <span className="text-xs font-medium uppercase tracking-wide text-muted">Subtotal</span>
-          <p className="text-sm text-foreground">{formatCurrency(invoice.subtotal)}</p>
+          <p className="font-tabular text-sm text-foreground">{formatCurrency(invoice.subtotal)}</p>
         </div>
         <div>
           <span className="text-xs font-medium uppercase tracking-wide text-muted">Grand Total</span>
-          <p className="text-sm text-foreground">{formatCurrency(invoice.grandTotal)}</p>
+          <p className="font-tabular text-sm text-foreground">{formatCurrency(invoice.grandTotal)}</p>
         </div>
         <div>
           <span className="text-xs font-medium uppercase tracking-wide text-muted">Paid</span>
-          <p className="text-sm text-foreground">{formatCurrency(invoice.paidAmount)}</p>
+          <p className="font-tabular text-sm text-foreground">{formatCurrency(invoice.paidAmount)}</p>
         </div>
         <div>
           <span className="text-xs font-medium uppercase tracking-wide text-muted">Outstanding</span>
-          <p className="text-sm font-semibold text-foreground">{formatCurrency(invoice.outstanding)}</p>
+          <p className="font-tabular text-sm font-semibold text-foreground">{formatCurrency(invoice.outstanding)}</p>
         </div>
       </div>
 
@@ -89,9 +89,9 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
             {invoice.items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.itemName}</TableCell>
-                <TableCell>{item.quantity}</TableCell>
-                <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                <TableCell>{formatCurrency(item.total)}</TableCell>
+                <TableCell className="font-tabular">{item.quantity}</TableCell>
+                <TableCell className="font-tabular">{formatCurrency(item.unitPrice)}</TableCell>
+                <TableCell className="font-tabular">{formatCurrency(item.total)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -112,8 +112,8 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
             <TableBody>
               {invoice.payments.map((payment) => (
                 <TableRow key={payment.id}>
-                  <TableCell>{new Date(payment.paymentDate).toLocaleString()}</TableCell>
-                  <TableCell>{formatCurrency(payment.amount)}</TableCell>
+                  <TableCell className="font-tabular">{new Date(payment.paymentDate).toLocaleString()}</TableCell>
+                  <TableCell className="font-tabular">{formatCurrency(payment.amount)}</TableCell>
                   <TableCell>{payment.referenceNo ?? "-"}</TableCell>
                 </TableRow>
               ))}

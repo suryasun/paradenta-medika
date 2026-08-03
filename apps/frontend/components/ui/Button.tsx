@@ -27,7 +27,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+          // Press micro-interaction (design-system.md §11.7): motion-micro
+          // scale-down on press, no extra color change beyond the existing
+          // hover state -- pressing reads as tactile without a new token.
+          "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,color,transform] duration-[100ms] ease-out active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100",
           VARIANT_CLASSES[variant],
           className,
         )}

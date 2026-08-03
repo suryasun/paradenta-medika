@@ -47,10 +47,13 @@ export function CreatePaymentModal({ invoiceId, outstanding, onClose }: { invoic
   return (
     <Modal title="Record Payment" onClose={onClose}>
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-muted">Outstanding: {formatCurrency(outstanding)}</p>
+        <p className="font-tabular text-sm text-muted">Outstanding: {formatCurrency(outstanding)}</p>
 
         {lines.map((line, index) => (
-          <div key={index} className="flex items-end gap-2">
+          // New lines animate in (design-system.md §11 micro-interaction);
+          // existing lines keep their index/key so they don't remount
+          // (and don't replay the animation) when a line is appended.
+          <div key={index} className="flex animate-[tab-fade-in_180ms_ease-out] items-end gap-2">
             <Select
               id={`paymentMethod-${index}`}
               label="Method"
@@ -71,7 +74,7 @@ export function CreatePaymentModal({ invoiceId, outstanding, onClose }: { invoic
               type="number"
               value={line.amount}
               onChange={(e) => updateLine(index, { amount: e.target.value })}
-              className="w-36"
+              className="w-36 font-tabular"
             />
             {lines.length > 1 && (
               <Button type="button" variant="ghost" onClick={() => removeLine(index)}>
@@ -85,7 +88,7 @@ export function CreatePaymentModal({ invoiceId, outstanding, onClose }: { invoic
           Split Payment (+)
         </Button>
 
-        <p className="text-sm text-foreground">
+        <p className="font-tabular text-sm text-foreground">
           Total: {formatCurrency(total)} {total > outstanding && <span className="text-error">exceeds outstanding balance</span>}
         </p>
 

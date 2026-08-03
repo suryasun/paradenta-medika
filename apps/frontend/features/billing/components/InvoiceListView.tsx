@@ -54,7 +54,7 @@ export function InvoiceListView() {
         />
       </div>
 
-      {isLoading && <LoadingState label="Loading invoices..." />}
+      {isLoading && <LoadingState label="Loading invoices..." rows={5} columns={6} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />}
       {!isLoading && !isError && data && data.items.length === 0 && (
         <EmptyState title="No invoices found" description="Invoices appear automatically once a Visit is closed." />
@@ -75,9 +75,9 @@ export function InvoiceListView() {
             {data.items.map((invoice) => (
               <TableRow key={invoice.id}>
                 <TableCell className="font-medium">{invoice.invoiceNo}</TableCell>
-                <TableCell>{new Date(invoice.invoiceDate).toLocaleDateString()}</TableCell>
-                <TableCell>{formatCurrency(invoice.grandTotal)}</TableCell>
-                <TableCell>{formatCurrency(invoice.outstanding)}</TableCell>
+                <TableCell className="font-tabular">{new Date(invoice.invoiceDate).toLocaleDateString()}</TableCell>
+                <TableCell className="font-tabular">{formatCurrency(invoice.grandTotal)}</TableCell>
+                <TableCell className="font-tabular">{formatCurrency(invoice.outstanding)}</TableCell>
                 <TableCell>
                   <Badge tone={INVOICE_STATUS_TONE[invoice.status]}>{invoice.status}</Badge>
                 </TableCell>

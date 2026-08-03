@@ -1,11 +1,13 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { InlineEditableCell } from "@/components/ui/InlineEditableCell";
+import { Input } from "@/components/ui/Input";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Modal } from "@/components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "@/components/ui/Table";
@@ -33,10 +35,14 @@ interface AdminEntityListPageProps<T extends { id: string; isActive?: boolean }>
   };
 }
 
-// Shared list/create/edit shell for all six Master Data admin entities
-// (task-021..026). Each entity page supplies its columns/fields/service;
-// this component owns the query, the create modal, the edit modal, and
-// the isActive toggle (every entity supports deactivate via update).
+// Shared list/create/edit shell for all Master Data admin entities.
+// Each entity page supplies its columns/fields/service; this component owns
+// the query, the create modal, the edit modal, the isActive toggle, search,
+// and inline edit for single-field corrections (docs/02-design/pages/
+// master-data.md §9): any non-createOnly text/number field that also has a
+// list column gets an inline edit affordance instead of requiring the full
+// modal for a one-field change. Multi-field edits and createOnly fields
+// (Code) stay in the modal.
 export function AdminEntityListPage<T extends { id: string; isActive?: boolean }>({
   title,
   resourceKey,
@@ -48,6 +54,7 @@ export function AdminEntityListPage<T extends { id: string; isActive?: boolean }
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<T | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["master-data", resourceKey, "list"],
@@ -75,19 +82,59 @@ export function AdminEntityListPage<T extends { id: string; isActive?: boolean }
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["master-data", resourceKey] }),
   });
 
+  const inlineEditableFieldByKey = useMemo(() => {
+    const map = new Map<string, FieldConfig>();
+    for (const field of fields) {
+      if (!field.createOnly && (field.type === "text" || field.type === "number")) {
+        map.set(field.name, field);
+      }
+    }
+    return map;
+  }, [fields]);
+
+  async function commitInlineEdit(item: T, field: FieldConfig, nextValue: string | number) {
+    await service.update(item.id, { [field.name]: nextValue });
+    await queryClient.invalidateQueries({ queryKey: ["master-data", resourceKey] });
+  }
+
+  const items = data?.items ?? [];
+  const filteredItems = search.trim()
+    ? items.filter((item) =>
+        columns.some((col) => String((item as Record<string, unknown>)[col.key] ?? "").toLowerCase().includes(search.trim().toLowerCase())),
+      )
+    : items;
+
+  const createAction = (
+    <PermissionGuard permission={`${permissionPrefix}.manage`}>
+      <Button onClick={() => setShowCreate(true)}>New {title.replace(/s$/, "")}</Button>
+    </PermissionGuard>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-foreground">{title}</h1>
-        <PermissionGuard permission={`${permissionPrefix}.manage`}>
-          <Button onClick={() => setShowCreate(true)}>New {title.replace(/s$/, "")}</Button>
-        </PermissionGuard>
+        {createAction}
       </div>
 
-      {isLoading && <LoadingState label={`Loading ${title.toLowerCase()}...`} />}
+      {items.length > 0 && (
+        <Input
+          placeholder={`Search ${title.toLowerCase()}...`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs"
+        />
+      )}
+
+      {isLoading && <LoadingState label={`Loading ${title.toLowerCase()}...`} rows={5} columns={columns.length + 2} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />}
-      {!isLoading && !isError && data && data.items.length === 0 && <EmptyState title={`No ${title.toLowerCase()} found`} />}
-      {!isLoading && !isError && data && data.items.length > 0 && (
+      {!isLoading && !isError && data && items.length === 0 && (
+        <EmptyState title={`No ${title.toLowerCase()} found`} description={`Get started by adding the first ${title.toLowerCase().replace(/s$/, "")}.`} action={createAction} />
+      )}
+      {!isLoading && !isError && data && items.length > 0 && filteredItems.length === 0 && (
+        <EmptyState title="No matches" description="Try a different search term." />
+      )}
+      {!isLoading && !isError && filteredItems.length > 0 && (
         <Table>
           <TableHead>
             <TableRow>
@@ -99,11 +146,26 @@ export function AdminEntityListPage<T extends { id: string; isActive?: boolean }
             </TableRow>
           </TableHead>
           <TableBody>
-            {data.items.map((item) => (
+            {filteredItems.map((item) => (
               <TableRow key={item.id}>
-                {columns.map((col) => (
-                  <TableCell key={col.key}>{col.render ? col.render(item) : String((item as Record<string, unknown>)[col.key] ?? "-")}</TableCell>
-                ))}
+                {columns.map((col) => {
+                  const field = inlineEditableFieldByKey.get(col.key);
+                  const rawValue = (item as Record<string, unknown>)[col.key];
+                  if (field && (typeof rawValue === "string" || typeof rawValue === "number")) {
+                    return (
+                      <TableCell key={col.key}>
+                        <InlineEditableCell
+                          value={rawValue}
+                          type={field.type === "number" ? "number" : "text"}
+                          displayValue={col.render ? col.render(item) : undefined}
+                          aria-label={`${field.label} for ${(item as Record<string, unknown>)[columns[0]?.key] ?? item.id}`}
+                          onCommit={(nextValue) => commitInlineEdit(item, field, nextValue)}
+                        />
+                      </TableCell>
+                    );
+                  }
+                  return <TableCell key={col.key}>{col.render ? col.render(item) : String(rawValue ?? "-")}</TableCell>;
+                })}
                 <TableCell>
                   <Badge tone={item.isActive ? "success" : "neutral"}>{item.isActive ? "Active" : "Inactive"}</Badge>
                 </TableCell>

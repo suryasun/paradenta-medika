@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -11,6 +12,16 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { useRoles } from "../hooks/useRoles";
 import { useUser } from "../hooks/useUser";
 import { useActivateUser, useAssignRoles, useDeactivateUser, useRevokeSessions, useUpdateUserEmail } from "../hooks/useUserMutations";
+
+// docs/02-design/pages/system.md §4 flagged the same class of bug as
+// RolePermissionsModal for this view's role checkboxes -- and it has the
+// same root cause, confirmed against the real backend: `SystemUser`
+// (apps/frontend/features/system/types/system.types.ts, mirroring
+// UserAdminResponseDto) has no roles/roleIds field, `GET
+// /system/users/:userId` doesn't return one, and `POST
+// /system/users/:userId/roles` is write-only. There is no way to know a
+// user's current roles from any endpoint in apps/backend today. Flagged,
+// not silently worked around -- see the warning Alert below.
 
 export function UserDetailView({ userId }: { userId: string }) {
   const { data: user, isLoading, isError, error, refetch } = useUser(userId);
@@ -80,6 +91,10 @@ export function UserDetailView({ userId }: { userId: string }) {
       <PermissionGuard permission="system.user.role.manage">
         <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
           <span className="text-sm font-medium text-foreground">Assign Roles</span>
+          <Alert tone="warning">
+            This user&apos;s current roles aren&apos;t available to show here yet. No box below is pre-checked — that does not mean
+            this user has no roles today. Saving replaces this user&apos;s entire role assignment with only what&apos;s checked.
+          </Alert>
           <div className="flex flex-wrap gap-3">
             {rolesData?.items.map((role) => (
               <label key={role.id} className="flex items-center gap-2 text-sm text-foreground">

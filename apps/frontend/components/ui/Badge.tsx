@@ -18,7 +18,14 @@ const TONE_CLASSES: Record<Tone, string> = {
 export function Badge({ className, tone = "neutral", ...props }: BadgeProps) {
   return (
     <span
-      className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", TONE_CLASSES[tone], className)}
+      className={cn(
+        // Status transitions cross-fade over motion-standard (design-system.md
+        // §11.7) rather than swapping instantly, so the eye can follow a
+        // change on a busy board (Reservation/Queue/Billing/Visit status).
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-[180ms] ease-out",
+        TONE_CLASSES[tone],
+        className,
+      )}
       {...props}
     />
   );

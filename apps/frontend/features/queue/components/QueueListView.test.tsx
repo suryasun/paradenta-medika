@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { QueueListView } from "./QueueListView";
@@ -157,6 +157,47 @@ describe("QueueListView", () => {
     await user.click(within(dialog).getByRole("button", { name: "Confirm Skip" }));
 
     await waitFor(() => expect(mockedQueueService.skip).toHaveBeenCalledWith("q1", undefined));
+  });
+
+  it("renders a status Badge on each card, not just the border accent", async () => {
+    mockedQueueService.list.mockResolvedValue({ items: [buildQueueEntry()], meta: { page: 1, limit: 100, total: 1, totalPages: 1 } });
+
+    renderView();
+    const card = await screen.findByRole("group", { name: "A001" });
+
+    expect(within(card).getByText("WAITING")).toBeInTheDocument();
+  });
+
+  it("dragging a WAITING card onto the CALLED column calls the call endpoint", async () => {
+    mockedQueueService.list.mockResolvedValue({ items: [buildQueueEntry()], meta: { page: 1, limit: 100, total: 1, totalPages: 1 } });
+    mockedQueueService.call.mockResolvedValue(buildQueueEntry({ status: "CALLED" }));
+
+    renderView();
+    const card = await screen.findByRole("group", { name: "A001" });
+    const calledColumn = screen.getByTestId("queue-column-CALLED");
+    const dataTransfer = { setData: jest.fn(), getData: jest.fn(), effectAllowed: "" };
+
+    fireEvent.dragStart(card, { dataTransfer });
+    fireEvent.dragOver(calledColumn, { dataTransfer });
+    fireEvent.drop(calledColumn, { dataTransfer });
+
+    await waitFor(() => expect(mockedQueueService.call).toHaveBeenCalledWith("q1"));
+  });
+
+  it("dragging a WAITING card onto the COMPLETED column (an invalid, skip-ahead transition) does nothing", async () => {
+    mockedQueueService.list.mockResolvedValue({ items: [buildQueueEntry()], meta: { page: 1, limit: 100, total: 1, totalPages: 1 } });
+
+    renderView();
+    const card = await screen.findByRole("group", { name: "A001" });
+    const completedColumn = screen.getByTestId("queue-column-COMPLETED");
+    const dataTransfer = { setData: jest.fn(), getData: jest.fn(), effectAllowed: "" };
+
+    fireEvent.dragStart(card, { dataTransfer });
+    fireEvent.dragOver(completedColumn, { dataTransfer });
+    fireEvent.drop(completedColumn, { dataTransfer });
+
+    expect(mockedQueueService.call).not.toHaveBeenCalled();
+    expect(mockedQueueService.complete).not.toHaveBeenCalled();
   });
 
   it("switches to a flat grid when filtering by a non-board status like CANCELLED", async () => {

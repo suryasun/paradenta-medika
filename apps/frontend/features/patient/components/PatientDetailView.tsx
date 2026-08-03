@@ -1,23 +1,65 @@
 "use client";
 
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { InlineEditableCell } from "@/components/ui/InlineEditableCell";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Tabs } from "@/components/ui/Tabs";
 import { PermissionGuard } from "@/components/guards/PermissionGuard";
+import { useAuthStore } from "@/stores/auth.store";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { ClinicalTimelineSection } from "@/features/emr/components/ClinicalTimelineSection";
 import { usePatient } from "../hooks/usePatient";
 import { useArchivePatient, useRestorePatient } from "../hooks/usePatientMutations";
+import { patientService } from "../services/patient.service";
+import { UpdatePatientInput } from "../types/patient.types";
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
       <dt className="text-xs font-medium uppercase tracking-wide text-muted">{label}</dt>
       <dd className="text-sm text-foreground">{value || "-"}</dd>
+    </div>
+  );
+}
+
+// docs/02-design/pages/patient.md §13: inline edit for simple profile
+// fields instead of a full Edit-Patient round-trip for a one-field
+// correction. Scoped exactly to UpdatePatientInput's actual fields
+// (fullName/phoneNumber/email/address) -- gender/DOB/place-of-birth
+// aren't in that DTO and stay read-only, since the API contract is frozen.
+function EditableField({
+  label,
+  value,
+  patientId,
+  field,
+}: {
+  label: string;
+  value: string | null | undefined;
+  patientId: string;
+  field: keyof UpdatePatientInput;
+}) {
+  const canEdit = useAuthStore((s) => s.hasPermission("patient.update"));
+  const queryClient = useQueryClient();
+
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted">{label}</dt>
+      <dd className="text-sm text-foreground">
+        <InlineEditableCell
+          value={value || ""}
+          disabled={!canEdit}
+          aria-label={label}
+          onCommit={async (nextValue) => {
+            await patientService.update(patientId, { [field]: String(nextValue) });
+            await queryClient.invalidateQueries({ queryKey: ["patients", "detail", patientId] });
+          }}
+        />
+      </dd>
     </div>
   );
 }
@@ -45,7 +87,7 @@ export function PatientDetailView({ patientId }: { patientId: string }) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-foreground">{patient.profile.fullName}</h1>
+          <h1 className="font-display text-foreground">{patient.profile.fullName}</h1>
           <p className="text-sm text-muted">
             MRN {patient.medicalRecordNumber} · <Badge tone={patient.profile.status === "ACTIVE" ? "success" : "neutral"}>{patient.profile.status}</Badge>
           </p>
@@ -77,12 +119,12 @@ export function PatientDetailView({ patientId }: { patientId: string }) {
             label: "Profile",
             content: (
               <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Full Name" value={patient.profile.fullName} />
+                <EditableField label="Full Name" value={patient.profile.fullName} patientId={patientId} field="fullName" />
                 <Field label="Gender" value={patient.profile.gender === "MALE" ? "Male" : "Female"} />
                 <Field label="Date of Birth" value={patient.profile.dateOfBirth} />
                 <Field label="Place of Birth" value={patient.profile.placeOfBirth} />
-                <Field label="Phone" value={patient.profile.phoneNumber} />
-                <Field label="Email" value={patient.profile.email} />
+                <EditableField label="Phone" value={patient.profile.phoneNumber} patientId={patientId} field="phoneNumber" />
+                <EditableField label="Email" value={patient.profile.email} patientId={patientId} field="email" />
               </dl>
             ),
           },
@@ -99,7 +141,11 @@ export function PatientDetailView({ patientId }: { patientId: string }) {
           {
             key: "address",
             label: "Address",
-            content: <p className="text-sm text-foreground">{patient.addresses[0] || "-"}</p>,
+            content: (
+              <dl>
+                <EditableField label="Address" value={patient.addresses[0]} patientId={patientId} field="address" />
+              </dl>
+            ),
           },
           {
             key: "reservations",

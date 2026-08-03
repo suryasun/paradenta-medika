@@ -30,7 +30,7 @@ export function PatientListView() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-foreground">Patients</h1>
+        <h1 className="font-display text-foreground">Patients</h1>
         <PermissionGuard permission="patient.create">
           <Link href="/patients/new">
             <Button>Register Patient</Button>
@@ -63,7 +63,7 @@ export function PatientListView() {
         </Select>
       </div>
 
-      {isLoading && <LoadingState label="Loading patients..." />}
+      {isLoading && <LoadingState label="Loading patients..." rows={5} columns={6} />}
       {isError && <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />}
       {!isLoading && !isError && data && data.items.length === 0 && (
         <EmptyState title="No patients found" description="Try adjusting your search or filters." />

@@ -107,6 +107,31 @@ describe("PatientDetailView", () => {
     expect(screen.getByText("No attachments across any visit yet")).toBeInTheDocument();
   });
 
+  it("edits the phone number inline on the Profile tab", async () => {
+    const user = userEvent.setup();
+    mockedPatientService.detail.mockResolvedValue(DETAIL);
+    mockedPatientService.update.mockResolvedValue({
+      id: "p1",
+      medicalRecordNumber: "MRN000001",
+      fullName: "John Doe",
+      gender: "MALE",
+      dateOfBirth: "1998-08-10",
+      phoneNumber: "0899",
+      status: "ACTIVE",
+    });
+
+    renderView();
+    await screen.findByRole("heading", { name: "John Doe" });
+
+    await user.click(screen.getByRole("button", { name: "Edit Phone" }));
+    const input = screen.getByLabelText("Phone");
+    await user.clear(input);
+    await user.type(input, "0899");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(mockedPatientService.update).toHaveBeenCalledWith("p1", { phoneNumber: "0899" }));
+  });
+
   it("archiving from the detail page calls the archive endpoint", async () => {
     const user = userEvent.setup();
     mockedPatientService.detail.mockResolvedValue(DETAIL);

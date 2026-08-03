@@ -32,7 +32,12 @@ export function Tabs({ items, defaultKey }: { items: TabItem[]; defaultKey?: str
           </button>
         ))}
       </div>
-      <div role="tabpanel" className="py-4">
+      {/* motion-standard cross-fade on tab switch (design-system.md §11.1)
+          -- key={active} remounts the panel so the fade-in plays every
+          switch; shell-level, applies to every consumer of Tabs
+          (including EMR's VisitWorkspace, all 14 tabs) without any
+          consumer needing its own transition code. */}
+      <div key={active} role="tabpanel" className="animate-[tab-fade-in_180ms_ease-out] py-4">
         {activeItem?.content}
       </div>
     </div>
