@@ -2669,3 +2669,117 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ---------------------------------------------------------------------------
+// Reporting Module (docs/03-sad/20-module-report.md Section 5 Data Model,
+// Epic AG task-178-184). Reporting is a read-only projection layer over
+// events published by other modules (Section 2.4 Read Model Architecture)
+// -- it therefore never takes an FK relation into another module's tables
+// (module boundary rule, docs/04-ai-contract/07-module-contract.md);
+// `branchId`/reference ids below are plain, non-FK columns, the same
+// convention already used for DoctorFeeSettlementItem.visitTreatmentId.
+// ---------------------------------------------------------------------------
+
+enum ReportJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+/// Section 5.2 report_jobs -- schema landed now per task-178's own
+/// Deliverables list, but the job execution/worker pipeline itself is
+/// Epic AH's scope (task-185-191, Report Catalog & Scheduled Reports);
+/// no code in this epic writes rows here yet.
+model ReportJob {
+  id             String          @id @default(uuid()) @db.Char(36)
+  reportName     String          @map("report_name") @db.VarChar(100)
+  requestedBy    String          @map("requested_by") @db.Char(36)
+  generatedBy    String?         @map("generated_by") @db.Char(36)
+  branchScope    Json            @map("branch_scope")
+  parameters     Json            @map("parameters_json")
+  status         ReportJobStatus @default(QUEUED)
+  startedAt      DateTime?       @map("started_at")
+  finishedAt     DateTime?       @map("finished_at")
+  idempotencyKey String?         @unique @map("idempotency_key") @db.VarChar(150)
+  errorCode      String?         @map("error_code") @db.VarChar(50)
+  errorMessage   String?         @map("error_message_safe") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  snapshots ReportSnapshot[]
+
+  @@index([status])
+  @@map("report_jobs")
+}
+
+/// Section 5.3 report_snapshots -- same "schema now, worker later" note as
+/// ReportJob above.
+model ReportSnapshot {
+  id                String    @id @default(uuid()) @db.Char(36)
+  reportJobId       String?   @map("report_job_id") @db.Char(36)
+  snapshotDate      DateTime  @map("snapshot_date")
+  module            String    @db.VarChar(50)
+  definitionVersion String    @map("definition_version") @db.VarChar(20)
+  sourceWatermark   String    @map("source_watermark") @db.VarChar(150)
+  scopeHash         String    @map("scope_hash") @db.VarChar(100)
+  payloadUri        String?   @map("payload_uri") @db.VarChar(500)
+  payloadHash       String?   @map("payload_hash") @db.VarChar(100)
+  rowCount          Int?      @map("row_count")
+  schemaVersion     String    @map("schema_version") @db.VarChar(20)
+  retentionUntil    DateTime? @map("retention_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  reportJob ReportJob? @relation(fields: [reportJobId], references: [id])
+
+  @@map("report_snapshots")
+}
+
+/// Section 5.4 dashboard_summaries: metric code + dimension keys (here,
+/// `branchId`/`dimensionKey`) + value + freshness/version metadata.
+/// `dimensionKey` defaults to "" (undimensioned) -- this epic's projection
+/// consumers track cumulative-since-projection-activation totals rather
+/// than date-bucketed ones (a documented grain choice, Section 3.3's own
+/// "grain" field, to keep the projection handlers tractable); a future
+/// epic can add a date dimension without changing this table's shape.
+model DashboardSummary {
+  id                String   @id @default(uuid()) @db.Char(36)
+  metricCode        String   @map("metric_code") @db.VarChar(100)
+  branchId          String?  @map("branch_id") @db.Char(36)
+  dimensionKey      String   @default("") @map("dimension_key") @db.VarChar(150)
+  value             Decimal  @db.Decimal(18, 2)
+  currency          String?  @db.VarChar(3)
+  dataAsOf          DateTime @map("data_as_of")
+  freshness         String   @default("fresh") @db.VarChar(20)
+  definitionVersion String   @map("definition_version") @db.VarChar(20)
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([metricCode, branchId, dimensionKey], name: "dashboard_summary_scope")
+  @@index([metricCode])
+  @@map("dashboard_summaries")
+}
+
+/// Section 5.4 report_projection_checkpoints, consolidated with the
+/// Section 2.4 "inbox idempotency record" concept: this codebase's
+/// IEventBus (docs/03-sad/02-system-architecture.md Section 23) is an
+/// in-process pub/sub with no `eventId` on published payloads (a durable
+/// outbox is documented future work, per EventBus.ts's own comment) -- so
+/// `sourceKey` is the natural per-event domain identifier already present
+/// in each payload (e.g. `journalId`, `visitId`), and the unique
+/// constraint on (consumerName, sourceKey) doubles as both the dedup/inbox
+/// check and the most-recent-processed watermark for that stream.
+model ReportProjectionCheckpoint {
+  id           String   @id @default(uuid()) @db.Char(36)
+  consumerName String   @map("consumer_name") @db.VarChar(100)
+  sourceKey    String   @map("source_key") @db.VarChar(150)
+  processedAt  DateTime @default(now()) @map("processed_at")
+
+  @@unique([consumerName, sourceKey], name: "checkpoint_idempotency")
+  @@index([consumerName])
+  @@map("report_projection_checkpoints")
+}

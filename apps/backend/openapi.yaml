@@ -2114,44 +2114,59 @@ paths:
   # ---------------------------------------------------------------------
   # Reports (docs/06-tasks/task-059.md)
   # ---------------------------------------------------------------------
+  # ---------------------------------------------------------------------
+  # Reporting - Advanced Dashboards (docs/06-tasks/task-178.md..task-183.md,
+  # Epic AG). Projection-backed dashboards per docs/03-sad/20-module-report.md
+  # Section 6.1; supersedes the Phase 1 task-059 "today only" implementation
+  # at the same /reports/dashboards/operations route (see
+  # GetOperationsDashboardUseCase.ts's doc comment). task-184 (HR Dashboard)
+  # is not exposed: no HR module/events exist in this codebase yet
+  # (documented block, same precedent as task-136/task-162).
+  # ---------------------------------------------------------------------
+  /reports/dashboards/executive:
+    get:
+      tags: [Reports]
+      summary: Executive dashboard (aggregate cross-module KPIs; payroll cost omitted, no HR module)
+      x-permission: report.dashboard.executive.read
+      parameters: [{ name: branchId, in: query, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/DashboardOk' }
+
   /reports/dashboards/operations:
     get:
       tags: [Reports]
-      summary: Operations dashboard (today's reservations/queue/collections)
+      summary: Operations dashboard (reservation/queue/visit counters, cumulative since projection activation)
       x-permission: report.dashboard.operations.read
-      parameters:
-        - name: branchId
-          in: query
-          schema: { type: string, format: uuid }
+      parameters: [{ name: branchId, in: query, schema: { type: string, format: uuid } }]
       responses:
-        '200':
-          description: Dashboard metrics
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/ApiSuccessEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        type: object
-                        properties:
-                          scope:
-                            type: object
-                            properties:
-                              branchIds: { type: array, items: { type: string, format: uuid } }
-                              timezone: { type: string, example: "Asia/Jakarta" }
-                          dataAsOf: { type: string, format: date-time }
-                          freshness: { type: string, enum: [fresh] }
-                          definitionVersion: { type: string, example: "1.0.0" }
-                          metrics:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                code: { type: string, example: "reservation.today.count" }
-                                value: { type: number }
-                                currency: { type: string, example: "IDR" }
+        '200': { $ref: '#/components/responses/DashboardOk' }
+
+  /reports/dashboards/clinical:
+    get:
+      tags: [Reports]
+      summary: Clinical dashboard (aggregate-only visit counter; no PII/free-text per Section 4.7)
+      x-permission: report.dashboard.clinical.read
+      parameters: [{ name: branchId, in: query, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/DashboardOk' }
+
+  /reports/dashboards/finance:
+    get:
+      tags: [Reports]
+      summary: Finance dashboard (posted revenue/expense, outstanding balance -- Finance/Billing-authoritative only)
+      x-permission: report.dashboard.finance.read
+      parameters: [{ name: branchId, in: query, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/DashboardOk' }
+
+  /reports/dashboards/warehouse:
+    get:
+      tags: [Reports]
+      summary: Warehouse dashboard (low-stock alert gauge)
+      x-permission: report.dashboard.warehouse.read
+      parameters: [{ name: branchId, in: query, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/DashboardOk' }
 
   # ---------------------------------------------------------------------
   # Warehouse - Foundation (docs/06-tasks/task-095.md..task-103.md, Epic V)
@@ -3933,6 +3948,34 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+    DashboardOk:
+      description: Dashboard metrics (docs/03-sad/20-module-report.md Section 6.1 response envelope)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ApiSuccessEnvelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      scope:
+                        type: object
+                        properties:
+                          branchIds: { type: array, items: { type: string, format: uuid } }
+                          timezone: { type: string, example: "Asia/Jakarta" }
+                      dataAsOf: { type: string, format: date-time }
+                      freshness: { type: string, enum: [fresh, partial] }
+                      definitionVersion: { type: string, example: "1.0.0" }
+                      metrics:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code: { type: string, example: "finance.posted-revenue" }
+                            value: { type: number }
+                            currency: { type: string, example: "IDR" }
     ValidationError:
       description: Request failed DTO validation (class-validator, whitelist + forbidNonWhitelisted)
       content:

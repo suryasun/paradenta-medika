@@ -77,6 +77,12 @@ export class FakeInvoiceRepository implements IInvoiceRepository {
     invoice.updatedBy = updatedBy;
     return invoice;
   }
+
+  async sumOutstandingByBranch(branchId: string): Promise<number> {
+    return [...this.invoices.values()]
+      .filter((i) => i.branchId === branchId && (i.status === 'UNPAID' || i.status === 'PARTIALLY_PAID'))
+      .reduce((sum, i) => sum + (Number(i.grandTotal) - Number(i.paidAmount)), 0);
+  }
 }
 
 export class FakeInvoiceItemRepository implements IInvoiceItemRepository {

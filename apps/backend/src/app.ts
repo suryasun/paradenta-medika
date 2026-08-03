@@ -94,9 +94,6 @@ export function createApp(config: ConfigService): Express {
   const billingRouter = buildBillingModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, billingRouter);
 
-  const reportsRouter = buildReportsModule(authModule.authenticate, authModule.requirePermission);
-  app.use(API_V1_PREFIX, reportsRouter);
-
   // Phase 1 module composition is now complete (Epics J, A-I / task-001..059).
   // Phase 2 modules are mounted here as each is implemented, reusing
   // authModule.authenticate / authModule.requirePermission for protected routes.
@@ -108,6 +105,13 @@ export function createApp(config: ConfigService): Express {
   app.use(API_V1_PREFIX, financeRouter);
 
   // Phase 3 modules are mounted here as each is implemented (Warehouse Epic V onward; Finance Epic AB onward).
+
+  // Epic AG (task-178-184): Reporting's dashboard projections subscribe to
+  // events published by Patient/Reservation/Queue/EMR/Billing/Finance/
+  // Warehouse, so this is wired last, after every source module's own
+  // composition root has registered its repositories.
+  const reportsRouter = buildReportsModule(eventBus, authModule.authenticate, authModule.requirePermission);
+  app.use(API_V1_PREFIX, reportsRouter);
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);

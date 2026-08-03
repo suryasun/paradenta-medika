@@ -123,7 +123,11 @@ const PERMISSION_KEYS = [
   'queue.skip',
   'queue.start',
   'queue.transfer',
+  'report.dashboard.clinical.read',
+  'report.dashboard.executive.read',
+  'report.dashboard.finance.read',
   'report.dashboard.operations.read',
+  'report.dashboard.warehouse.read',
   'reservation.analytics.read',
   'reservation.cancel',
   'reservation.check-in',
@@ -222,6 +226,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'reservation.create',
     'masterdata.treatment.read',
     'masterdata.tooth-condition.read',
+    'report.dashboard.clinical.read',
   ],
   REGISTRATION: [
     'patient.create',
@@ -290,6 +295,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     // both roles for report *read* access (export itself isn't
     // implemented this phase -- see warehouse.routes.ts comment).
     'warehouse.report.read',
+    'report.dashboard.warehouse.read',
   ],
   // Warehouse Manager has every row in the Actor Matrix ✔ except the
   // Finance-specific "Approve variance/adjustment (financial threshold)"
@@ -321,6 +327,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'warehouse.batch.read',
     'warehouse.batch.quarantine',
     'warehouse.report.read',
+    'report.dashboard.warehouse.read',
   ],
   // docs/03-sad/17-module-finance.md Section 4.1 Actor Matrix: "Maintain
   // COA mapping" is Finance Manager (and Administrator) only -- Finance
@@ -369,6 +376,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.settlement.generate',
     'finance.settlement.pay',
     'finance.report.read',
+    'report.dashboard.finance.read',
   ],
   FINANCE_MANAGER: [
     'finance.account.read',
@@ -397,6 +405,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.settlement.pay',
     'finance.report.read',
     'finance.report.export',
+    'report.dashboard.finance.read',
   ],
 };
 

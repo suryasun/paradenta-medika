@@ -1,5 +1,5 @@
 import { IsOptional, IsUUID } from 'class-validator';
 
-export class OperationsDashboardQueryDto {
+export class DashboardQueryDto {
   @IsOptional() @IsUUID('4') branchId?: string;
 }

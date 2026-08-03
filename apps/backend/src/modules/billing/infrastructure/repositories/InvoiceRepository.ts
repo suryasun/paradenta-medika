@@ -84,4 +84,12 @@ export class InvoiceRepository implements IInvoiceRepository {
   async close(id: string, updatedBy: string): Promise<Invoice> {
     return prisma.invoice.update({ where: { id }, data: { status: 'CLOSED', updatedBy } });
   }
+
+  async sumOutstandingByBranch(branchId: string): Promise<number> {
+    const invoices = await prisma.invoice.findMany({
+      where: { branchId, deletedAt: null, status: { in: ['UNPAID', 'PARTIALLY_PAID'] } },
+      select: { grandTotal: true, paidAmount: true },
+    });
+    return invoices.reduce((sum, invoice) => sum + (Number(invoice.grandTotal) - Number(invoice.paidAmount)), 0);
+  }
 }

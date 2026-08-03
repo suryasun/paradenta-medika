@@ -37,4 +37,6 @@ export interface IInvoiceRepository {
   countByInvoiceNoPrefix(prefix: string): Promise<number>;
   updatePayment(id: string, input: UpdateInvoicePaymentInput): Promise<Invoice>;
   close(id: string, updatedBy: string): Promise<Invoice>;
+  /** Sum of (grandTotal - paidAmount) across UNPAID/PARTIALLY_PAID invoices for a branch -- docs/03-sad/20-module-report.md Section 4.2 "Outstanding" KPI. */
+  sumOutstandingByBranch(branchId: string): Promise<number>;
 }
