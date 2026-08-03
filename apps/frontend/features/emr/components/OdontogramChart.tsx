@@ -17,6 +17,30 @@ const PERMANENT_LOWER = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36,
 const PRIMARY_UPPER = [55, 54, 53, 52, 51, 61, 62, 63, 64, 65];
 const PRIMARY_LOWER = [85, 84, 83, 82, 81, 71, 72, 73, 74, 75];
 
+// Master Data's ToothCondition.colorCode is free-text (see prisma/seed.ts)
+// and includes "Slate", which isn't a valid CSS/SVG color keyword (unlike
+// "Red"/"Blue"/"Gold" etc, which happen to be) -- an invalid SVG fill value
+// silently falls back to black. This maps the known seed values to real
+// hex colors; anything not in the map (a real hex value, or a valid CSS
+// keyword not listed here) passes through unchanged.
+const CLINICAL_COLOR_MAP: Record<string, string> = {
+  green: "#16a34a",
+  red: "#dc2626",
+  slate: "#64748b",
+  gray: "#6b7280",
+  orange: "#ea580c",
+  blue: "#2563eb",
+  yellow: "#ca8a04",
+  purple: "#9333ea",
+  gold: "#b7862f",
+  silver: "#94a3b8",
+  brown: "#92400e",
+};
+
+function resolveToothColor(colorCode: string): string {
+  return CLINICAL_COLOR_MAP[colorCode.toLowerCase()] ?? colorCode;
+}
+
 interface OdontogramChartProps {
   entries: OdontogramEntry[];
   conditions: ToothCondition[];
@@ -37,7 +61,7 @@ function Tooth({
   selected: boolean;
   onClick: () => void;
 }) {
-  const fill = condition?.colorCode || undefined;
+  const fill = condition?.colorCode ? resolveToothColor(condition.colorCode) : undefined;
   const statusText = condition ? condition.conditionName : "No condition recorded";
 
   return (
