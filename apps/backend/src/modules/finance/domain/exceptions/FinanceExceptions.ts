@@ -1,4 +1,4 @@
-import { BusinessException, ConflictException, NotFoundException } from '../../../../shared/http/exceptions';
+import { AuthorizationException, BusinessException, ConflictException, NotFoundException } from '../../../../shared/http/exceptions';
 
 export class AccountNotFoundException extends NotFoundException {
   constructor() {
@@ -34,5 +34,82 @@ export class AccountCyclicHierarchyException extends BusinessException {
 export class AccountTypeNormalBalanceMismatchException extends BusinessException {
   constructor(accountType: string, expectedNormalBalance: string) {
     super('FIN_ACCOUNT_TYPE_MISMATCH', `${accountType} accounts must have normalBalance=${expectedNormalBalance}`);
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_ACCOUNT_NOT_POSTABLE" (422) -- heading/inactive account selected on a journal line. */
+export class AccountNotPostableException extends BusinessException {
+  constructor() {
+    super('FIN_ACCOUNT_NOT_POSTABLE', 'This account is a heading, inactive, or otherwise not postable');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Journals (docs/03-sad/17-module-finance.md UC-FIN-002, Section 6.6
+// literal error codes where they exist).
+// ---------------------------------------------------------------------------
+
+export class JournalNotFoundException extends NotFoundException {
+  constructor() {
+    super('Journal not found');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_JOURNAL_UNBALANCED" (422). */
+export class JournalUnbalancedException extends BusinessException {
+  constructor() {
+    super('FIN_JOURNAL_UNBALANCED', 'Total debit and total credit must be equal');
+  }
+}
+
+/**
+ * No literal Section 6.6 code covers a wrong-status journal action
+ * (Update/Post/Void requiring draft, Reverse requiring posted) --
+ * extrapolated by the same `WHS_*_INVALID_STATUS` naming convention
+ * already established throughout the Warehouse module for the identical
+ * gap.
+ */
+export class JournalNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('FIN_JOURNAL_INVALID_STATUS', `Journal must be in ${expected} status for this action`);
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_SEGREGATION_OF_DUTIES" (403) -- the journal creator cannot also post it. */
+export class JournalSegregationOfDutiesException extends AuthorizationException {
+  constructor() {
+    super('The creator of this journal cannot also post it', 'FIN_SEGREGATION_OF_DUTIES');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_PERIOD_CLOSED" (409) -- no open financial period covers this journal date. */
+export class FinancialPeriodClosedException extends ConflictException {
+  constructor() {
+    super('This journal date does not fall within an open financial period', 'FIN_PERIOD_CLOSED');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_DUPLICATE_POSTING" (409) -- an automatic posting's source reference has already been posted. */
+export class JournalDuplicatePostingException extends ConflictException {
+  constructor() {
+    super('This source reference has already been posted', 'FIN_DUPLICATE_POSTING');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Financial Period (docs/03-sad/17-module-finance.md UC-FIN-007,
+// task-168 folded into Epic AC per this phase's documented sequencing).
+// ---------------------------------------------------------------------------
+
+export class FinancialPeriodNotFoundException extends NotFoundException {
+  constructor() {
+    super('Financial period not found');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 5.2: "Date ranges for active periods must not overlap within a branch." */
+export class FinancialPeriodOverlapException extends BusinessException {
+  constructor() {
+    super('FIN_PERIOD_OVERLAP', 'This period overlaps an existing open or locked period for the branch');
   }
 }

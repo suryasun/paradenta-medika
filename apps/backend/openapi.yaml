@@ -3064,6 +3064,181 @@ paths:
         '200': { $ref: '#/components/responses/Ok' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  # ---------------------------------------------------------------------
+  # Finance -- Journals (docs/06-tasks/task-146.md..task-152.md,
+  # docs/03-sad/17-module-finance.md Section 6.2, UC-FIN-002)
+  # ---------------------------------------------------------------------
+  /finance/journals:
+    get:
+      tags: [Finance]
+      summary: List journals
+      x-permission: finance.journal.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, POSTED, REVERSED, VOIDED] }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Finance]
+      summary: Create a manual journal (draft; unaffected ledger until Post)
+      x-permission: finance.journal.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, journalDate, description, lines]
+              properties:
+                branchId: { type: string, format: uuid }
+                journalDate: { type: string, format: date }
+                description: { type: string, example: "Accrual listrik Juli 2026" }
+                lines:
+                  type: array
+                  minItems: 2
+                  items:
+                    type: object
+                    required: [accountId, debit, credit]
+                    properties:
+                      accountId: { type: string, format: uuid }
+                      debit: { type: number }
+                      credit: { type: number }
+                      description: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "FIN_JOURNAL_UNBALANCED or FIN_ACCOUNT_NOT_POSTABLE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/journals/{journalId}:
+    get:
+      tags: [Finance]
+      summary: Journal detail (with lines and computed debit/credit totals)
+      x-permission: finance.journal.read
+      parameters: [{ name: journalId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Finance]
+      summary: Update a draft journal's date/description/lines (rejected once posted/reversed/voided)
+      x-permission: finance.journal.update
+      parameters: [{ name: journalId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody: { $ref: '#/components/requestBodies/GenericJson' }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_JOURNAL_INVALID_STATUS, FIN_JOURNAL_UNBALANCED, or FIN_ACCOUNT_NOT_POSTABLE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/journals/{journalId}/post:
+    post:
+      tags: [Finance]
+      summary: Post a draft journal into the immutable ledger, assigning its journalNo (maker-checker -- poster cannot be the creator)
+      x-permission: finance.journal.post
+      parameters: [{ name: journalId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: "FIN_SEGREGATION_OF_DUTIES -- creator cannot also post", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "FIN_PERIOD_CLOSED or FIN_DUPLICATE_POSTING", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "FIN_JOURNAL_INVALID_STATUS -- must be draft", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/journals/{journalId}/reverse:
+    post:
+      tags: [Finance]
+      summary: Create a linked reversal journal with swapped debit/credit lines, netting the original to zero
+      x-permission: finance.journal.reverse
+      parameters: [{ name: journalId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [journalDate, reason]
+              properties:
+                journalDate: { type: string, format: date }
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "FIN_PERIOD_CLOSED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "FIN_JOURNAL_INVALID_STATUS -- must be posted (already-reversed journals are no longer POSTED)", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/journals/{journalId}/void:
+    post:
+      tags: [Finance]
+      summary: Void a draft journal (rejected once posted -- use Reverse instead)
+      x-permission: finance.journal.void
+      parameters: [{ name: journalId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_JOURNAL_INVALID_STATUS -- must be draft", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # ---------------------------------------------------------------------
+  # Finance -- Financial Period (docs/06-tasks/task-168.md, folded into
+  # Epic AC; Lock/Close/Reopen land with Epic AE)
+  # ---------------------------------------------------------------------
+  /finance/periods:
+    get:
+      tags: [Finance]
+      summary: List financial periods
+      x-permission: finance.period.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [OPEN, LOCKED, CLOSED] }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Finance]
+      summary: Create a financial period (date ranges for open/locked periods must not overlap within a branch)
+      x-permission: finance.period.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, periodName, startDate, endDate]
+              properties:
+                branchId: { type: string, format: uuid }
+                periodName: { type: string, example: "Juli 2026" }
+                startDate: { type: string, format: date }
+                endDate: { type: string, format: date }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "FIN_PERIOD_OVERLAP", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
 components:
   securitySchemes:
     bearerAuth:

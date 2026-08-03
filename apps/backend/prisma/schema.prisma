@@ -221,6 +221,8 @@ model Branch {
   warehouseLocations WarehouseLocation[]
   purchaseOrders     PurchaseOrder[]
   financeAccounts    Account[]
+  journals           Journal[]
+  financialPeriods   FinancialPeriod[]
 
   @@map("branches")
 }
@@ -2284,14 +2286,137 @@ model Account {
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by") @db.Char(36)
 
-  branch   Branch?   @relation(fields: [branchId], references: [id])
-  parent   Account?  @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children Account[] @relation("AccountHierarchy")
+  branch   Branch?       @relation(fields: [branchId], references: [id])
+  parent   Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children Account[]     @relation("AccountHierarchy")
+  lines    JournalLine[]
 
   @@unique([branchId, code])
   @@index([parentId])
   @@index([accountType])
   @@map("accounts")
+}
+
+// ---------------------------------------------------------------------------
+// Finance Module: Journals & Financial Period (docs/03-sad/17-module-
+// finance.md UC-FIN-002/UC-FIN-007, Epic AC task-146-152 + task-168
+// folded in early per this phase's own documented sequencing note:
+// Post Journal's FIN_PERIOD_CLOSED check needs FinancialPeriod to exist,
+// so task-168 (Financial Period entity/Create/List, normally Epic AE)
+// is built now; Lock/Close/Reopen (task-169-171) remain in Epic AE.
+// Table names follow the SAD's own literal Section 5.1 dictionary
+// (`journal_entries`, `journal_details`, `financial_periods`), the same
+// implementer's-choice permission already exercised throughout this
+// phase.
+// ---------------------------------------------------------------------------
+
+enum FinanceJournalStatus {
+  DRAFT
+  POSTED
+  REVERSED
+  VOIDED
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2/3.3: `journalNo` is
+/// "generated, immutable after posting" -- task-146's own AC says
+/// "journalNumber is generated immutably once posted", read literally as
+/// generated AT posting time (not at draft creation), unlike this
+/// codebase's Warehouse-module precedent (PO/GR numbers generate at
+/// creation). `journalNo` therefore stays null while draft.
+model Journal {
+  id            String               @id @default(uuid()) @db.Char(36)
+  journalNo     String?              @unique @map("journal_no") @db.VarChar(40)
+  branchId      String               @map("branch_id") @db.Char(36)
+  journalDate   DateTime             @map("journal_date") @db.Date
+  referenceType String?              @map("reference_type") @db.VarChar(50)
+  referenceId   String?              @map("reference_id") @db.Char(36)
+  postingType   String?              @map("posting_type") @db.VarChar(40)
+  description   String               @db.VarChar(500)
+  status        FinanceJournalStatus @default(DRAFT)
+
+  postedAt      DateTime? @map("posted_at")
+  postedBy      String?   @map("posted_by") @db.Char(36)
+  voidedAt      DateTime? @map("voided_at")
+  voidedBy      String?   @map("voided_by") @db.Char(36)
+  voidReason    String?   @map("void_reason") @db.Text
+  reversalOfId  String?   @unique @map("reversal_of_id") @db.Char(36)
+  reverseReason String?   @map("reverse_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch     Branch        @relation(fields: [branchId], references: [id])
+  lines      JournalLine[]
+  reversalOf Journal?      @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversedBy Journal?      @relation("JournalReversal")
+
+  @@unique([referenceType, referenceId, postingType], name: "idempotency_key")
+  @@index([branchId, journalDate, status])
+  @@map("journal_entries")
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2: "Exactly one [of debit/
+/// credit] is positive" -- enforced in the application layer, mirroring
+/// Warehouse's StockTransaction qty_in/qty_out convention.
+model JournalLine {
+  id           String  @id @default(uuid()) @db.Char(36)
+  journalId    String  @map("journal_entry_id") @db.Char(36)
+  accountId    String  @map("account_id") @db.Char(36)
+  debit        Decimal @default(0) @db.Decimal(18, 2)
+  credit       Decimal @default(0) @db.Decimal(18, 2)
+  description  String? @db.VarChar(500)
+  costCenterId String? @map("cost_center_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  journal Journal @relation(fields: [journalId], references: [id])
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@index([accountId, journalId])
+  @@map("journal_details")
+}
+
+enum FinancialPeriodStatus {
+  OPEN
+  LOCKED
+  CLOSED
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2/3.2: "Date ranges for
+/// active periods must not overlap within a branch" -- checked at the
+/// application layer (OPEN/LOCKED periods only; a CLOSED period's range
+/// may legitimately be superseded). Section 3.7's state machine allows
+/// Open -> Locked -> Closed and Closed -> Open (reopen), but task-169-171
+/// (Lock/Close/Reopen) are Epic AE's own scope; only Create/List (task-168)
+/// land here.
+model FinancialPeriod {
+  id         String                @id @default(uuid()) @db.Char(36)
+  branchId   String                @map("branch_id") @db.Char(36)
+  periodName String                @map("period_name") @db.VarChar(100)
+  startDate  DateTime              @map("start_date") @db.Date
+  endDate    DateTime              @map("end_date") @db.Date
+  status     FinancialPeriodStatus @default(OPEN)
+
+  lockedBy     String?   @map("locked_by") @db.Char(36)
+  lockedAt     DateTime? @map("locked_at")
+  closedBy     String?   @map("closed_by") @db.Char(36)
+  closedAt     DateTime? @map("closed_at")
+  reopenedBy   String?   @map("reopened_by") @db.Char(36)
+  reopenedAt   DateTime? @map("reopened_at")
+  reopenReason String?   @map("reopen_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId, startDate, endDate])
+  @@index([status])
+  @@map("financial_periods")
 }
 
 model AuditLog {

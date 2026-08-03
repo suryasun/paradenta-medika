@@ -70,6 +70,14 @@ const PERMISSION_KEYS = [
   'emr.vital.record',
   'finance.account.manage',
   'finance.account.read',
+  'finance.journal.create',
+  'finance.journal.post',
+  'finance.journal.read',
+  'finance.journal.reverse',
+  'finance.journal.update',
+  'finance.journal.void',
+  'finance.period.manage',
+  'finance.period.read',
   'masterdata.branch.manage',
   'masterdata.branch.read',
   'masterdata.clinic.manage',
@@ -301,8 +309,34 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   // COA mapping" is Finance Manager (and Administrator) only -- Finance
   // Staff can read the chart of accounts (needed to pick accounts on a
   // manual journal, Epic AC) but not create/edit/deactivate it.
-  FINANCE_STAFF: ['finance.account.read'],
-  FINANCE_MANAGER: ['finance.account.read', 'finance.account.manage'],
+  // docs/03-sad/17-module-finance.md Section 4.1 Actor Matrix: Staff can
+  // view ledger/reports and create/submit manual journals but not post/
+  // reverse them (Post/reverse is Manager-only, matching Warehouse's own
+  // dual-tier create-vs-post precedent); Update/Void apply only to a
+  // journal's own draft state, granted alongside Create. Period Create
+  // isn't its own matrix row -- period.manage follows "Close/reopen
+  // period" being Manager-only, and period.read is harmless/useful for
+  // both roles to check valid posting dates.
+  FINANCE_STAFF: [
+    'finance.account.read',
+    'finance.journal.read',
+    'finance.journal.create',
+    'finance.journal.update',
+    'finance.journal.void',
+    'finance.period.read',
+  ],
+  FINANCE_MANAGER: [
+    'finance.account.read',
+    'finance.account.manage',
+    'finance.journal.read',
+    'finance.journal.create',
+    'finance.journal.update',
+    'finance.journal.void',
+    'finance.journal.post',
+    'finance.journal.reverse',
+    'finance.period.read',
+    'finance.period.manage',
+  ],
 };
 
 function toPermissionName(key: string): string {
