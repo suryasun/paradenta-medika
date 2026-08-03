@@ -3469,6 +3469,187 @@ paths:
         '409': { description: "FIN_EXPENSE_NOT_APPROVED or FIN_PERIOD_CLOSED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
         '422': { description: "FIN_EXPENSE_PAYMENT_EXCEEDS_APPROVED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
+  # ---------------------------------------------------------------------
+  # Finance -- Daily Closing (docs/06-tasks/task-163.md..task-165.md,
+  # docs/03-sad/17-module-finance.md Section 6.4, UC-FIN-005)
+  # ---------------------------------------------------------------------
+  /finance/daily-closings:
+    get:
+      tags: [Finance]
+      summary: List daily closings
+      x-permission: finance.cash.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: cashAccountId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [SUBMITTED, APPROVED] }
+        - name: dateFrom
+          in: query
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Finance]
+      summary: Submit a daily cash closing -- expected balance is read from the cash account's current balance, variance requires a reason
+      x-permission: finance.cash.close
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, cashAccountId, cashierId, closingDate, countedBalance]
+              properties:
+                branchId: { type: string, format: uuid }
+                cashAccountId: { type: string, format: uuid }
+                cashierId: { type: string, format: uuid }
+                closingDate: { type: string, format: date }
+                countedBalance: { type: number, example: 2150000.00 }
+                denominations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      nominal: { type: number, example: 100000 }
+                      quantity: { type: number, example: 20 }
+                varianceReason: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "FIN_CLOSING_DUPLICATE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "FIN_CLOSING_VARIANCE_REASON_REQUIRED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/daily-closings/{closingId}/approve:
+    post:
+      tags: [Finance]
+      summary: Approve a submitted daily closing (maker-checker -- approver cannot be the requester)
+      x-permission: finance.cash.approve_close
+      parameters: [{ name: closingId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: "FIN_SEGREGATION_OF_DUTIES", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_CLOSING_INVALID_STATUS -- must be submitted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # ---------------------------------------------------------------------
+  # Finance -- Doctor Fee Settlement (docs/06-tasks/task-166.md/
+  # task-167.md, docs/03-sad/17-module-finance.md Section 6.4, UC-FIN-006)
+  # ---------------------------------------------------------------------
+  /finance/doctor-fee-settlements/generate:
+    post:
+      tags: [Finance]
+      summary: Generate a draft settlement aggregating unsettled doctor-fee source lines for a doctor/branch/period
+      x-permission: finance.settlement.generate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, doctorId, periodStart, periodEnd, feeAccountId]
+              properties:
+                branchId: { type: string, format: uuid }
+                doctorId: { type: string, format: uuid }
+                periodStart: { type: string, format: date }
+                periodEnd: { type: string, format: date }
+                feeAccountId: { type: string, format: uuid, description: "Ledger account debited when this settlement is paid" }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "FIN_ACCOUNT_NOT_POSTABLE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/doctor-fee-settlements/{settlementId}/approve:
+    post:
+      tags: [Finance]
+      summary: Approve a draft settlement (maker-checker -- approver cannot be the requester)
+      x-permission: finance.settlement.approve
+      parameters: [{ name: settlementId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: "FIN_SEGREGATION_OF_DUTIES", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_SETTLEMENT_INVALID_STATUS -- must be draft", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/doctor-fee-settlements/{settlementId}/pay:
+    post:
+      tags: [Finance]
+      summary: Pay an approved settlement -- posts a system journal debiting the settlement's fee account and crediting the chosen cash account
+      x-permission: finance.settlement.pay
+      parameters: [{ name: settlementId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cashAccountId, paymentDate]
+              properties:
+                cashAccountId: { type: string, format: uuid }
+                paymentDate: { type: string, format: date }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "FIN_SETTLEMENT_NOT_APPROVED or FIN_PERIOD_CLOSED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # ---------------------------------------------------------------------
+  # Finance -- Financial Period Lock/Close/Reopen (docs/06-tasks/
+  # task-169.md..task-171.md, docs/03-sad/17-module-finance.md UC-FIN-007;
+  # Create/List landed in Epic AC)
+  # ---------------------------------------------------------------------
+  /finance/periods/{periodId}/lock:
+    post:
+      tags: [Finance]
+      summary: Lock an open financial period (Open -> Locked)
+      x-permission: finance.period.lock
+      parameters: [{ name: periodId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_PERIOD_INVALID_STATUS -- must be open", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/periods/{periodId}/close:
+    post:
+      tags: [Finance]
+      summary: Close a locked financial period (Locked -> Closed), publishing finance.period.closed.v1 exactly once
+      x-permission: finance.period.close
+      parameters: [{ name: periodId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_PERIOD_INVALID_STATUS -- must be locked", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /finance/periods/{periodId}/reopen:
+    post:
+      tags: [Finance]
+      summary: "Reopen a closed period (Closed -> Open) -- elevated, mandatory-reason action distinct from ordinary period.manage"
+      x-permission: finance.period.reopen
+      parameters: [{ name: periodId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "FIN_PERIOD_INVALID_STATUS -- must be closed", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
 components:
   securitySchemes:
     bearerAuth:

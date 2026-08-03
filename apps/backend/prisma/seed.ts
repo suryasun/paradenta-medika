@@ -70,6 +70,8 @@ const PERMISSION_KEYS = [
   'emr.vital.record',
   'finance.account.manage',
   'finance.account.read',
+  'finance.cash.approve_close',
+  'finance.cash.close',
   'finance.cash.manage',
   'finance.cash.read',
   'finance.cash.transfer',
@@ -83,8 +85,14 @@ const PERMISSION_KEYS = [
   'finance.journal.reverse',
   'finance.journal.update',
   'finance.journal.void',
+  'finance.period.close',
+  'finance.period.lock',
   'finance.period.manage',
   'finance.period.read',
+  'finance.period.reopen',
+  'finance.settlement.approve',
+  'finance.settlement.generate',
+  'finance.settlement.pay',
   'masterdata.branch.manage',
   'masterdata.branch.read',
   'masterdata.clinic.manage',
@@ -330,6 +338,15 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   // follows the same Manager-only tier as COA mapping; cash.transfer
   // (which posts a journal, not unlike Create manual journal) is granted
   // to both.
+  // task-162-171 (Epic AE): "Daily cash close ✔" includes Staff (own
+  // shift), "Approve closing variance" is Manager-only. Doctor Fee
+  // Settlement has no dedicated Actor Matrix row -- mirrors Expense's own
+  // generate(create)/pay-both, approve-Manager-only tiering. Period
+  // Lock/Close are Manager-only per "Close/reopen period" ✔ Manager;
+  // Reopen is intentionally withheld from Manager -- task-171's own text
+  // ("elevated authorization... distinct from ordinary period-manage
+  // permission") maps to Administrator-only (Administrator already gets
+  // every permission via the blanket grant below, not through this map).
   FINANCE_STAFF: [
     'finance.account.read',
     'finance.journal.read',
@@ -339,9 +356,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.period.read',
     'finance.cash.read',
     'finance.cash.transfer',
+    'finance.cash.close',
     'finance.expense.read',
     'finance.expense.create',
     'finance.expense.pay',
+    'finance.settlement.generate',
+    'finance.settlement.pay',
   ],
   FINANCE_MANAGER: [
     'finance.account.read',
@@ -354,13 +374,20 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.journal.reverse',
     'finance.period.read',
     'finance.period.manage',
+    'finance.period.lock',
+    'finance.period.close',
     'finance.cash.read',
     'finance.cash.manage',
     'finance.cash.transfer',
+    'finance.cash.close',
+    'finance.cash.approve_close',
     'finance.expense.read',
     'finance.expense.create',
     'finance.expense.approve',
     'finance.expense.pay',
+    'finance.settlement.generate',
+    'finance.settlement.approve',
+    'finance.settlement.pay',
   ],
 };
 

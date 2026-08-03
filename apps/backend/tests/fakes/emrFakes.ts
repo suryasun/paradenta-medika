@@ -64,7 +64,11 @@ import { CreateVisitInput, IVisitRepository } from '../../src/modules/emr/domain
 import { IVitalSignRepository, RecordVitalSignInput } from '../../src/modules/emr/domain/repositories/IVitalSignRepository';
 import { ISoapNoteRepository, UpsertSoapNoteInput } from '../../src/modules/emr/domain/repositories/ISoapNoteRepository';
 import { CreateVisitDiagnosisInput, IVisitDiagnosisRepository } from '../../src/modules/emr/domain/repositories/IVisitDiagnosisRepository';
-import { CreateVisitTreatmentInput, IVisitTreatmentRepository } from '../../src/modules/emr/domain/repositories/IVisitTreatmentRepository';
+import {
+  CreateVisitTreatmentInput,
+  DoctorFeeSourceLine,
+  IVisitTreatmentRepository,
+} from '../../src/modules/emr/domain/repositories/IVisitTreatmentRepository';
 import { CreateMedicalHistoryInput, IMedicalHistoryRepository } from '../../src/modules/emr/domain/repositories/IMedicalHistoryRepository';
 import { CreateAllergyInput, IAllergyRepository } from '../../src/modules/emr/domain/repositories/IAllergyRepository';
 import {
@@ -237,6 +241,19 @@ export class FakeVisitTreatmentRepository implements IVisitTreatmentRepository {
 
   async countByVisitId(visitId: string): Promise<number> {
     return (await this.findByVisitId(visitId)).length;
+  }
+
+  /** Test-seeded source lines (no Visit/Treatment join modeled in this fake) -- Finance's Doctor Fee Settlement tests push directly into `manualDoctorFeeSources`. */
+  manualDoctorFeeSources: DoctorFeeSourceLine[] = [];
+
+  async findUnsettledDoctorFeeSources(
+    _doctorId: string,
+    _branchId: string,
+    _periodStart: Date,
+    _periodEnd: Date,
+    excludeVisitTreatmentIds: string[],
+  ): Promise<DoctorFeeSourceLine[]> {
+    return this.manualDoctorFeeSources.filter((s) => !excludeVisitTreatmentIds.includes(s.visitTreatmentId));
   }
 }
 

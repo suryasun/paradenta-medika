@@ -212,19 +212,21 @@ model Branch {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  clinic             Clinic              @relation(fields: [clinicId], references: [id])
-  doctors            Doctor[]
-  reservations       Reservation[]
-  invoices           Invoice[]
-  queues             Queue[]
-  visits             Visit[]
-  warehouseLocations WarehouseLocation[]
-  purchaseOrders     PurchaseOrder[]
-  financeAccounts    Account[]
-  journals           Journal[]
-  financialPeriods   FinancialPeriod[]
-  cashAccounts       CashAccount[]
-  expenses           Expense[]
+  clinic               Clinic                @relation(fields: [clinicId], references: [id])
+  doctors              Doctor[]
+  reservations         Reservation[]
+  invoices             Invoice[]
+  queues               Queue[]
+  visits               Visit[]
+  warehouseLocations   WarehouseLocation[]
+  purchaseOrders       PurchaseOrder[]
+  financeAccounts      Account[]
+  journals             Journal[]
+  financialPeriods     FinancialPeriod[]
+  cashAccounts         CashAccount[]
+  expenses             Expense[]
+  dailyClosings        DailyClosing[]
+  doctorFeeSettlements DoctorFeeSettlement[]
 
   @@map("branches")
 }
@@ -364,6 +366,7 @@ model Doctor {
   prescriptions          Prescription[]
   consents               Consent[]
   medicalCertificates    MedicalCertificate[]
+  feeSettlements         DoctorFeeSettlement[]
 
   @@index([branchId])
   @@map("doctors")
@@ -2288,12 +2291,13 @@ model Account {
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by") @db.Char(36)
 
-  branch       Branch?       @relation(fields: [branchId], references: [id])
-  parent       Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children     Account[]     @relation("AccountHierarchy")
-  lines        JournalLine[]
-  cashAccounts CashAccount[]
-  expenses     Expense[]
+  branch         Branch?               @relation(fields: [branchId], references: [id])
+  parent         Account?              @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children       Account[]             @relation("AccountHierarchy")
+  lines          JournalLine[]
+  cashAccounts   CashAccount[]
+  expenses       Expense[]
+  feeSettlements DoctorFeeSettlement[]
 
   @@unique([branchId, code])
   @@index([parentId])
@@ -2351,11 +2355,12 @@ model Journal {
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by") @db.Char(36)
 
-  branch     Branch        @relation(fields: [branchId], references: [id])
-  lines      JournalLine[]
-  reversalOf Journal?      @relation("JournalReversal", fields: [reversalOfId], references: [id])
-  reversedBy Journal?      @relation("JournalReversal")
-  expense    Expense?
+  branch        Branch               @relation(fields: [branchId], references: [id])
+  lines         JournalLine[]
+  reversalOf    Journal?             @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversedBy    Journal?             @relation("JournalReversal")
+  expense       Expense?
+  feeSettlement DoctorFeeSettlement?
 
   @@unique([referenceType, referenceId, postingType], name: "idempotency_key")
   @@index([branchId, journalDate, status])
@@ -2469,8 +2474,9 @@ model CashAccount {
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by") @db.Char(36)
 
-  branch        Branch  @relation(fields: [branchId], references: [id])
-  ledgerAccount Account @relation(fields: [ledgerAccountId], references: [id])
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  ledgerAccount Account        @relation(fields: [ledgerAccountId], references: [id])
+  dailyClosings DailyClosing[]
 
   @@unique([branchId, code])
   @@index([ledgerAccountId])
@@ -2525,6 +2531,125 @@ model Expense {
 
   @@index([branchId, expenseDate, status])
   @@map("expenses")
+}
+
+// ---------------------------------------------------------------------------
+// Finance Module: Daily Closing & Doctor Fee Settlement (docs/03-sad/
+// 17-module-finance.md UC-FIN-005/UC-FIN-006, Epic AE task-163-167).
+// Table names follow the SAD's own literal Section 5.1 dictionary
+// (`daily_closings`, `doctor_fee_settlements`), the same implementer's-
+// choice permission already exercised throughout this phase.
+// ---------------------------------------------------------------------------
+
+enum DailyClosingStatus {
+  SUBMITTED
+  APPROVED
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2: unique closing scope
+/// `(branch_id, cash_account_id, cashier_id, closing_date, shift_id)` --
+/// `shift_id` is dropped since no shift concept exists anywhere in this
+/// codebase (SAD's own Section 5.1 permits one consistent physical
+/// design). `expectedBalance` is read from `CashAccount.currentBalance`
+/// at closing time (UC-FIN-005 step 2's "approved opening balance and
+/// posted cash movements" collapses to this, since no separate opening-
+/// balance-approval workflow exists in any task).
+model DailyClosing {
+  id              String             @id @default(uuid()) @db.Char(36)
+  branchId        String             @map("branch_id") @db.Char(36)
+  cashAccountId   String             @map("cash_account_id") @db.Char(36)
+  cashierId       String             @map("cashier_id") @db.Char(36)
+  closingDate     DateTime           @map("closing_date") @db.Date
+  expectedBalance Decimal            @map("expected_balance") @db.Decimal(18, 2)
+  countedBalance  Decimal            @map("counted_balance") @db.Decimal(18, 2)
+  variance        Decimal            @db.Decimal(18, 2)
+  varianceReason  String?            @map("variance_reason") @db.Text
+  denominations   Json?
+  status          DailyClosingStatus @default(SUBMITTED)
+
+  approvedBy String?   @map("approved_by") @db.Char(36)
+  approvedAt DateTime? @map("approved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch      Branch      @relation(fields: [branchId], references: [id])
+  cashAccount CashAccount @relation(fields: [cashAccountId], references: [id])
+
+  @@unique([branchId, cashAccountId, cashierId, closingDate])
+  @@map("daily_closings")
+}
+
+enum DoctorFeeSettlementStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2/3.3: `feeAccountId` is
+/// the ledger account debited at payment time -- Section 3.6's two-step
+/// accrual/payment posting template is collapsed to a single payment
+/// posting since no task in 166-167 builds a separate accrual step;
+/// Finance explicitly picks the fee account at Generate time rather than
+/// relying on an account-mapping configuration that no task specifies
+/// (the same gap that blocks task-162).
+model DoctorFeeSettlement {
+  id           String                    @id @default(uuid()) @db.Char(36)
+  settlementNo String                    @unique @map("settlement_no") @db.VarChar(40)
+  branchId     String                    @map("branch_id") @db.Char(36)
+  doctorId     String                    @map("doctor_id") @db.Char(36)
+  periodStart  DateTime                  @map("period_start") @db.Date
+  periodEnd    DateTime                  @map("period_end") @db.Date
+  feeAccountId String                    @map("fee_account_id") @db.Char(36)
+  grossAmount  Decimal                   @map("gross_amount") @db.Decimal(18, 2)
+  deductions   Decimal                   @default(0) @db.Decimal(18, 2)
+  netAmount    Decimal                   @map("net_amount") @db.Decimal(18, 2)
+  status       DoctorFeeSettlementStatus @default(DRAFT)
+
+  approvedBy       String?   @map("approved_by") @db.Char(36)
+  approvedAt       DateTime? @map("approved_at")
+  paidBy           String?   @map("paid_by") @db.Char(36)
+  paidAt           DateTime? @map("paid_at")
+  paymentJournalId String?   @unique @map("payment_journal_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch         Branch                    @relation(fields: [branchId], references: [id])
+  doctor         Doctor                    @relation(fields: [doctorId], references: [id])
+  feeAccount     Account                   @relation(fields: [feeAccountId], references: [id])
+  paymentJournal Journal?                  @relation(fields: [paymentJournalId], references: [id])
+  items          DoctorFeeSettlementItem[]
+
+  @@index([branchId, doctorId, status])
+  @@map("doctor_fee_settlements")
+}
+
+/// docs/03-sad/17-module-finance.md Section 5.2: "A child doctor_fee_
+/// settlement_items projection may be added for source-level
+/// traceability without modifying the authoritative source fee record."
+/// `visitTreatmentId` is a plain, non-FK reference to EMR's own
+/// `VisitTreatment` table (read via `IVisitTreatmentRepository`, not a
+/// cross-module Prisma join) -- the `@unique` constraint is the DB-level
+/// backstop for `FIN_SETTLEMENT_SOURCE_USED` (a source can appear in at
+/// most one settlement, ever).
+model DoctorFeeSettlementItem {
+  id               String  @id @default(uuid()) @db.Char(36)
+  settlementId     String  @map("settlement_id") @db.Char(36)
+  visitTreatmentId String  @unique @map("visit_treatment_id") @db.Char(36)
+  amount           Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  settlement DoctorFeeSettlement @relation(fields: [settlementId], references: [id])
+
+  @@index([settlementId])
+  @@map("doctor_fee_settlement_items")
 }
 
 model AuditLog {

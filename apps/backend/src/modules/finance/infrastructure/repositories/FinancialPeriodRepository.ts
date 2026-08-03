@@ -1,4 +1,4 @@
-import { FinancialPeriod, Prisma } from '@prisma/client';
+import { FinancialPeriod, FinancialPeriodStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/infrastructure/prisma';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { PagedResult, sanitizeSortField } from '../../../../shared/http/pagination';
@@ -59,5 +59,21 @@ export class FinancialPeriodRepository implements IFinancialPeriodRepository {
     return prisma.financialPeriod.findFirst({
       where: { branchId, status: 'OPEN', startDate: { lte: date }, endDate: { gte: date } },
     });
+  }
+
+  async updateStatus(
+    id: string,
+    status: FinancialPeriodStatus,
+    fields: {
+      lockedBy?: string;
+      lockedAt?: Date;
+      closedBy?: string;
+      closedAt?: Date;
+      reopenedBy?: string;
+      reopenedAt?: Date;
+      reopenReason?: string;
+    },
+  ): Promise<FinancialPeriod> {
+    return prisma.financialPeriod.update({ where: { id }, data: { status, ...fields } });
   }
 }

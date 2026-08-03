@@ -195,3 +195,93 @@ export class ExpensePaymentExceedsApprovedException extends BusinessException {
     super('FIN_EXPENSE_PAYMENT_EXCEEDS_APPROVED', 'Payment amount cannot exceed the approved amount');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Daily Closing (docs/03-sad/17-module-finance.md UC-FIN-005, Epic AE
+// task-163-165).
+// ---------------------------------------------------------------------------
+
+export class DailyClosingNotFoundException extends NotFoundException {
+  constructor() {
+    super('Daily closing not found');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_CLOSING_DUPLICATE" (409) -- a closing already exists for this branch/cashAccount/cashier/date scope. */
+export class DailyClosingDuplicateException extends ConflictException {
+  constructor() {
+    super('A daily closing already exists for this scope and date', 'FIN_CLOSING_DUPLICATE');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_CLOSING_VARIANCE_REASON_REQUIRED" (422) -- non-zero variance lacks a reason. */
+export class DailyClosingVarianceReasonRequiredException extends BusinessException {
+  constructor() {
+    super('FIN_CLOSING_VARIANCE_REASON_REQUIRED', 'A variance reason is required when counted balance differs from expected balance');
+  }
+}
+
+/** No literal Section 6.6 code for approving an already-approved closing -- extrapolated by the same `FIN_*_INVALID_STATUS` convention. */
+export class DailyClosingNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('FIN_CLOSING_INVALID_STATUS', `Daily closing must be in ${expected} status for this action`);
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 8.2: "Cashier may submit only their own drawer/shift closing; variance approval is separate" -- approver cannot be the requester. */
+export class DailyClosingSegregationOfDutiesException extends AuthorizationException {
+  constructor() {
+    super('The requester of this closing cannot also approve it', 'FIN_SEGREGATION_OF_DUTIES');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Doctor Fee Settlement (docs/03-sad/17-module-finance.md UC-FIN-006,
+// Epic AE task-166-167).
+// ---------------------------------------------------------------------------
+
+export class DoctorFeeSettlementNotFoundException extends NotFoundException {
+  constructor() {
+    super('Doctor fee settlement not found');
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 6.6: "FIN_SETTLEMENT_SOURCE_USED" (409) -- a source has already been settled. */
+export class SettlementSourceUsedException extends ConflictException {
+  constructor() {
+    super('One or more fee sources have already been included in a prior settlement', 'FIN_SETTLEMENT_SOURCE_USED');
+  }
+}
+
+/** No literal Section 6.6 code for a wrong-status settlement action -- extrapolated by the same `FIN_*_INVALID_STATUS` convention. */
+export class DoctorFeeSettlementNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('FIN_SETTLEMENT_INVALID_STATUS', `Settlement must be in ${expected} status for this action`);
+  }
+}
+
+/** docs/03-sad/17-module-finance.md Section 8.2 segregation-of-duties principle applied to settlement approval, the same pattern as Journal/Expense. */
+export class SettlementSegregationOfDutiesException extends AuthorizationException {
+  constructor() {
+    super('The requester of this settlement cannot also approve it', 'FIN_SEGREGATION_OF_DUTIES');
+  }
+}
+
+/** docs/06-tasks/task-167.md AC: "Pay rejected unless settlement is approved." No literal Section 6.6 code -- extrapolated by the same `FIN_EXPENSE_NOT_APPROVED` naming convention. */
+export class SettlementNotApprovedException extends ConflictException {
+  constructor() {
+    super('This settlement has not been approved and cannot be paid', 'FIN_SETTLEMENT_NOT_APPROVED');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Financial Period Lock/Close/Reopen (docs/03-sad/17-module-finance.md
+// UC-FIN-007, Epic AE task-169-171; Create/List landed in Epic AC).
+// ---------------------------------------------------------------------------
+
+/** No literal Section 6.6 code for a wrong-status period action -- extrapolated by the same `FIN_*_INVALID_STATUS` convention. */
+export class FinancialPeriodNotInStatusException extends BusinessException {
+  constructor(expected: string) {
+    super('FIN_PERIOD_INVALID_STATUS', `Financial period must be in ${expected} status for this action`);
+  }
+}

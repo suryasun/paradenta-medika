@@ -1,4 +1,4 @@
-import { Account, CashAccount, Expense, FinancialPeriod, Journal, JournalLine } from '@prisma/client';
+import { Account, CashAccount, DailyClosing, DoctorFeeSettlement, DoctorFeeSettlementItem, Expense, FinancialPeriod, Journal, JournalLine } from '@prisma/client';
 import {
   AccountListFilter,
   CreateAccountInput,
@@ -30,6 +30,17 @@ import {
   IExpenseRepository,
   UpdateExpenseInput,
 } from '../../src/modules/finance/domain/repositories/IExpenseRepository';
+import {
+  CreateDailyClosingInput,
+  DailyClosingListFilter,
+  IDailyClosingRepository,
+} from '../../src/modules/finance/domain/repositories/IDailyClosingRepository';
+import {
+  CreateDoctorFeeSettlementInput,
+  DoctorFeeSettlementListFilter,
+  DoctorFeeSettlementWithItems,
+  IDoctorFeeSettlementRepository,
+} from '../../src/modules/finance/domain/repositories/IDoctorFeeSettlementRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -361,6 +372,26 @@ export class FakeFinancialPeriodRepository implements IFinancialPeriodRepository
       ) ?? null
     );
   }
+
+  async updateStatus(
+    id: string,
+    status: FinancialPeriod['status'],
+    fields: Partial<{
+      lockedBy: string;
+      lockedAt: Date;
+      closedBy: string;
+      closedAt: Date;
+      reopenedBy: string;
+      reopenedAt: Date;
+      reopenReason: string;
+    }>,
+  ): Promise<FinancialPeriod> {
+    const period = this.periods.get(id);
+    if (!period) throw new Error('not found');
+    period.status = status;
+    Object.assign(period, fields);
+    return period;
+  }
 }
 
 export class FakeCashAccountRepository implements ICashAccountRepository {
@@ -509,5 +540,162 @@ export class FakeExpenseRepository implements IExpenseRepository {
 
   async findByNumber(expenseNo: string): Promise<Expense | null> {
     return [...this.expenses.values()].find((e) => e.expenseNo === expenseNo) ?? null;
+  }
+}
+
+export class FakeDailyClosingRepository implements IDailyClosingRepository {
+  closings = new Map<string, DailyClosing>();
+
+  async create(input: CreateDailyClosingInput): Promise<DailyClosing> {
+    const closing: DailyClosing = {
+      id: nextFakeUuid(),
+      branchId: input.branchId,
+      cashAccountId: input.cashAccountId,
+      cashierId: input.cashierId,
+      closingDate: input.closingDate,
+      expectedBalance: input.expectedBalance as never,
+      countedBalance: input.countedBalance as never,
+      variance: input.variance as never,
+      varianceReason: input.varianceReason ?? null,
+      denominations: (input.denominations ?? null) as never,
+      status: 'SUBMITTED',
+      approvedBy: null,
+      approvedAt: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+    } as DailyClosing;
+    this.closings.set(closing.id, closing);
+    return closing;
+  }
+
+  async list(query: ListQueryDto, filter: DailyClosingListFilter): Promise<PagedResult<DailyClosing>> {
+    const all = [...this.closings.values()].filter(
+      (c) =>
+        (!filter.branchId || c.branchId === filter.branchId) &&
+        (!filter.cashAccountId || c.cashAccountId === filter.cashAccountId) &&
+        (!filter.status || c.status === filter.status),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async findById(id: string): Promise<DailyClosing | null> {
+    return this.closings.get(id) ?? null;
+  }
+
+  async findExisting(branchId: string, cashAccountId: string, cashierId: string, closingDate: Date): Promise<DailyClosing | null> {
+    return (
+      [...this.closings.values()].find(
+        (c) =>
+          c.branchId === branchId &&
+          c.cashAccountId === cashAccountId &&
+          c.cashierId === cashierId &&
+          c.closingDate.getTime() === closingDate.getTime(),
+      ) ?? null
+    );
+  }
+
+  async approve(id: string, approvedBy: string, approvedAt: Date): Promise<DailyClosing> {
+    const closing = this.closings.get(id);
+    if (!closing) throw new Error('not found');
+    closing.status = 'APPROVED';
+    closing.approvedBy = approvedBy;
+    closing.approvedAt = approvedAt;
+    return closing;
+  }
+}
+
+export class FakeDoctorFeeSettlementRepository implements IDoctorFeeSettlementRepository {
+  settlements = new Map<string, DoctorFeeSettlementWithItems>();
+  private itemSequence = 0;
+
+  async create(input: CreateDoctorFeeSettlementInput): Promise<DoctorFeeSettlementWithItems> {
+    const settlement: DoctorFeeSettlementWithItems = {
+      id: nextFakeUuid(),
+      settlementNo: input.settlementNo,
+      branchId: input.branchId,
+      doctorId: input.doctorId,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      feeAccountId: input.feeAccountId,
+      grossAmount: input.grossAmount as never,
+      deductions: 0 as never,
+      netAmount: input.netAmount as never,
+      status: 'DRAFT',
+      approvedBy: null,
+      approvedAt: null,
+      paidBy: null,
+      paidAt: null,
+      paymentJournalId: null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+      items: input.items.map((item) => {
+        this.itemSequence += 1;
+        return {
+          id: `dfsi-${this.itemSequence}-${nextFakeUuid()}`,
+          settlementId: '',
+          visitTreatmentId: item.visitTreatmentId,
+          amount: item.amount as never,
+          createdAt: new Date(),
+        } as DoctorFeeSettlementItem;
+      }),
+    } as DoctorFeeSettlementWithItems;
+    settlement.items.forEach((item) => {
+      (item as DoctorFeeSettlementItem).settlementId = settlement.id;
+    });
+    this.settlements.set(settlement.id, settlement);
+    return settlement;
+  }
+
+  async list(query: ListQueryDto, filter: DoctorFeeSettlementListFilter): Promise<PagedResult<DoctorFeeSettlementWithItems>> {
+    const all = [...this.settlements.values()].filter(
+      (s) =>
+        (!filter.branchId || s.branchId === filter.branchId) &&
+        (!filter.doctorId || s.doctorId === filter.doctorId) &&
+        (!filter.status || s.status === filter.status),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async findById(id: string): Promise<DoctorFeeSettlementWithItems | null> {
+    return this.settlements.get(id) ?? null;
+  }
+
+  async findSettledVisitTreatmentIds(doctorId: string): Promise<string[]> {
+    return [...this.settlements.values()]
+      .filter((s) => s.doctorId === doctorId)
+      .flatMap((s) => s.items.map((i) => i.visitTreatmentId));
+  }
+
+  async approve(id: string, approvedBy: string, approvedAt: Date): Promise<DoctorFeeSettlementWithItems> {
+    const settlement = this.settlements.get(id);
+    if (!settlement) throw new Error('not found');
+    settlement.status = 'APPROVED';
+    settlement.approvedBy = approvedBy;
+    settlement.approvedAt = approvedAt;
+    return settlement;
+  }
+
+  async markPaid(id: string, paidBy: string, paidAt: Date, paymentJournalId: string): Promise<DoctorFeeSettlementWithItems> {
+    const settlement = this.settlements.get(id);
+    if (!settlement) throw new Error('not found');
+    settlement.status = 'PAID';
+    settlement.paidBy = paidBy;
+    settlement.paidAt = paidAt;
+    settlement.paymentJournalId = paymentJournalId;
+    return settlement;
+  }
+
+  async count(): Promise<number> {
+    return this.settlements.size;
+  }
+
+  async findByNumber(settlementNo: string): Promise<DoctorFeeSettlement | null> {
+    return [...this.settlements.values()].find((s) => s.settlementNo === settlementNo) ?? null;
   }
 }

@@ -19,6 +19,10 @@ import {
   UpdateExpenseRequestDto,
 } from '../../application/dtos/ExpenseRequestDto';
 import { ListExpenseQueryDto } from '../../application/dtos/ExpenseQueryDto';
+import { CreateDailyClosingRequestDto } from '../../application/dtos/DailyClosingRequestDto';
+import { ListDailyClosingQueryDto } from '../../application/dtos/DailyClosingQueryDto';
+import { GenerateDoctorFeeSettlementRequestDto, PayDoctorFeeSettlementRequestDto } from '../../application/dtos/DoctorFeeSettlementRequestDto';
+import { ReopenFinancialPeriodRequestDto } from '../../application/dtos/FinancialPeriodReopenRequestDto';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { CreateAccountUseCase } from '../../application/use-cases/CreateAccountUseCase';
 import { ListAccountsUseCase } from '../../application/use-cases/ListAccountsUseCase';
@@ -45,19 +49,34 @@ import { SubmitExpenseUseCase } from '../../application/use-cases/SubmitExpenseU
 import { ApproveExpenseUseCase } from '../../application/use-cases/ApproveExpenseUseCase';
 import { RejectExpenseUseCase } from '../../application/use-cases/RejectExpenseUseCase';
 import { PayExpenseUseCase } from '../../application/use-cases/PayExpenseUseCase';
+import { CreateDailyClosingUseCase } from '../../application/use-cases/CreateDailyClosingUseCase';
+import { ApproveDailyClosingUseCase } from '../../application/use-cases/ApproveDailyClosingUseCase';
+import { ListDailyClosingsUseCase } from '../../application/use-cases/ListDailyClosingsUseCase';
+import { GenerateDoctorFeeSettlementUseCase } from '../../application/use-cases/GenerateDoctorFeeSettlementUseCase';
+import { ApproveDoctorFeeSettlementUseCase } from '../../application/use-cases/ApproveDoctorFeeSettlementUseCase';
+import { PayDoctorFeeSettlementUseCase } from '../../application/use-cases/PayDoctorFeeSettlementUseCase';
+import { LockFinancialPeriodUseCase } from '../../application/use-cases/LockFinancialPeriodUseCase';
+import { CloseFinancialPeriodUseCase } from '../../application/use-cases/CloseFinancialPeriodUseCase';
+import { ReopenFinancialPeriodUseCase } from '../../application/use-cases/ReopenFinancialPeriodUseCase';
 import { JournalNumberGenerator } from '../../application/services/JournalNumberGenerator';
 import { ExpenseNumberGenerator } from '../../application/services/ExpenseNumberGenerator';
+import { DoctorFeeSettlementNumberGenerator } from '../../application/services/DoctorFeeSettlementNumberGenerator';
 import { AccountRepository } from '../../infrastructure/repositories/AccountRepository';
 import { JournalRepository } from '../../infrastructure/repositories/JournalRepository';
 import { FinancialPeriodRepository } from '../../infrastructure/repositories/FinancialPeriodRepository';
 import { CashAccountRepository } from '../../infrastructure/repositories/CashAccountRepository';
 import { ExpenseRepository } from '../../infrastructure/repositories/ExpenseRepository';
+import { DailyClosingRepository } from '../../infrastructure/repositories/DailyClosingRepository';
+import { DoctorFeeSettlementRepository } from '../../infrastructure/repositories/DoctorFeeSettlementRepository';
+import { VisitTreatmentRepository } from '../../../emr/infrastructure/repositories/VisitTreatmentRepository';
 import { AccountController } from '../controllers/AccountController';
 import { JournalController } from '../controllers/JournalController';
 import { FinancialPeriodController } from '../controllers/FinancialPeriodController';
 import { CashAccountController } from '../controllers/CashAccountController';
 import { CashTransferController } from '../controllers/CashTransferController';
 import { ExpenseController } from '../controllers/ExpenseController';
+import { DailyClosingController } from '../controllers/DailyClosingController';
+import { DoctorFeeSettlementController } from '../controllers/DoctorFeeSettlementController';
 
 /**
  * docs/06-tasks/task-143.md..task-152.md (Epic AB Finance Foundation +
@@ -77,6 +96,9 @@ export function buildFinanceModule(
   const financialPeriodRepository = new FinancialPeriodRepository();
   const cashAccountRepository = new CashAccountRepository();
   const expenseRepository = new ExpenseRepository();
+  const dailyClosingRepository = new DailyClosingRepository();
+  const doctorFeeSettlementRepository = new DoctorFeeSettlementRepository();
+  const visitTreatmentRepository = new VisitTreatmentRepository();
 
   const accountController = new AccountController(
     new CreateAccountUseCase(accountRepository, auditService),
@@ -98,6 +120,9 @@ export function buildFinanceModule(
   const financialPeriodController = new FinancialPeriodController(
     new CreatePeriodUseCase(financialPeriodRepository, auditService),
     new ListPeriodsUseCase(financialPeriodRepository),
+    new LockFinancialPeriodUseCase(financialPeriodRepository, auditService),
+    new CloseFinancialPeriodUseCase(financialPeriodRepository, auditService, eventBus),
+    new ReopenFinancialPeriodUseCase(financialPeriodRepository, auditService),
   );
 
   const cashAccountController = new CashAccountController(
@@ -126,6 +151,31 @@ export function buildFinanceModule(
     new RejectExpenseUseCase(expenseRepository, auditService),
     new PayExpenseUseCase(
       expenseRepository,
+      cashAccountRepository,
+      journalRepository,
+      financialPeriodRepository,
+      new JournalNumberGenerator(journalRepository),
+      auditService,
+    ),
+  );
+
+  const dailyClosingController = new DailyClosingController(
+    new CreateDailyClosingUseCase(dailyClosingRepository, cashAccountRepository, auditService),
+    new ApproveDailyClosingUseCase(dailyClosingRepository, auditService, eventBus),
+    new ListDailyClosingsUseCase(dailyClosingRepository),
+  );
+
+  const doctorFeeSettlementController = new DoctorFeeSettlementController(
+    new GenerateDoctorFeeSettlementUseCase(
+      doctorFeeSettlementRepository,
+      visitTreatmentRepository,
+      accountRepository,
+      new DoctorFeeSettlementNumberGenerator(doctorFeeSettlementRepository),
+      auditService,
+    ),
+    new ApproveDoctorFeeSettlementUseCase(doctorFeeSettlementRepository, auditService),
+    new PayDoctorFeeSettlementUseCase(
+      doctorFeeSettlementRepository,
       cashAccountRepository,
       journalRepository,
       financialPeriodRepository,
@@ -199,6 +249,14 @@ export function buildFinanceModule(
     validateBody(CreateFinancialPeriodRequestDto),
     financialPeriodController.create,
   );
+  router.post('/finance/periods/:periodId/lock', requirePermission('finance.period.lock'), financialPeriodController.lock);
+  router.post('/finance/periods/:periodId/close', requirePermission('finance.period.close'), financialPeriodController.close);
+  router.post(
+    '/finance/periods/:periodId/reopen',
+    requirePermission('finance.period.reopen'),
+    validateBody(ReopenFinancialPeriodRequestDto),
+    financialPeriodController.reopen,
+  );
 
   // docs/06-tasks/task-153.md..task-155.md (Epic AD, UC-FIN-004). Literal
   // `finance.cash.*` Section 8.1 verbs.
@@ -262,6 +320,52 @@ export function buildFinanceModule(
     requirePermission('finance.expense.pay'),
     validateBody(PayExpenseRequestDto),
     expenseController.pay,
+  );
+
+  // docs/06-tasks/task-163.md..task-165.md (Epic AE, UC-FIN-005). No
+  // literal `finance.daily-closing.*` group exists in Section 8.1 --
+  // Daily Closing is part of the `finance.cash.*` group per Section
+  // 6.4's own grouping (`/finance/daily-closings` sits under "Cash and
+  // Expense" in the API index) and the literal `close`/`approve_close`
+  // verbs already listed there.
+  router.post(
+    '/finance/daily-closings',
+    requirePermission('finance.cash.close'),
+    validateBody(CreateDailyClosingRequestDto),
+    dailyClosingController.create,
+  );
+  router.post(
+    '/finance/daily-closings/:closingId/approve',
+    requirePermission('finance.cash.approve_close'),
+    dailyClosingController.approve,
+  );
+  router.get(
+    '/finance/daily-closings',
+    requirePermission('finance.cash.read'),
+    validateQuery(ListDailyClosingQueryDto),
+    dailyClosingController.list,
+  );
+
+  // docs/06-tasks/task-166.md/task-167.md (Epic AE, UC-FIN-006). Literal
+  // `finance.settlement.*` Section 8.1 verbs (read/generate/approve/pay
+  // -- `read` unused since no list/get endpoint is in this task set's
+  // scope).
+  router.post(
+    '/finance/doctor-fee-settlements/generate',
+    requirePermission('finance.settlement.generate'),
+    validateBody(GenerateDoctorFeeSettlementRequestDto),
+    doctorFeeSettlementController.generate,
+  );
+  router.post(
+    '/finance/doctor-fee-settlements/:settlementId/approve',
+    requirePermission('finance.settlement.approve'),
+    doctorFeeSettlementController.approve,
+  );
+  router.post(
+    '/finance/doctor-fee-settlements/:settlementId/pay',
+    requirePermission('finance.settlement.pay'),
+    validateBody(PayDoctorFeeSettlementRequestDto),
+    doctorFeeSettlementController.pay,
   );
 
   return router;

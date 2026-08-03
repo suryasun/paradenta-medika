@@ -23,4 +23,17 @@ export interface IFinancialPeriodRepository {
   findOverlapping(branchId: string, startDate: Date, endDate: Date): Promise<FinancialPeriod[]>;
   /** The OPEN period (if any) covering the given branch/date, used to gate journal posting. */
   findOpenPeriodForDate(branchId: string, date: Date): Promise<FinancialPeriod | null>;
+  updateStatus(
+    id: string,
+    status: FinancialPeriodStatus,
+    fields: {
+      lockedBy?: string;
+      lockedAt?: Date;
+      closedBy?: string;
+      closedAt?: Date;
+      reopenedBy?: string;
+      reopenedAt?: Date;
+      reopenReason?: string;
+    },
+  ): Promise<FinancialPeriod>;
 }
