@@ -90,6 +90,8 @@ const PERMISSION_KEYS = [
   'finance.period.manage',
   'finance.period.read',
   'finance.period.reopen',
+  'finance.report.export',
+  'finance.report.read',
   'finance.settlement.approve',
   'finance.settlement.generate',
   'finance.settlement.pay',
@@ -347,6 +349,10 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   // ("elevated authorization... distinct from ordinary period-manage
   // permission") maps to Administrator-only (Administrator already gets
   // every permission via the blanket grant below, not through this map).
+  // task-172-177 (Epic AF): reports have no dedicated Actor Matrix row --
+  // finance.report.read is granted to both roles since either needs to
+  // view operational/statutory reports; finance.report.export (reserved,
+  // no export-format endpoint exists yet) stays Manager-only.
   FINANCE_STAFF: [
     'finance.account.read',
     'finance.journal.read',
@@ -362,6 +368,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.expense.pay',
     'finance.settlement.generate',
     'finance.settlement.pay',
+    'finance.report.read',
   ],
   FINANCE_MANAGER: [
     'finance.account.read',
@@ -388,6 +395,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'finance.settlement.generate',
     'finance.settlement.approve',
     'finance.settlement.pay',
+    'finance.report.read',
+    'finance.report.export',
   ],
 };
 

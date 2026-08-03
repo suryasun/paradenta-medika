@@ -41,6 +41,16 @@ import {
   DoctorFeeSettlementWithItems,
   IDoctorFeeSettlementRepository,
 } from '../../src/modules/finance/domain/repositories/IDoctorFeeSettlementRepository';
+import {
+  CashFlowFilter,
+  CashFlowRow,
+  GeneralLedgerFilter,
+  GeneralLedgerRow,
+  IFinanceReportRepository,
+  IncomeStatementResult,
+  ReportDateFilter,
+  TrialBalanceRow,
+} from '../../src/modules/finance/domain/repositories/IFinanceReportRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -697,5 +707,117 @@ export class FakeDoctorFeeSettlementRepository implements IDoctorFeeSettlementRe
 
   async findByNumber(settlementNo: string): Promise<DoctorFeeSettlement | null> {
     return [...this.settlements.values()].find((s) => s.settlementNo === settlementNo) ?? null;
+  }
+}
+
+/** docs/06-tasks/task-172.md..task-175.md (Epic AF): reads directly off the same fake journal/account/cash-account stores used by the rest of Finance's fakes, mirroring FakeWarehouseReportRepository's approach of composing over sibling fakes rather than its own storage. */
+export class FakeFinanceReportRepository implements IFinanceReportRepository {
+  constructor(
+    private readonly journalRepository: FakeJournalRepository,
+    private readonly accountRepository: FakeAccountRepository,
+    private readonly cashAccountRepository: FakeCashAccountRepository,
+  ) {}
+
+  private postedLines(filter: ReportDateFilter, accountId?: string) {
+    return [...this.journalRepository.journals.values()]
+      .filter(
+        (journal) =>
+          journal.branchId === filter.branchId &&
+          journal.status === 'POSTED' &&
+          journal.journalDate.getTime() >= filter.dateFrom.getTime() &&
+          journal.journalDate.getTime() <= filter.dateTo.getTime(),
+      )
+      .flatMap((journal) => journal.lines.filter((line) => !accountId || line.accountId === accountId).map((line) => ({ journal, line })));
+  }
+
+  async getTrialBalance(filter: ReportDateFilter): Promise<TrialBalanceRow[]> {
+    const byAccount = new Map<string, TrialBalanceRow>();
+    for (const { line } of this.postedLines(filter)) {
+      const account = this.accountRepository.accounts.get(line.accountId)!;
+      const existing = byAccount.get(line.accountId) ?? {
+        accountId: line.accountId,
+        accountCode: account.code,
+        accountName: account.name,
+        accountType: account.accountType,
+        normalBalance: account.normalBalance,
+        debit: 0,
+        credit: 0,
+        balance: 0,
+      };
+      existing.debit += Number(line.debit);
+      existing.credit += Number(line.credit);
+      byAccount.set(line.accountId, existing);
+    }
+    return [...byAccount.values()].map((row) => ({
+      ...row,
+      balance: row.normalBalance === 'DEBIT' ? row.debit - row.credit : row.credit - row.debit,
+    }));
+  }
+
+  async getGeneralLedger(filter: GeneralLedgerFilter, query: ListQueryDto): Promise<PagedResult<GeneralLedgerRow>> {
+    const all = this.postedLines(filter, filter.accountId).map(({ journal, line }) => {
+      const account = this.accountRepository.accounts.get(line.accountId)!;
+      return {
+        journalId: journal.id,
+        journalNo: journal.journalNo,
+        journalDate: journal.journalDate,
+        accountId: line.accountId,
+        accountCode: account.code,
+        accountName: account.name,
+        debit: Number(line.debit),
+        credit: Number(line.credit),
+        description: line.description,
+        referenceType: journal.referenceType,
+        referenceId: journal.referenceId,
+      };
+    });
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async getIncomeStatement(filter: ReportDateFilter): Promise<IncomeStatementResult> {
+    const revenueMap = new Map<string, { accountId: string; accountCode: string; accountName: string; amount: number }>();
+    const expenseMap = new Map<string, { accountId: string; accountCode: string; accountName: string; amount: number }>();
+    for (const { line } of this.postedLines(filter)) {
+      const account = this.accountRepository.accounts.get(line.accountId)!;
+      if (account.accountType !== 'REVENUE' && account.accountType !== 'EXPENSE') continue;
+      const isRevenue = account.accountType === 'REVENUE';
+      const map = isRevenue ? revenueMap : expenseMap;
+      const existing = map.get(line.accountId) ?? { accountId: line.accountId, accountCode: account.code, accountName: account.name, amount: 0 };
+      existing.amount += isRevenue ? Number(line.credit) - Number(line.debit) : Number(line.debit) - Number(line.credit);
+      map.set(line.accountId, existing);
+    }
+    const revenue = [...revenueMap.values()];
+    const expense = [...expenseMap.values()];
+    const totalRevenue = revenue.reduce((sum, row) => sum + row.amount, 0);
+    const totalExpense = expense.reduce((sum, row) => sum + row.amount, 0);
+    return { revenue, expense, totalRevenue, totalExpense, netResult: totalRevenue - totalExpense };
+  }
+
+  async getCashFlow(filter: CashFlowFilter): Promise<CashFlowRow[]> {
+    const cashAccounts = [...this.cashAccountRepository.cashAccounts.values()].filter(
+      (c) => c.branchId === filter.branchId && (!filter.cashAccountId || c.id === filter.cashAccountId),
+    );
+    const cashAccountByLedgerId = new Map(cashAccounts.map((c) => [c.ledgerAccountId, c]));
+    const rows = new Map<string, CashFlowRow>();
+    for (const { journal, line } of this.postedLines(filter)) {
+      const cashAccount = cashAccountByLedgerId.get(line.accountId);
+      if (!cashAccount) continue;
+      const category = journal.postingType ?? 'UNCATEGORIZED';
+      const key = `${cashAccount.id}::${category}`;
+      const existing = rows.get(key) ?? {
+        cashAccountId: cashAccount.id,
+        cashAccountCode: cashAccount.code,
+        cashAccountName: cashAccount.name,
+        category,
+        inflow: 0,
+        outflow: 0,
+        net: 0,
+      };
+      existing.inflow += Number(line.debit);
+      existing.outflow += Number(line.credit);
+      rows.set(key, existing);
+    }
+    return [...rows.values()].map((row) => ({ ...row, net: row.inflow - row.outflow }));
   }
 }

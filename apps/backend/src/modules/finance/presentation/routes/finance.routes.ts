@@ -23,6 +23,14 @@ import { CreateDailyClosingRequestDto } from '../../application/dtos/DailyClosin
 import { ListDailyClosingQueryDto } from '../../application/dtos/DailyClosingQueryDto';
 import { GenerateDoctorFeeSettlementRequestDto, PayDoctorFeeSettlementRequestDto } from '../../application/dtos/DoctorFeeSettlementRequestDto';
 import { ReopenFinancialPeriodRequestDto } from '../../application/dtos/FinancialPeriodReopenRequestDto';
+import {
+  CashFlowQueryDto,
+  DailyClosingReportQueryDto,
+  ExpensesReportQueryDto,
+  GeneralLedgerQueryDto,
+  IncomeStatementQueryDto,
+  TrialBalanceQueryDto,
+} from '../../application/dtos/ReportQueryDto';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { CreateAccountUseCase } from '../../application/use-cases/CreateAccountUseCase';
 import { ListAccountsUseCase } from '../../application/use-cases/ListAccountsUseCase';
@@ -58,9 +66,16 @@ import { PayDoctorFeeSettlementUseCase } from '../../application/use-cases/PayDo
 import { LockFinancialPeriodUseCase } from '../../application/use-cases/LockFinancialPeriodUseCase';
 import { CloseFinancialPeriodUseCase } from '../../application/use-cases/CloseFinancialPeriodUseCase';
 import { ReopenFinancialPeriodUseCase } from '../../application/use-cases/ReopenFinancialPeriodUseCase';
+import { GetTrialBalanceReportUseCase } from '../../application/use-cases/GetTrialBalanceReportUseCase';
+import { GetGeneralLedgerReportUseCase } from '../../application/use-cases/GetGeneralLedgerReportUseCase';
+import { GetIncomeStatementReportUseCase } from '../../application/use-cases/GetIncomeStatementReportUseCase';
+import { GetCashFlowReportUseCase } from '../../application/use-cases/GetCashFlowReportUseCase';
+import { GetExpensesReportUseCase } from '../../application/use-cases/GetExpensesReportUseCase';
+import { GetDailyClosingReportUseCase } from '../../application/use-cases/GetDailyClosingReportUseCase';
 import { JournalNumberGenerator } from '../../application/services/JournalNumberGenerator';
 import { ExpenseNumberGenerator } from '../../application/services/ExpenseNumberGenerator';
 import { DoctorFeeSettlementNumberGenerator } from '../../application/services/DoctorFeeSettlementNumberGenerator';
+import { ReportDateRangeResolver } from '../../application/services/ReportDateRangeResolver';
 import { AccountRepository } from '../../infrastructure/repositories/AccountRepository';
 import { JournalRepository } from '../../infrastructure/repositories/JournalRepository';
 import { FinancialPeriodRepository } from '../../infrastructure/repositories/FinancialPeriodRepository';
@@ -68,6 +83,7 @@ import { CashAccountRepository } from '../../infrastructure/repositories/CashAcc
 import { ExpenseRepository } from '../../infrastructure/repositories/ExpenseRepository';
 import { DailyClosingRepository } from '../../infrastructure/repositories/DailyClosingRepository';
 import { DoctorFeeSettlementRepository } from '../../infrastructure/repositories/DoctorFeeSettlementRepository';
+import { FinanceReportRepository } from '../../infrastructure/repositories/FinanceReportRepository';
 import { VisitTreatmentRepository } from '../../../emr/infrastructure/repositories/VisitTreatmentRepository';
 import { AccountController } from '../controllers/AccountController';
 import { JournalController } from '../controllers/JournalController';
@@ -77,6 +93,7 @@ import { CashTransferController } from '../controllers/CashTransferController';
 import { ExpenseController } from '../controllers/ExpenseController';
 import { DailyClosingController } from '../controllers/DailyClosingController';
 import { DoctorFeeSettlementController } from '../controllers/DoctorFeeSettlementController';
+import { FinanceReportController } from '../controllers/FinanceReportController';
 
 /**
  * docs/06-tasks/task-143.md..task-152.md (Epic AB Finance Foundation +
@@ -99,6 +116,8 @@ export function buildFinanceModule(
   const dailyClosingRepository = new DailyClosingRepository();
   const doctorFeeSettlementRepository = new DoctorFeeSettlementRepository();
   const visitTreatmentRepository = new VisitTreatmentRepository();
+  const financeReportRepository = new FinanceReportRepository();
+  const reportDateRangeResolver = new ReportDateRangeResolver(financialPeriodRepository);
 
   const accountController = new AccountController(
     new CreateAccountUseCase(accountRepository, auditService),
@@ -182,6 +201,15 @@ export function buildFinanceModule(
       new JournalNumberGenerator(journalRepository),
       auditService,
     ),
+  );
+
+  const financeReportController = new FinanceReportController(
+    new GetTrialBalanceReportUseCase(financeReportRepository, reportDateRangeResolver),
+    new GetGeneralLedgerReportUseCase(financeReportRepository, reportDateRangeResolver),
+    new GetIncomeStatementReportUseCase(financeReportRepository, reportDateRangeResolver),
+    new GetCashFlowReportUseCase(financeReportRepository, reportDateRangeResolver),
+    new GetExpensesReportUseCase(expenseRepository, reportDateRangeResolver),
+    new GetDailyClosingReportUseCase(dailyClosingRepository, reportDateRangeResolver),
   );
 
   const router = Router();
@@ -366,6 +394,46 @@ export function buildFinanceModule(
     requirePermission('finance.settlement.pay'),
     validateBody(PayDoctorFeeSettlementRequestDto),
     doctorFeeSettlementController.pay,
+  );
+
+  // docs/06-tasks/task-172.md..task-177.md (Epic AF, Section 6.5 Reports).
+  // Literal `finance.report.read` Section 8.1 permission -- `finance.report.
+  // export` is reserved for a future export-format task, not exercised here.
+  router.get(
+    '/finance/reports/trial-balance',
+    requirePermission('finance.report.read'),
+    validateQuery(TrialBalanceQueryDto),
+    financeReportController.trialBalance,
+  );
+  router.get(
+    '/finance/reports/general-ledger',
+    requirePermission('finance.report.read'),
+    validateQuery(GeneralLedgerQueryDto),
+    financeReportController.generalLedger,
+  );
+  router.get(
+    '/finance/reports/income-statement',
+    requirePermission('finance.report.read'),
+    validateQuery(IncomeStatementQueryDto),
+    financeReportController.incomeStatement,
+  );
+  router.get(
+    '/finance/reports/cash-flow',
+    requirePermission('finance.report.read'),
+    validateQuery(CashFlowQueryDto),
+    financeReportController.cashFlow,
+  );
+  router.get(
+    '/finance/reports/expenses',
+    requirePermission('finance.report.read'),
+    validateQuery(ExpensesReportQueryDto),
+    financeReportController.expenses,
+  );
+  router.get(
+    '/finance/reports/daily-closing',
+    requirePermission('finance.report.read'),
+    validateQuery(DailyClosingReportQueryDto),
+    financeReportController.dailyClosing,
   );
 
   return router;

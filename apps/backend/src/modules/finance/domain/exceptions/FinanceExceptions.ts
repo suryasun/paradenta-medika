@@ -285,3 +285,21 @@ export class FinancialPeriodNotInStatusException extends BusinessException {
     super('FIN_PERIOD_INVALID_STATUS', `Financial period must be in ${expected} status for this action`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Finance Reporting (docs/03-sad/17-module-finance.md Section 6.5, Epic AF
+// task-172-177).
+// ---------------------------------------------------------------------------
+
+/** No literal Section 6.6 code -- extrapolated from Section 6.5's own literal text: "All report endpoints require branchId, dateFrom, and dateTo unless the report uses periodId." */
+export class ReportDateRangeRequiredException extends BusinessException {
+  constructor() {
+    super('FIN_REPORT_DATE_RANGE_REQUIRED', 'dateFrom and dateTo (or periodId) are required for this report');
+  }
+}
+
+export class ReportPeriodNotFoundException extends NotFoundException {
+  constructor() {
+    super('Financial period not found for this branch');
+  }
+}
