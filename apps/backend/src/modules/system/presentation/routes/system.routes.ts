@@ -38,6 +38,17 @@ import { ActivityLogRepository } from '../../infrastructure/repositories/Activit
 import { UserAdminController } from '../controllers/UserAdminController';
 import { RoleAdminController } from '../controllers/RoleAdminController';
 import { AuditController } from '../controllers/AuditController';
+import { CreateNotificationTemplateRequestDto, PreviewNotificationTemplateRequestDto } from '../../application/dtos/NotificationTemplateRequestDto';
+import { ListNotificationTemplateQueryDto, ListNotificationQueryDto } from '../../application/dtos/NotificationQueryDto';
+import { CreateNotificationTemplateUseCase } from '../../application/use-cases/CreateNotificationTemplateUseCase';
+import { ListNotificationTemplatesUseCase } from '../../application/use-cases/ListNotificationTemplatesUseCase';
+import { PreviewNotificationTemplateUseCase } from '../../application/use-cases/PreviewNotificationTemplateUseCase';
+import { ListNotificationsUseCase } from '../../application/use-cases/ListNotificationsUseCase';
+import { MarkNotificationReadUseCase } from '../../application/use-cases/MarkNotificationReadUseCase';
+import { TemplateRenderer } from '../../application/services/TemplateRenderer';
+import { NotificationTemplateRepository } from '../../infrastructure/repositories/NotificationTemplateRepository';
+import { NotificationRepository } from '../../infrastructure/repositories/NotificationRepository';
+import { NotificationController } from '../controllers/NotificationController';
 
 /**
  * docs/06-tasks/task-015.md..task-020.md composition root, wired against
@@ -79,6 +90,23 @@ export function buildSystemModule(
   const auditController = new AuditController(
     new QueryAuditLogsUseCase(new AuditLogRepository(), auditService),
     new QueryActivityLogsUseCase(new ActivityLogRepository()),
+  );
+
+  // docs/06-tasks/task-195.md/task-196.md/task-197.md/task-198.md (Epic AJ).
+  // task-199 (SendNotificationUseCase) is an internal service with no
+  // public endpoint of its own (per that task's own API Impact: "None") --
+  // it is not wired into this router; wiring specific source-module
+  // triggers (Reservation/Warehouse/Finance reminders) that would call it
+  // is explicitly out of task-199's scope per its Definition of Done.
+  const notificationTemplateRepository = new NotificationTemplateRepository();
+  const notificationRepository = new NotificationRepository();
+  const templateRenderer = new TemplateRenderer();
+  const notificationController = new NotificationController(
+    new CreateNotificationTemplateUseCase(notificationTemplateRepository, templateRenderer, auditService),
+    new ListNotificationTemplatesUseCase(notificationTemplateRepository),
+    new PreviewNotificationTemplateUseCase(notificationTemplateRepository, templateRenderer),
+    new ListNotificationsUseCase(notificationRepository),
+    new MarkNotificationReadUseCase(notificationRepository),
   );
 
   const router = Router();
@@ -123,6 +151,33 @@ export function buildSystemModule(
     validateQuery(ActivityLogQueryDto),
     auditController.activityLogs,
   );
+
+  router.get(
+    '/system/notification-templates',
+    requirePermission('system.notification-template.read'),
+    validateQuery(ListNotificationTemplateQueryDto),
+    notificationController.listTemplates,
+  );
+  router.post(
+    '/system/notification-templates',
+    requirePermission('system.notification-template.manage'),
+    validateBody(CreateNotificationTemplateRequestDto),
+    notificationController.createTemplate,
+  );
+  router.post(
+    '/system/notification-templates/:templateId/preview',
+    requirePermission('system.notification-template.manage'),
+    validateBody(PreviewNotificationTemplateRequestDto),
+    notificationController.preview,
+  );
+
+  router.get(
+    '/system/notifications',
+    requirePermission('system.notification.read'),
+    validateQuery(ListNotificationQueryDto),
+    notificationController.listNotifications,
+  );
+  router.post('/system/notifications/:notificationId/read', requirePermission('system.notification.read'), notificationController.markRead);
 
   return router;
 }

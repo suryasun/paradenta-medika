@@ -1,4 +1,4 @@
-import { ConflictException, BusinessException, NotFoundException } from '../../../../shared/http/exceptions';
+import { AuthorizationException, ConflictException, BusinessException, NotFoundException } from '../../../../shared/http/exceptions';
 
 /**
  * Error codes per docs/03-sad/21-module-system.md Section 6.4.
@@ -27,5 +27,43 @@ export class UserNotFoundException extends NotFoundException {
 export class RoleNotFoundException extends NotFoundException {
   constructor() {
     super('Role not found');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notification Center (docs/03-sad/21-module-system.md UC-SYS-005,
+// Epic AJ task-195-199). No literal Section 6.4 code exists for template
+// content/variable validation -- extrapolated by the same
+// `SYS_CONFIG_SCHEMA_INVALID`-style naming convention already used for
+// System's own config validation.
+// ---------------------------------------------------------------------------
+
+export class NotificationTemplateNotFoundException extends NotFoundException {
+  constructor() {
+    super('Notification template not found');
+  }
+}
+
+export class TemplateContentUnsafeException extends BusinessException {
+  constructor(reason: string) {
+    super('SYS_TEMPLATE_CONTENT_UNSAFE', `Template content rejected by channel policy: ${reason}`);
+  }
+}
+
+export class TemplateVariableMissingException extends BusinessException {
+  constructor(missing: string[]) {
+    super('SYS_TEMPLATE_VARIABLE_MISSING', `Missing required template variable(s): ${missing.join(', ')}`);
+  }
+}
+
+export class NotificationNotFoundException extends NotFoundException {
+  constructor() {
+    super('Notification not found');
+  }
+}
+
+export class NotificationNotOwnedException extends AuthorizationException {
+  constructor() {
+    super('This notification does not belong to the requester', 'SYS_NOTIFICATION_NOT_OWNED');
   }
 }

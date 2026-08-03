@@ -2842,3 +2842,86 @@ model ReportProjectionCheckpoint {
   @@index([consumerName])
   @@map("report_projection_checkpoints")
 }
+
+// ---------------------------------------------------------------------------
+// Notification Center (docs/03-sad/21-module-system.md Section 3.2/5.4,
+// Epic AJ task-195-199).
+// ---------------------------------------------------------------------------
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  IN_APP
+}
+
+/// Section 5.4 notification_templates: "Template immutable after
+/// published" -- editing a template creates a new row with an
+/// incremented `version` for the same `templateKey` rather than an
+/// UPDATE, per Section 3.4 rule 5's same versioning discipline already
+/// used for system_parameters.
+model NotificationTemplate {
+  id             String              @id @default(uuid()) @db.Char(36)
+  templateKey    String              @map("template_key") @db.VarChar(100)
+  channel        NotificationChannel
+  locale         String              @db.VarChar(10)
+  subject        String?             @db.VarChar(200)
+  body           String              @db.Text
+  variableSchema Json                @map("variable_schema")
+  classification String              @default("internal") @db.VarChar(20)
+  version        Int                 @default(1)
+  isActive       Boolean             @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  notifications Notification[]
+
+  @@unique([templateKey, version])
+  @@index([templateKey])
+  @@map("system_notification_templates")
+}
+
+enum NotificationStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+  READ
+  CANCELLED
+}
+
+/// Section 3.2 Notification: "recipient-specific immutable delivery
+/// request/status record." `subject`/`message` are the already-rendered
+/// content (a snapshot at send time), not a live re-render of the
+/// template -- the template can gain a new version later without
+/// changing what was actually sent. `idempotencyKey` (unique) is what
+/// makes SendNotificationUseCase's retry safe (UC-SYS-005 step 5: "Failed
+/// transient sends retry idempotently... permanent failure is dead-
+/// lettered"): since the literal status enum above has no distinct
+/// `retrying`/`dead_letter` state (unlike BackgroundJob, which does),
+/// this codebase maps "dead-lettered" onto `status=FAILED` once
+/// `attempts` reaches the configured max -- documented in
+/// SendNotificationUseCase.ts, not a schema gap.
+model Notification {
+  id              String              @id @default(uuid()) @db.Char(36)
+  recipientUserId String              @map("recipient_user_id") @db.Char(36)
+  templateId      String?             @map("template_id") @db.Char(36)
+  channel         NotificationChannel
+  subject         String?             @db.VarChar(200)
+  message         String              @db.Text
+  status          NotificationStatus  @default(QUEUED)
+  idempotencyKey  String              @unique @map("idempotency_key") @db.VarChar(200)
+  attempts        Int                 @default(0)
+  lastError       String?             @map("last_error") @db.Text
+
+  sentAt    DateTime? @map("sent_at")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  template NotificationTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([recipientUserId])
+  @@index([status])
+  @@map("system_notifications")
+}

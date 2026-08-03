@@ -423,6 +423,88 @@ paths:
         '200': { $ref: '#/components/responses/PagedOk' }
 
   # ---------------------------------------------------------------------
+  # System - Notification Center (docs/06-tasks/task-195.md..task-198.md,
+  # Epic AJ). task-199 (SendNotificationUseCase) is an internal service
+  # with no public endpoint of its own -- not listed here.
+  # ---------------------------------------------------------------------
+  /system/notification-templates:
+    get:
+      tags: [System]
+      summary: List notification templates (all versions)
+      x-permission: system.notification-template.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { name: templateKey, in: query, schema: { type: string } }
+        - { name: channel, in: query, schema: { type: string, enum: [EMAIL, SMS, IN_APP] } }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [System]
+      summary: "Create a notification template (immutable after published -- creates a new version)"
+      x-permission: system.notification-template.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [templateKey, channel, locale, body, variableSchema]
+              properties:
+                templateKey: { type: string, example: "reservation.reminder" }
+                channel: { type: string, enum: [EMAIL, SMS, IN_APP] }
+                locale: { type: string, example: "id-ID" }
+                subject: { type: string }
+                body: { type: string, example: "Hi {{patientName}}, your appointment is on {{date}}." }
+                variableSchema: { type: array, items: { type: string } }
+                classification: { type: string, example: "internal" }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '422': { description: "SYS_TEMPLATE_CONTENT_UNSAFE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/notification-templates/{templateId}/preview:
+    post:
+      tags: [System]
+      summary: "Render a template against preview data (never sends a real notification)"
+      x-permission: system.notification-template.manage
+      parameters: [{ name: templateId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload: { type: object, additionalProperties: true }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "SYS_TEMPLATE_VARIABLE_MISSING", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/notifications:
+    get:
+      tags: [System]
+      summary: "List the authenticated user's own notification inbox"
+      x-permission: system.notification.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { name: status, in: query, schema: { type: string, enum: [QUEUED, PROCESSING, SENT, DELIVERED, FAILED, READ, CANCELLED] } }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+
+  /system/notifications/{notificationId}/read:
+    post:
+      tags: [System]
+      summary: Mark one of the authenticated user's own notifications as read
+      x-permission: system.notification.read
+      parameters: [{ name: notificationId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { description: "SYS_NOTIFICATION_NOT_OWNED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
   # Master Data (docs/06-tasks/task-021.md..task-026.md) — six identically
   # shaped CRUD resources (crudUseCaseFactory), documented once per resource.
   # ---------------------------------------------------------------------
