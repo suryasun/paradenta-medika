@@ -1,6 +1,8 @@
 # Pages
 
-Index of page-level design specs for all 11 modules. Only Patient (`patient.md`) has a source-verbatim spec from the SAD; the other 10 are **Proposed Design** documents derived from `docs/01-prd/features/` and `docs/01-prd/acceptance-criteria/`, per the resolution recorded in `docs/02-design/design-system.md`.
+Index of page-level design specs for all 11 modules. All 11 have now been brought to depth per `docs/02-design/redesign-prompt.md`, in phase order, module by module. Seven modules have shipped frontend code and were **verified against it** (Master Data, Patient, Reservation, Queue, EMR, Billing, System) — real gaps between spec and implementation were found and documented in every one of them, not just assumed compliant. Four modules have no frontend yet (Finance, Warehouse, HR, Reporting's advanced/dashboard layer) and were specced from source docs — Finance and Warehouse against their real, tested backend route/permission surface (high confidence); HR against SAD prose alone, since it has no backend at all (lower confidence, flagged explicitly in its own file).
+
+**2026 visual/interactivity revision (second pass, this session):** `design-system.md` refreshed its color/typography/icon *values* (jade/porcelain palette, a display+body+data typography system, Lucide icons) without changing token *structure*, added a Motion & Interactivity Foundations section (§11), and approved Recharts as this project's first charting library. `ui-guidelines.md` gained a matching Interactivity Patterns section (§9). Every one of the 11 page specs below now has its own "Interactivity" section threading the 6 named requirements (micro-interactions, live update, drag-and-drop, inline edit, interactive charts, interactive odontogram) through wherever they actually apply to that module — not uniformly; several sections explicitly say where a requirement does *not* fit rather than forcing it in. Both `.dc.html` mockups were updated to the refreshed values and made self-contained (their referenced `components/dental-tokens.css`/`fig-tokens.css`/`Components.bundle.js` were never committed to this repo — a pre-existing gap this pass surfaced and worked around, not introduced).
 
 ---
 
@@ -8,21 +10,42 @@ Index of page-level design specs for all 11 modules. Only Patient (`patient.md`)
 
 | Module | File | Status |
 |---|---|---|
-| Master Data | [master-data.md](./master-data.md) | Proposed — derived from features + business rules |
+| Master Data | [master-data.md](./master-data.md) | **Verified against shipped code** (Phase 1) — 7 of 28 SAD catalogs built; real gaps vs. `ui-guidelines.md` flagged inline (missing search/filter/sort/pagination, blur validation, skeleton loading state) |
 | Patient | [patient.md](./patient.md) | Source-specified (`docs/03-sad/12-module-patient.md` §12) |
-| Reservation | [reservation.md](./reservation.md) | Proposed |
-| Queue | [queue.md](./queue.md) | Proposed |
-| EMR | [emr.md](./emr.md) | Proposed — Odontogram flagged for a dedicated hi-fi pass |
-| Billing | [billing.md](./billing.md) | Proposed |
-| Finance | [finance.md](./finance.md) | Proposed |
-| Warehouse | [warehouse.md](./warehouse.md) | Proposed |
-| Human Resource | [hr.md](./hr.md) | Proposed |
-| Reporting & Dashboard | [reporting.md](./reporting.md) | Proposed |
-| System Administration | [system.md](./system.md) | Proposed |
+| Reservation | [reservation.md](./reservation.md) | **Verified against shipped code** (Phase 1) — SAD §33 has a real UI spec; shipped list table is missing 5 of 10 spec'd columns (Patient/MRN/Doctor/Source/Created By), no sort, no status timeline — flagged inline |
+| Queue | [queue.md](./queue.md) | **Verified against shipped code** (Phase 1) — no SAD UI spec exists to verify against, but real gaps found: status is color-only (no badge renders `QUEUE_STATUS_TONE`, `design-system.md` §8.2), cards show no patient/doctor name, single dashboard vs. SAD's 3 role-specific views |
+| EMR | [emr.md](./emr.md) | **Verified against shipped code, summary depth** (Phase 1+2) — one Visit Workspace, not separate pages; 14 tabs summarized, full field-level specs deferred (largest SAD doc in the project, ~11.8k lines). Odontogram confirmed as table+form only, not the interactive tooth chart — still needs its dedicated hi-fi pass |
+| Billing | [billing.md](./billing.md) | **Verified against shipped code** (Phase 1) — much narrower than SAD §12's 7-status lifecycle: only 2 routes shipped, no Discount/Insurance/Refund/Void UI at all. Flagged as a product-scope question, not silently assumed deferred |
+| Finance | [finance.md](./finance.md) | **Proposed, backend-grounded** — no frontend shipped yet, but every route/permission below is copy-verified against the real (tested, passing) backend code rather than SAD prose alone. 9 functional areas mapped; RBAC table flagged as inferred, not SAD-literal |
+| Warehouse | [warehouse.md](./warehouse.md) | **Proposed, backend-grounded** — no frontend shipped yet, all 11 functional areas mapped against real backend routes/permissions (the code's own comments already cite the SAD's literal permission catalog and flag every extrapolation, carried into this spec) |
+| Human Resource | [hr.md](./hr.md) | **Proposed, SAD-only** — the only module in this project with zero backend or frontend. Payroll Run's real 8-status state machine and the SAD's verbatim (not inferred) Actor Matrix are documented; flagged as the lowest-confidence spec in this pass |
+| Reporting & Dashboard | [reporting.md](./reporting.md) | **Proposed, backend-grounded** — Dashboard/Patient/Queue mockups already exist (`Parakita - Key Screens.dc.html`); Reservation/Queue also have their own module-local analytics pages. The centralized Reporting module itself has no frontend; verified against real routes — corrected the page inventory from an assumed 6-category structure to the real 5-dashboard + generic-catalog architecture (no HR dashboard exists) |
+| System Administration | [system.md](./system.md) | **Verified against shipped code** (Phase 1) — only Users/Roles shipped; found a significant bug: neither the Role-Permissions modal nor User-Role assignment pre-populates existing grants, so both open blank regardless of current state |
 
-## 2. Visual references built this pass
+## 2. Visual references
 
 - `Parakita - Design System.dc.html` — tokens + component gallery (light/dark)
 - `Parakita - Key Screens.dc.html` — Dashboard, Patient List, Patient Detail (Profile tab), Queue Board — with Owner/Dokter/Kasir role switching
 
-The remaining modules (Master Data, Reservation, EMR, Billing, Finance, Warehouse, HR, Reporting, System Admin) have page inventories but no visual mockup yet — flag to the user as a next step, prioritized by what Claude Code will implement first.
+No module beyond these three screens has a built mockup yet — every other module (Master Data, Reservation, EMR, Billing, Finance, Warehouse, HR, Reporting, System Admin) now has a page spec deep enough to build one from, but the mockups themselves remain a follow-up pass, not done in this one. Priority order for that follow-up, by how reusable the underlying pattern is: Master Data (8 screens share one `AdminEntityListPage` shape — one representative frame, e.g. Treatments, covers all 8), System (Users/Roles share the same shape), then Reservation/Queue/Billing (each has its own list+detail+modal pattern already), then the four unbuilt-backend-grounded/SAD-only modules last, in phase order (Finance, Warehouse, Reporting, HR).
+
+## 3. Cross-module findings from this pass
+
+Patterns that recurred across multiple modules, worth fixing once rather than per-module:
+
+- **No transactional screen shows patient/customer identity.** Reservation's list, Queue's cards, and Billing's Detail page all omit patient name/MRN — not three unrelated gaps, one recurring backend-DTO/frontend-denormalization gap (`reservation.md` §2.1, `queue.md` §2.1, `billing.md` §4).
+- **Color-only status communication.** Queue's `QueueCard` signals status only via an unlabeled border accent — the mapped `Badge` tone is defined in code but never rendered (`design-system.md` §8.2, `queue.md` §2.3). Fails this file's own §9 accessibility rule.
+- **State pre-population bugs.** System's Role-Permissions modal and User-Role assignment both open with every checkbox unchecked regardless of the entity's actual current grants (`system.md` §4–§5) — a real functional bug, not a design gap.
+- **Every list is missing search/filter/sort/pagination to some degree**, and every form validates on submit rather than on blur, per `ui-guidelines.md` §§1–3 — confirmed independently in Master Data, Reservation, Queue, Billing, System. Treat as one systemic fix (likely a shared component/hook), not per-module patches.
+- **Money fields are never formatted** (Rp-prefix, 2-decimal, right-aligned) anywhere they appear as input — Master Data's Treatment price, Billing's payment amount, and (once built) Finance's journal lines all share this gap. The 2026 revision's tabular-figure data typeface (`design-system.md` §3) is the natural fix vehicle — apply it when this gap is finally addressed, rather than formatting money fields with an unrelated font choice.
+
+## 4. Definition of Done — 2026 visual/interactivity revision
+
+- No token **role** was renamed, removed, or restructured in `design-system.md` — every existing page-spec citation of Primary/Secondary/Success/Warning/Error/Info/Neutral remains valid. Verified: §8's status-mapping tables (§8.1–8.4, all written before this revision) needed zero edits, because they reference roles, not hex values.
+- Palette, typography, and icon refresh applied consistently: jade/porcelain hex values in `design-system.md` §2, the display/body/data three-role typography system in §3, Lucide as the named icon set in §7 — and no page spec or mockup introduces a color, font, or icon outside those definitions.
+- Every one of the 11 `pages/*.md` files has an **Interactivity** section mapping the 6 named requirements to that module specifically — confirmed present in all 11 as of this pass. A module explicitly saying a requirement doesn't apply to it (e.g. `system.md` §8 ruling out drag-and-drop/charts/odontogram) counts as done; forcing an irrelevant pattern in would not.
+- Recharts is the only chart library referenced anywhere in `docs/02-design/` — every prior "no library approved" gap (`reservation.md`, `queue.md`, `finance.md`, `warehouse.md`, `reporting.md`) is superseded by `design-system.md` §11.4's approval, not left as a stale flag alongside a new, contradicting approval.
+- `prefers-reduced-motion` is documented as a hard floor, not a preference, in both `design-system.md` §11.6 and `ui-guidelines.md` §9.6, and both `.dc.html` mockups include the actual media-query rule (not just a doc mention) so the pattern is demonstrated, not only described.
+- The interactive odontogram spec (`design-system.md` §11.5, cross-referenced from `emr.md` §10) fully replaces the table+form stand-in as the intended EMR Odontogram tab — not documented as an addition alongside it.
+- Both `.dc.html` mockups render their token values without depending on the missing `components/` files — confirmed by inlining every CSS custom property both files actually reference (checked via a full `var(--...)` grep across both files, not assumed complete).
+- A genuine pre-existing bug was found and fixed, not just documented, while touching these files: the Design System mockup's color-ramp ramp() helper had a prefix-doubling bug that meant its own swatch gallery never rendered a real color — fixed as part of this pass since it directly blocked verifying the palette refresh visually.

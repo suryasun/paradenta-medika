@@ -56,3 +56,7 @@ Patient Detail
 
 ---
 
+## 13. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
+
+Patient Detail's Profile/Identity/Address/Emergency Contact tabs (§12.2) are simple field sets, well-suited to **inline edit** (`ui-guidelines.md` §9.3) the same way `master-data.md` §9 argues for Master Data's catalogs — a hover-edit pencil per field, commit on blur, rather than a full Edit-Patient page round-trip for a single corrected phone number. Reservation/Visit/Treatment/Payment History tabs stay read-only lists (no inline edit — they're derived records from other modules, not owned here). **Live update** applies to Reservation/Visit History specifically: a patient's history tabs should reflect a just-completed Reservation check-in or Visit close without a manual page refresh, cross-fading the new row in per `ui-guidelines.md` §9.2 rather than popping it in. Patient List's row-click-to-view-detail interaction gets a `motion-micro` press state (§11.7) on the row itself, not just the "Lihat" link, so the whole row visibly registers the click.
+

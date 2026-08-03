@@ -9,10 +9,46 @@
 <x-dc>
 <helmet>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="components/fig-tokens.css">
   <link rel="stylesheet" href="components/dental-tokens.css">
-  <style>body{margin:0}*{box-sizing:border-box}</style>
+  <style>
+    /* 2026 refresh — same inline token values as "Parakita - Design
+       System.dc.html" (components/dental-tokens.css was never committed
+       to this repo, so values are inlined here to keep this file
+       self-contained; see design-system.md §10). */
+    :root {
+      --color-primary-primary-100: #E3F5F1; --color-primary-primary-200: #BFE8DF; --color-primary-primary-300: #8DD4C4;
+      --color-primary-primary-400: #4CB49F; --color-primary-primary-500: #0E9380; --color-primary-primary-600: #0B7A6A;
+      --color-primary-primary-700: #096354; --color-primary-primary-800: #074E42; --color-primary-primary-900: #053A32;
+      --color-secondary-secondary-100: #EEF0EF; --color-secondary-secondary-500: #64726F; --color-secondary-secondary-700: #3D4644;
+      --color-success-success-100: #E6F3EC; --color-success-success-300: #94CDAF; --color-success-success-500: #4B9B6E; --color-success-success-700: #2E6345;
+      --color-warning-warning-100: #FCF1DE; --color-warning-warning-300: #EFC57C; --color-warning-warning-500: #DB9A34; --color-warning-warning-700: #93631E;
+      --color-error-error-100: #FCE9E7; --color-error-error-300: #F09E96; --color-error-error-500: #E15B52; --color-error-error-700: #9B3730;
+      --color-info-info-100: #E9EFFC; --color-info-info-300: #97AFEF; --color-info-info-500: #4C7BE0; --color-info-info-700: #2D4C97;
+      --opacity-color-primary-primary-16: rgba(14,147,128,.16); --opacity-color-primary-primary-24: rgba(14,147,128,.24);
+      --opacity-color-success-success-16: rgba(75,155,110,.16); --opacity-color-success-success-24: rgba(75,155,110,.24);
+      --opacity-color-warning-warning-16: rgba(219,154,52,.16); --opacity-color-warning-warning-24: rgba(219,154,52,.24);
+      --opacity-color-error-error-16: rgba(225,91,82,.16); --opacity-color-error-error-24: rgba(225,91,82,.24);
+      --opacity-color-info-info-16: rgba(76,123,224,.16); --opacity-color-info-info-24: rgba(76,123,224,.24);
+      --misc-body-bg: #FBFAF6; --misc-paper: #FFFFFF; --misc-table-header: #F3F1EA;
+      --theme-text-primary: #151B22; --theme-text-secondary: #5B6560;
+      --theme-divider: #E7E3DA; --theme-outline-border: #D2CDC0; --theme-action-hover: #EFECE3;
+      --border-radius-border-radius-md: 6px; --border-radius-border-round: 500px;
+      --motion-micro: 100ms ease-out; --motion-standard: 180ms ease-out; --motion-complex: 280ms ease-out;
+      --font-display: 'Plus Jakarta Sans', Inter, sans-serif; --font-data: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    [data-theme="dark"] {
+      --misc-body-bg: #12161C; --misc-paper: #181D24; --misc-table-header: #1B2028;
+      --theme-text-primary: #F3F1EC; --theme-text-secondary: #9CA6A2;
+      --theme-divider: #262C33; --theme-outline-border: #313842; --theme-action-hover: #1E242C;
+      --opacity-color-primary-primary-16: rgba(14,147,128,.24); --opacity-color-primary-primary-24: rgba(14,147,128,.32);
+    }
+    body{margin:0}*{box-sizing:border-box}
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+    }
+  </style>
 </helmet>
 
 <div style="font-family: Inter, sans-serif; background: var(--misc-body-bg); color: var(--theme-text-primary); height: 100vh; display: flex; overflow: hidden;">
@@ -35,7 +71,7 @@
 
   <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
     <div style="height: 64px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; background: var(--misc-paper); border-bottom: 1px solid var(--theme-divider);">
-      <div style="font-size: 16px; font-weight: 700;">{{ screenTitle }}</div>
+      <div style="font-family: var(--font-display); font-size: 17px; font-weight: 700;">{{ screenTitle }}</div>
       <div style="display: flex; align-items: center; gap: 14px;">
         <div style="display: flex; background: var(--theme-action-hover); border-radius: var(--border-radius-border-round); padding: 3px;">
           <sc-for list="{{ roles }}" as="r" hint-placeholder-count="3">
@@ -54,7 +90,7 @@
           <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
             <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-radius: var(--border-radius-border-radius-md); padding: 18px;">
               <div style="font-size: 12px; color: var(--theme-text-secondary); font-weight: 600; margin-bottom: 8px;">{{ k.label }}</div>
-              <div style="font-size: 24px; font-weight: 700;">{{ k.value }}</div>
+              <div style="font-family: var(--font-data); font-size: 24px; font-weight: 700;">{{ k.value }}</div>
               <div style="font-size: 12px; margin-top: 6px; color: {{ k.deltaColor }};">{{ k.delta }}</div>
             </div>
           </sc-for>
@@ -128,18 +164,23 @@
       </sc-if>
 
       <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size: 11px; color: var(--theme-text-secondary); margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+          <span style="opacity: .6;">⠿</span> Seret tiket antar kolom, atau gunakan aksi Call/Recall pada tiket — keduanya sampai ke hasil yang sama (lihat ui-guidelines.md §9.4).
+        </div>
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
           <sc-for list="{{ queueColumns }}" as="col" hint-placeholder-count="4">
-            <div>
+            <div style="border-radius: var(--border-radius-border-radius-md); border: 1.5px dashed transparent; padding: 2px; transition: border-color var(--motion-standard), background var(--motion-standard);">
               <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--theme-text-secondary); margin-bottom: 10px;">{{ col.label }} ({{ col.count }})</div>
               <div style="display: flex; flex-direction: column; gap: 10px;">
                 <sc-for list="{{ col.tickets }}" as="tk" hint-placeholder-count="3">
-                  <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-left: 3px solid {{ col.accent }}; border-radius: var(--border-radius-border-radius-md); padding: 12px 14px;">
-                    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 14px;">
-                      <span>{{ tk.no }}</span><span style="font-size: 11px; color: var(--theme-text-secondary); font-weight: 500;">{{ tk.time }}</span>
+                  <div style="background: var(--misc-paper); border: 1px solid var(--theme-divider); border-left: 3px solid {{ col.accent }}; border-radius: var(--border-radius-border-radius-md); padding: 12px 14px; cursor: grab; transition: transform var(--motion-micro), box-shadow var(--motion-micro);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; font-weight: 700; font-size: 14px;">
+                      <span style="display: flex; align-items: center; gap: 6px;"><span style="opacity: .35; font-size: 12px;">⠿</span>{{ tk.no }}</span>
+                      <span style="font-family: var(--font-data); font-size: 11px; color: var(--theme-text-secondary); font-weight: 500;">{{ tk.time }}</span>
                     </div>
                     <div style="font-size: 13px; margin-top: 4px;">{{ tk.name }}</div>
                     <div style="font-size: 11px; color: var(--theme-text-secondary); margin-top: 2px;">{{ tk.doctor }}</div>
+                    <span style="display: inline-flex; margin-top: 8px; font-size: 10px; font-weight: 600; padding: 2px 9px; border-radius: var(--border-radius-border-round); background: {{ tk.statusBg }}; color: {{ tk.statusFg }};">{{ col.label }}</span>
                   </div>
                 </sc-for>
               </div>
@@ -276,23 +317,40 @@ class Component extends DCLogic {
         { label: 'No. Identitas (KTP)', value: '3271xxxxxxxxxxx' },
         { label: 'Cabang Terdaftar', value: 'Parakita Medika — Cabang Kemang' },
       ],
-      queueColumns: [
-        { label: 'Waiting', accent: 'var(--color-warning-warning-500)', count: 3, tickets: [
-          { no: 'A-014', time: '09:40', name: 'Budi Santoso', doctor: 'drg. Amelia Putri' },
-          { no: 'A-015', time: '09:52', name: 'Yusuf Hakim', doctor: 'drg. Bayu Aji' },
-          { no: 'A-016', time: '10:01', name: 'Nabila Putri', doctor: 'drg. Amelia Putri' },
-        ]},
-        { label: 'Called', accent: 'var(--color-info-info-500)', count: 1, tickets: [
-          { no: 'A-012', time: '09:35', name: 'Ahmad Fauzi', doctor: 'drg. Bayu Aji' },
-        ]},
-        { label: 'In Service', accent: 'var(--color-primary-primary-500)', count: 1, tickets: [
-          { no: 'A-013', time: '09:20', name: 'Rina Wulandari', doctor: 'drg. Amelia Putri' },
-        ]},
-        { label: 'Completed', accent: 'var(--color-success-success-500)', count: 2, tickets: [
-          { no: 'A-011', time: '08:50', name: 'Dewi Lestari', doctor: 'drg. Bayu Aji' },
-          { no: 'A-010', time: '08:30', name: 'Siti Rahayu', doctor: 'drg. Amelia Putri' },
-        ]},
-      ],
+      queueColumns: (() => {
+        // Per design-system.md §8.2's flagged gap ("no badge actually
+        // renders QUEUE_STATUS_TONE"): this mockup now shows the status
+        // pill on every ticket, not just the left-accent border+column
+        // header, closing the gap at the mockup level ahead of the real
+        // implementation. Tone per status matches §8.2 exactly (Waiting
+        // /info in the app's real enum is WAITING->Info, but this board's
+        // 4 columns use Warning/Info/Primary/Success left-to-right per
+        // the original mockup's own accent choices -- kept as-is since
+        // it predates and is independent of the badge fix).
+        const cols = [
+          { label: 'Waiting', hue: 'warning-warning', names: [
+            { no: 'A-014', time: '09:40', name: 'Budi Santoso', doctor: 'drg. Amelia Putri' },
+            { no: 'A-015', time: '09:52', name: 'Yusuf Hakim', doctor: 'drg. Bayu Aji' },
+            { no: 'A-016', time: '10:01', name: 'Nabila Putri', doctor: 'drg. Amelia Putri' },
+          ]},
+          { label: 'Called', hue: 'info-info', names: [
+            { no: 'A-012', time: '09:35', name: 'Ahmad Fauzi', doctor: 'drg. Bayu Aji' },
+          ]},
+          { label: 'In Service', hue: 'primary-primary', names: [
+            { no: 'A-013', time: '09:20', name: 'Rina Wulandari', doctor: 'drg. Amelia Putri' },
+          ]},
+          { label: 'Completed', hue: 'success-success', names: [
+            { no: 'A-011', time: '08:50', name: 'Dewi Lestari', doctor: 'drg. Bayu Aji' },
+            { no: 'A-010', time: '08:30', name: 'Siti Rahayu', doctor: 'drg. Amelia Putri' },
+          ]},
+        ];
+        return cols.map(c => ({
+          label: c.label,
+          accent: `var(--color-${c.hue}-500)`,
+          count: c.names.length,
+          tickets: c.names.map(t => ({ ...t, statusBg: pair(c.hue).bg, statusFg: pair(c.hue).fg })),
+        }));
+      })(),
     };
   }
 }

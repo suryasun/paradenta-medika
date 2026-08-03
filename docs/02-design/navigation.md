@@ -36,6 +36,8 @@ The primary sidebar sections correspond one-to-one with the Core Modules defined
 
 Which sections a given logged-in user actually sees is resolved at runtime from their Role → Permission → Menu mapping (RBAC, see `docs/03-sad/02-system-architecture.md` Section 17).
 
+**Note (added during the module-by-module redesign pass):** the "Primary Roles" column above is a coarse, sidebar-visibility-level list, not an exhaustive role catalog — several modules' own RBAC sections define finer-grained roles this table doesn't mention: Finance has a separate **Finance Manager** role distinct from Finance Staff (`finance.md` §12, segregation-of-duties gated); HR's Actor Matrix (`hr.md` §6, sourced verbatim from `docs/03-sad/19-module-hr.md` §4.1) has **HR Manager**, **Employee** (self-service), and **Supervisor** (scope-limited approval) alongside HR Staff. Do not treat this table as the full role list when implementing a specific module's permission checks — use that module's own page spec instead.
+
 ---
 
 # 3. Reference Navigation Pattern (Patient Module)
@@ -151,80 +153,117 @@ Seluruh perubahan data pasien harus dilakukan melalui Aggregate ini agar seluruh
 > Status: **proposed design**, not extracted from the SAD (which only specifies Patient's navigation — see §3). Each tree below is derived from that module's `docs/01-prd/features/<module>.md` use-case list and `docs/02-design/pages/<module>.md`. Mark this whole section as design output, not architecture, if referenced from code.
 
 ```text
-Master Data
-├── Data Klinik & Cabang
-├── Departemen & Ruangan
-├── Dokter & Pegawai
-├── Treatment & Treatment Category
-├── Medicine / Medical Item / Consumable
-├── Supplier & Insurance
-└── Payment Method / Tax / Discount / Promotion
+Master Data (CONFIRMED — verified against apps/frontend/config/navigation.ts;
+see docs/02-design/pages/master-data.md §7. Flat list, not grouped by SAD §8's
+4 catalog groups, because only 7 of 28 catalogs are shipped so far — 21 remain
+unbuilt, tracked in master-data.md §1.2.)
+├── Clinics
+├── Branches
+├── Doctors
+├── Treatment Categories
+├── Treatments
+├── Payment Methods
+├── Tooth Conditions
+└── Consent Templates (EMR-owned, permission-gated on emr.consent-template.*
+    not masterdata.* — UI-colocated here, not a Master Data catalog)
 
-Reservation
-├── Reservation List
-├── Create Reservation
-├── Doctor Schedule / Availability
-├── Reservation Timeline
-└── Reservation History
+Reservation (CONFIRMED — verified against apps/frontend/config/navigation.ts;
+see docs/02-design/pages/reservation.md §7. Create Reservation, Detail, and
+Reschedule/Cancel are reached from within List/Detail, not top-level sidebar
+items — Doctor Schedule and Time Slot Selection are inline pickers, not
+standalone screens; Reservation History lives under Patient Detail, not here.)
+├── List
+└── Analytics
 
-Queue
-├── Queue Dashboard (board)
-├── Check-in
-└── Queue History
+Queue (CONFIRMED — verified against apps/frontend/config/navigation.ts;
+see docs/02-design/pages/queue.md §7. Single flat link, no sub-items —
+Dashboard is an in-page button, not a sidebar entry; "history" is a status
+filter on the same board, not a separate screen.)
+└── Queue (board/list, view mode set by status filter)
 
-EMR
-├── Visit (active)
-├── Odontogram
-├── SOAP Note
-├── Treatment Plan & Procedure
-├── Prescription
-├── Clinical Attachment / X-Ray
-└── Clinical Timeline
+EMR (CONFIRMED, and structurally different from every other module's tree:
+NOT a sidebar section at all — no standalone EMR entry exists in
+apps/frontend/config/navigation.ts, by design, since there is no Visit List
+endpoint. The items below are tabs within one Visit Workspace page
+(/emr/visits/{id}), reached only via Queue's "Open Visit" action on a
+CALLED entry. See docs/02-design/pages/emr.md §1-§2, §9.)
+Visit Workspace tabs: Vital Signs · SOAP Note · Diagnosis · Treatment ·
+Medical History · Allergy · Odontogram · Treatment Plan · Periodontal ·
+Referral · Follow Up · Attachments · Prescription · Consent · Medical
+Certificate
+(Clinical Timeline is NOT one of these tabs -- it lives under Patient
+Detail instead, see patient.md §12.2 and emr.md §4.)
 
-Billing
-├── Invoice List
-├── Generate Invoice
-├── Payment
-├── Discount / Insurance
-└── Refund / Void
+Billing (CONFIRMED -- verified against apps/frontend/config/navigation.ts;
+see docs/02-design/pages/billing.md §1, §6. Flat single link, no sub-items.
+Generate Invoice/Payment/Discount/Insurance/Refund/Void below the old tree
+mostly do not exist as shipped UI -- Payment is a modal reached from
+Invoice Detail, not a sidebar item; Discount/Insurance/Refund/Void have no
+shipped UI at all, see billing.md §1's gap list.)
+└── Billing (invoice list; detail reached per-row)
 
-Finance
-├── General Ledger
-├── Cash & Bank (Daily Closing)
+Finance (proposed -- no frontend shipped yet, backend fully built and
+tested. See docs/02-design/pages/finance.md, sourced from the real
+backend route/permission surface, not just SAD prose. Tree revised this
+pass to match all 9 functional areas the backend actually exposes.)
+├── Chart of Accounts
+├── Journal
+├── Financial Period
+├── Cash & Bank Accounts
+├── Cash Transfer
+├── Daily Cash Closing
 ├── Expense
 ├── Doctor Fee Settlement
-└── Financial Period
+├── Account Mappings
+└── Financial Reports
 
-Warehouse
-├── Stock Balance / Stock Card
+Warehouse (proposed -- no frontend shipped yet, backend fully built and
+tested. See docs/02-design/pages/warehouse.md, sourced from the real
+backend route/permission surface. Tree revised this pass to add the 4
+areas the old tree omitted: Item/Supplier/Location catalogs, Reservation,
+Batch, and Reports as its own group.)
+├── Item / Supplier / Warehouse Location (catalogs)
+├── Stock Balance & Ledger
 ├── Purchase Order
 ├── Goods Receipt
 ├── Stock Transfer
 ├── Stock Adjustment
-└── Stock Opname
+├── Stock Reservation
+├── Stock Opname
+├── Batch
+└── Reports (Stock Card / Balance / Movements / Purchases / Expiry / Opnames)
 
-Human Resource
+Reporting (proposed -- no frontend shipped yet, backend fully built and
+tested. See docs/02-design/pages/reporting.md. Real architecture is 5
+fixed dashboards + a separate generic report-catalog/job system, not 6
+category pages -- there is no HR dashboard route, consistent with HR
+having no backend at all.)
+├── Dashboards
+│   ├── Executive
+│   ├── Operations
+│   ├── Clinical
+│   ├── Finance
+│   └── Warehouse
+└── Reports (catalog -> on-demand or async job -> snapshot/export)
+
+Human Resource (fully proposed -- no backend or frontend exists at all,
+the only such module in this project. See docs/02-design/pages/hr.md.)
 ├── Employee List
 ├── Schedule & Attendance
 ├── Leave & Overtime
 ├── Payroll Run
 └── Payroll Register (Reports)
 
-Reporting
-├── Executive Dashboard
-├── Operational Reports
-├── Financial Reports
-├── Inventory Reports
-├── HR Reports
-└── Clinical & Quality Reports
-
-System Administration
-├── User Administration
-├── Role & Permission
-├── Menu & Feature Flag
-├── System Parameter
-├── Notification Template
-└── Audit / Activity Log
+System Administration (PARTIALLY CONFIRMED -- verified against
+apps/frontend/config/navigation.ts; see docs/02-design/pages/system.md
+§1, §7. Only the first 2 items below are shipped; the rest have backend
+from later Phase 3 epics but no frontend yet.)
+├── Users [CONFIRMED]
+├── Roles [CONFIRMED]
+├── Menu & Feature Flag [proposed, no shipped UI]
+├── System Parameter [proposed, no shipped UI]
+├── Notification Template [proposed, no shipped UI]
+└── Audit / Activity Log [proposed, no shipped UI]
 ```
 
-Each top-level item above maps 1:1 to the "Sidebar Section" rows in §2; sub-items are proposed screens pending confirmation, not yet reflected in a Figma frame per module (see `figma-links.md`).
+Each top-level item above maps 1:1 to the "Sidebar Section" rows in §2. Master Data is now **confirmed** (verified against shipped code, see above); the remaining sections' sub-items are still proposed screens pending confirmation, not yet reflected in a Figma frame per module (see `figma-links.md`).
