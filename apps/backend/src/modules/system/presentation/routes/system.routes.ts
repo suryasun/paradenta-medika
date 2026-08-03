@@ -55,6 +55,7 @@ import { ListSystemParameterQueryDto, ListFeatureFlagQueryDto } from '../../appl
 import { CreateChangeRequestDto, RollbackParameterDto } from '../../application/dtos/ConfigurationChangeRequestDto';
 import { CreateFeatureFlagRequestDto, UpdateFeatureFlagRequestDto } from '../../application/dtos/FeatureFlagRequestDto';
 import { CreateMenuRequestDto, UpdateMenuPermissionsRequestDto } from '../../application/dtos/MenuRequestDto';
+import { ListBackgroundJobQueryDto } from '../../application/dtos/BackgroundJobQueryDto';
 import { CreateParameterUseCase } from '../../application/use-cases/CreateParameterUseCase';
 import { ListParametersUseCase } from '../../application/use-cases/ListParametersUseCase';
 import { ListParameterVersionsUseCase } from '../../application/use-cases/ListParameterVersionsUseCase';
@@ -72,6 +73,13 @@ import { ConfigurationChangeRequestRepository } from '../../infrastructure/repos
 import { FeatureFlagRepository } from '../../infrastructure/repositories/FeatureFlagRepository';
 import { MenuRepository } from '../../infrastructure/repositories/MenuRepository';
 import { ApprovalWorkflowController } from '../controllers/ApprovalWorkflowController';
+import { ListBackgroundJobsUseCase } from '../../application/use-cases/ListBackgroundJobsUseCase';
+import { GetBackgroundJobUseCase } from '../../application/use-cases/GetBackgroundJobUseCase';
+import { RetryBackgroundJobUseCase } from '../../application/use-cases/RetryBackgroundJobUseCase';
+import { CancelBackgroundJobUseCase } from '../../application/use-cases/CancelBackgroundJobUseCase';
+import { GetOperationsHealthUseCase } from '../../application/use-cases/GetOperationsHealthUseCase';
+import { BackgroundJobRepository } from '../../infrastructure/repositories/BackgroundJobRepository';
+import { BackgroundJobController } from '../controllers/BackgroundJobController';
 
 /**
  * docs/06-tasks/task-015.md..task-020.md composition root, wired against
@@ -151,6 +159,17 @@ export function buildSystemModule(
     new CreateMenuUseCase(menuRepository, auditService),
     new ListMenusUseCase(menuRepository),
     new UpdateMenuPermissionsUseCase(menuRepository, permissionRepository, auditService),
+  );
+
+  // docs/06-tasks/task-207.md..task-209.md (Epic AL); GetOperationsHealthUseCase
+  // completes task-194 (Epic AI), deferred pending this exact registry.
+  const backgroundJobRepository = new BackgroundJobRepository();
+  const backgroundJobController = new BackgroundJobController(
+    new ListBackgroundJobsUseCase(backgroundJobRepository),
+    new GetBackgroundJobUseCase(backgroundJobRepository),
+    new RetryBackgroundJobUseCase(backgroundJobRepository, auditService),
+    new CancelBackgroundJobUseCase(backgroundJobRepository, auditService),
+    new GetOperationsHealthUseCase(backgroundJobRepository),
   );
 
   const router = Router();
@@ -292,6 +311,15 @@ export function buildSystemModule(
     validateBody(UpdateMenuPermissionsRequestDto),
     approvalWorkflowController.updateMenuPermissions,
   );
+
+  // docs/06-tasks/task-207.md..task-209.md (Epic AL, UC-SYS-007). No
+  // literal Section 6.4-style permission table exists for these endpoints
+  // -- extrapolated `system.job.*`/`system.health.read` names.
+  router.get('/system/jobs', requirePermission('system.job.read'), validateQuery(ListBackgroundJobQueryDto), backgroundJobController.list);
+  router.get('/system/jobs/:jobId', requirePermission('system.job.read'), backgroundJobController.detail);
+  router.post('/system/jobs/:jobId/retry', requirePermission('system.job.manage'), backgroundJobController.retry);
+  router.post('/system/jobs/:jobId/cancel', requirePermission('system.job.manage'), backgroundJobController.cancel);
+  router.get('/system/health/operations', requirePermission('system.health.read'), backgroundJobController.operationsHealth);
 
   return router;
 }

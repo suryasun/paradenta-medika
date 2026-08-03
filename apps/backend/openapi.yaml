@@ -741,6 +741,64 @@ paths:
         '422': { description: "SYS_PERMISSION_ASSIGNMENT_INVALID", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
   # ---------------------------------------------------------------------
+  # System - Background Job Operations (docs/06-tasks/task-207.md..
+  # task-209.md, Epic AL, UC-SYS-007). GET /system/health/operations
+  # completes task-194 (Epic AI), deferred pending this exact registry.
+  # ---------------------------------------------------------------------
+  /system/jobs:
+    get:
+      tags: [System]
+      summary: List background jobs
+      x-permission: system.job.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { name: jobType, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, RETRYING, FAILED, CANCELLED, DEAD_LETTER] } }
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+
+  /system/jobs/{jobId}:
+    get:
+      tags: [System]
+      summary: "Background job detail (error detail is a sanitised safe message, never a raw stack trace/secret)"
+      x-permission: system.job.read
+      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /system/jobs/{jobId}/retry:
+    post:
+      tags: [System]
+      summary: "Retry a failed/dead-lettered job (preserves the original idempotency key -- no duplicate side effects)"
+      x-permission: system.job.manage
+      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SYS_JOB_NOT_RETRYABLE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/jobs/{jobId}/cancel:
+    post:
+      tags: [System]
+      summary: "Best-effort cancel (rejects an already-SUCCEEDED job rather than silently losing its compensation requirement; already-terminal jobs are a no-op)"
+      x-permission: system.job.manage
+      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "SYS_JOB_ALREADY_SUCCEEDED", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /system/health/operations:
+    get:
+      tags: [System]
+      summary: "Queue depth, attempt counts, and safe (non-sensitive) recent-failure summaries"
+      x-permission: system.health.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # ---------------------------------------------------------------------
   # Master Data (docs/06-tasks/task-021.md..task-026.md) — six identically
   # shaped CRUD resources (crudUseCaseFactory), documented once per resource.
   # ---------------------------------------------------------------------

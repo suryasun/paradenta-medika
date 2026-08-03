@@ -1,6 +1,8 @@
 import {
   ActivityLog,
   AuditLog,
+  BackgroundJob,
+  BackgroundJobStatus,
   ConfigurationChangeRequest,
   FeatureFlag,
   Menu,
@@ -24,6 +26,11 @@ import {
   UpdateFeatureFlagInput,
 } from '../../src/modules/system/domain/repositories/IFeatureFlagRepository';
 import { CreateMenuInput, IMenuRepository, MenuWithPermissionIds } from '../../src/modules/system/domain/repositories/IMenuRepository';
+import {
+  BackgroundJobListFilter,
+  CreateBackgroundJobInput,
+  IBackgroundJobRepository,
+} from '../../src/modules/system/domain/repositories/IBackgroundJobRepository';
 import {
   CreateNotificationTemplateInput,
   INotificationTemplateRepository,
@@ -564,5 +571,62 @@ export class FakeMenuRepository implements IMenuRepository {
     const menu = this.menus.get(menuId);
     if (!menu) throw new Error('not found');
     return { ...menu, permissionIds };
+  }
+}
+
+export class FakeBackgroundJobRepository implements IBackgroundJobRepository {
+  jobs = new Map<string, BackgroundJob>();
+
+  async create(input: CreateBackgroundJobInput): Promise<BackgroundJob> {
+    const job: BackgroundJob = {
+      id: nextId('job'),
+      jobType: input.jobType,
+      status: 'QUEUED',
+      payloadRef: input.payloadRef ?? null,
+      idempotencyKey: input.idempotencyKey,
+      priority: input.priority ?? 0,
+      attempts: 0,
+      maxAttempts: input.maxAttempts ?? 3,
+      isRetryable: input.isRetryable ?? true,
+      scheduledAt: input.scheduledAt ?? null,
+      lockedAt: null,
+      lockedBy: null,
+      lastError: null,
+      traceId: input.traceId ?? null,
+      correlationId: input.correlationId ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as BackgroundJob;
+    this.jobs.set(job.id, job);
+    return job;
+  }
+
+  async findById(id: string): Promise<BackgroundJob | null> {
+    return this.jobs.get(id) ?? null;
+  }
+
+  async list(query: ListQueryDto, filter: BackgroundJobListFilter): Promise<PagedResult<BackgroundJob>> {
+    const filtered = [...this.jobs.values()]
+      .filter((j) => (!filter.jobType || j.jobType === filter.jobType) && (!filter.status || j.status === filter.status))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return paginate(filtered, query);
+  }
+
+  async updateStatus(id: string, status: BackgroundJobStatus, fields?: { attempts?: number; lastError?: string | null }): Promise<BackgroundJob> {
+    const job = this.jobs.get(id);
+    if (!job) throw new Error('not found');
+    job.status = status;
+    if (fields?.attempts !== undefined) job.attempts = fields.attempts;
+    if (fields?.lastError !== undefined) job.lastError = fields.lastError;
+    job.updatedAt = new Date();
+    return job;
+  }
+
+  async countByStatus(): Promise<Record<string, number>> {
+    const result: Record<string, number> = {};
+    for (const job of this.jobs.values()) {
+      result[job.status] = (result[job.status] ?? 0) + 1;
+    }
+    return result;
   }
 }

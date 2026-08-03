@@ -162,3 +162,28 @@ export class MenuKeyExistsException extends ConflictException {
     super('Menu key already exists', 'SYS_MENU_KEY_EXISTS');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Background Job Operations (docs/03-sad/21-module-system.md UC-SYS-007,
+// Epic AL task-207-209).
+// ---------------------------------------------------------------------------
+
+export class BackgroundJobNotFoundException extends NotFoundException {
+  constructor() {
+    super('Background job not found');
+  }
+}
+
+/** Literal Section 6.4: "SYS_JOB_NOT_RETRYABLE | 409 | Job type/status cannot be retried." */
+export class JobNotRetryableException extends ConflictException {
+  constructor() {
+    super('This job type is not retryable, or is not currently in a retryable status', 'SYS_JOB_NOT_RETRYABLE');
+  }
+}
+
+/** Extrapolated -- no literal Section 6.4 code for this specific case; docs/06-tasks/task-209.md AC: "does not silently lose the compensation requirement." */
+export class JobAlreadySucceededException extends ConflictException {
+  constructor() {
+    super('This job already succeeded and committed its external side effect; cancel is not possible -- use a compensating transaction instead', 'SYS_JOB_ALREADY_SUCCEEDED');
+  }
+}

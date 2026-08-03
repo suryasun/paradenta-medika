@@ -3070,3 +3070,58 @@ model MenuPermission {
   @@unique([menuId, permissionId])
   @@map("system_menu_permissions")
 }
+
+// ---------------------------------------------------------------------------
+// Background Job Operations (docs/03-sad/21-module-system.md Section 3.2/
+// 4.8 UC-SYS-007, Epic AL task-207-209). This is the shared job registry
+// task-207's own text says "every async worker in Phase 3 (Report Jobs,
+// Notification delivery, Automatic Stock/Billing consumers) is expected
+// to register against" -- but retrofitting Epic AH's CreateReportJobUseCase
+// or Epic AJ's SendNotificationUseCase to write rows here is out of these
+// three tasks' literal Backend Scope (each only asks for the registry
+// entity/migration plus List/Get/Retry/Cancel use cases); a documented
+// gap, not an oversight, for a future integration task.
+// ---------------------------------------------------------------------------
+
+enum BackgroundJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  RETRYING
+  FAILED
+  CANCELLED
+  DEAD_LETTER
+}
+
+/// Section 3.2 BackgroundJob: "type, payload reference, idempotency key,
+/// priority, attempts, schedule, status, lease, result/error safe
+/// message, and trace/correlation ids." `payloadRef` is a reference
+/// (e.g. another table's id), never the raw payload itself, matching
+/// Section 8.4's "secret references never appear in logs/snapshots" data
+/// -minimisation principle. `isRetryable` is set at creation time by the
+/// producing worker (per job type) since no concrete "retryable job type
+/// whitelist" is enumerated anywhere in the SAD.
+model BackgroundJob {
+  id             String              @id @default(uuid()) @db.Char(36)
+  jobType        String              @map("job_type") @db.VarChar(100)
+  status         BackgroundJobStatus @default(QUEUED)
+  payloadRef     String?             @map("payload_ref") @db.VarChar(200)
+  idempotencyKey String              @unique @map("idempotency_key") @db.VarChar(200)
+  priority       Int                 @default(0)
+  attempts       Int                 @default(0)
+  maxAttempts    Int                 @default(3) @map("max_attempts")
+  isRetryable    Boolean             @default(true) @map("is_retryable")
+  scheduledAt    DateTime?           @map("scheduled_at")
+  lockedAt       DateTime?           @map("locked_at")
+  lockedBy       String?             @map("locked_by") @db.VarChar(100)
+  lastError      String?             @map("last_error") @db.Text
+  traceId        String?             @map("trace_id") @db.Char(36)
+  correlationId  String?             @map("correlation_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([jobType])
+  @@map("system_background_jobs")
+}
