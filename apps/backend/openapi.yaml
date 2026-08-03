@@ -3788,6 +3788,40 @@ paths:
   # Finance -- Cash & Expense (docs/06-tasks/task-153.md..task-161.md,
   # docs/03-sad/17-module-finance.md Section 6.3, UC-FIN-003/UC-FIN-004)
   # ---------------------------------------------------------------------
+  /finance/account-mappings:
+    get:
+      tags: [Finance]
+      summary: List account mappings (payment method -> cash/revenue account posting configuration for task-162's Automatic Billing Event)
+      x-permission: finance.account-mapping.read
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+    post:
+      tags: [Finance]
+      summary: Create an account mapping for a branch/payment method -- one active mapping per (branchId, paymentMethodId)
+      x-permission: finance.account-mapping.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchId, paymentMethodId, cashAccountId, revenueAccountId]
+              properties:
+                branchId: { type: string, format: uuid }
+                paymentMethodId: { type: string, format: uuid }
+                cashAccountId: { type: string, format: uuid }
+                revenueAccountId: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { description: "FIN_ACCOUNT_MAPPING_EXISTS", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
   /finance/cash-accounts:
     get:
       tags: [Finance]

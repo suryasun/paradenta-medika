@@ -129,6 +129,7 @@ describe('Dashboard Projections (task-178, TC-RPT-001/002/003)', () => {
       invoiceId: invoice.id,
       invoiceNo: invoice.invoiceNo,
       paymentAmount: 200000,
+      paymentIds: ['payment-1'],
       invoiceStatus: 'PARTIALLY_PAID',
       occurredAt: new Date().toISOString(),
     };

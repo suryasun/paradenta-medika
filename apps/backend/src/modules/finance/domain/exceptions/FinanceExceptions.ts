@@ -132,6 +132,13 @@ export class AccountMappingMissingException extends BusinessException {
   }
 }
 
+/** docs/06-tasks/task-162.md: only one account mapping per (branch, payment method) -- @@unique in the schema; this is the application-layer pre-check. */
+export class AccountMappingAlreadyExistsException extends ConflictException {
+  constructor() {
+    super('An account mapping already exists for this branch and payment method', 'FIN_ACCOUNT_MAPPING_EXISTS');
+  }
+}
+
 /**
  * No literal Section 6.6 code for transferring a cash account to itself
  * -- extrapolated by the same `WHS_SOURCE_DESTINATION_SAME` naming

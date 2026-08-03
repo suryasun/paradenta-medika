@@ -74,8 +74,9 @@ export class CreatePaymentUseCase {
       }
     }
 
+    const createdPaymentIds: string[] = [];
     for (const line of input.payments) {
-      await this.paymentRepository.create({
+      const payment = await this.paymentRepository.create({
         invoiceId: invoice.id,
         paymentMethodId: line.paymentMethodId,
         amount: Number(line.amount),
@@ -84,6 +85,7 @@ export class CreatePaymentUseCase {
         note: line.note,
         createdBy: input.actorUserId,
       });
+      createdPaymentIds.push(payment.id);
     }
 
     const newPaidAmount = Number(invoice.paidAmount) + totalPaymentAmount;
@@ -110,6 +112,7 @@ export class CreatePaymentUseCase {
       invoiceNo: updated.invoiceNo,
       paymentAmount: totalPaymentAmount,
       invoiceStatus: newStatus,
+      paymentIds: createdPaymentIds,
       occurredAt: new Date().toISOString(),
     };
     await this.eventBus.publish(PAYMENT_COMPLETED_EVENT, eventPayload);

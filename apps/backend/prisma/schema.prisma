@@ -213,21 +213,22 @@ model Branch {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  clinic               Clinic                @relation(fields: [clinicId], references: [id])
-  doctors              Doctor[]
-  reservations         Reservation[]
-  invoices             Invoice[]
-  queues               Queue[]
-  visits               Visit[]
-  warehouseLocations   WarehouseLocation[]
-  purchaseOrders       PurchaseOrder[]
-  financeAccounts      Account[]
-  journals             Journal[]
-  financialPeriods     FinancialPeriod[]
-  cashAccounts         CashAccount[]
-  expenses             Expense[]
-  dailyClosings        DailyClosing[]
-  doctorFeeSettlements DoctorFeeSettlement[]
+  clinic                 Clinic                  @relation(fields: [clinicId], references: [id])
+  doctors                Doctor[]
+  reservations           Reservation[]
+  invoices               Invoice[]
+  queues                 Queue[]
+  visits                 Visit[]
+  warehouseLocations     WarehouseLocation[]
+  purchaseOrders         PurchaseOrder[]
+  financeAccounts        Account[]
+  journals               Journal[]
+  financialPeriods       FinancialPeriod[]
+  cashAccounts           CashAccount[]
+  expenses               Expense[]
+  dailyClosings          DailyClosing[]
+  doctorFeeSettlements   DoctorFeeSettlement[]
+  financeAccountMappings FinanceAccountMapping[]
 
   @@map("branches")
 }
@@ -323,7 +324,8 @@ model PaymentMethod {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  payments Payment[]
+  payments               Payment[]
+  financeAccountMappings FinanceAccountMapping[]
 
   @@map("payment_methods")
 }
@@ -2292,13 +2294,14 @@ model Account {
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by") @db.Char(36)
 
-  branch         Branch?               @relation(fields: [branchId], references: [id])
-  parent         Account?              @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children       Account[]             @relation("AccountHierarchy")
-  lines          JournalLine[]
-  cashAccounts   CashAccount[]
-  expenses       Expense[]
-  feeSettlements DoctorFeeSettlement[]
+  branch                 Branch?                 @relation(fields: [branchId], references: [id])
+  parent                 Account?                @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children               Account[]               @relation("AccountHierarchy")
+  lines                  JournalLine[]
+  cashAccounts           CashAccount[]
+  expenses               Expense[]
+  feeSettlements         DoctorFeeSettlement[]
+  financeAccountMappings FinanceAccountMapping[]
 
   @@unique([branchId, code])
   @@index([parentId])
@@ -2475,13 +2478,51 @@ model CashAccount {
   updatedAt DateTime @updatedAt @map("updated_at")
   updatedBy String?  @map("updated_by") @db.Char(36)
 
-  branch        Branch         @relation(fields: [branchId], references: [id])
-  ledgerAccount Account        @relation(fields: [ledgerAccountId], references: [id])
-  dailyClosings DailyClosing[]
+  branch                 Branch                  @relation(fields: [branchId], references: [id])
+  ledgerAccount          Account                 @relation(fields: [ledgerAccountId], references: [id])
+  dailyClosings          DailyClosing[]
+  financeAccountMappings FinanceAccountMapping[]
 
   @@unique([branchId, code])
   @@index([ledgerAccountId])
   @@map("cash_accounts")
+}
+
+/// docs/06-tasks/task-162.md; docs/03-sad/17-module-finance.md line 92
+/// ("Master Data | Account mapping, payment method... | Validate
+/// configuration and resolve ledger accounts") and line 210 ("configured
+/// once per branch and account mapping"). No literal table shape is named
+/// in the SAD -- designed from scratch per this task's own "Account-mapping
+/// configuration lookup" deliverable. Kept Finance-owned (FK to Finance's
+/// own CashAccount/Account, not a cross-module FK from Master Data) to
+/// respect the module-contract's "no cross-module DB access" rule; Master
+/// Data's `PaymentMethod` is still the referenced key, matching the
+/// existing precedent of Finance/EMR referencing Master Data catalog rows
+/// by id elsewhere in this schema (e.g. VisitTreatment.treatmentId).
+/// One mapping per (branch, payment method): `cashAccountId` (its
+/// `ledgerAccountId` is the account actually debited) and
+/// `revenueAccountId` are the two sides of UC-FIN-001's "debit mapped
+/// cash/bank account, credit mapped revenue/receivable account" posting.
+model FinanceAccountMapping {
+  id               String  @id @default(uuid()) @db.Char(36)
+  branchId         String  @map("branch_id") @db.Char(36)
+  paymentMethodId  String  @map("payment_method_id") @db.Char(36)
+  cashAccountId    String  @map("cash_account_id") @db.Char(36)
+  revenueAccountId String  @map("revenue_account_id") @db.Char(36)
+  isActive         Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  branch         Branch        @relation(fields: [branchId], references: [id])
+  paymentMethod  PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  cashAccount    CashAccount   @relation(fields: [cashAccountId], references: [id])
+  revenueAccount Account       @relation(fields: [revenueAccountId], references: [id])
+
+  @@unique([branchId, paymentMethodId])
+  @@map("finance_account_mappings")
 }
 
 enum FinanceExpenseStatus {

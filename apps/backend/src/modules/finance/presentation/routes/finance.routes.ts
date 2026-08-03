@@ -23,6 +23,7 @@ import { CreateDailyClosingRequestDto } from '../../application/dtos/DailyClosin
 import { ListDailyClosingQueryDto } from '../../application/dtos/DailyClosingQueryDto';
 import { GenerateDoctorFeeSettlementRequestDto, PayDoctorFeeSettlementRequestDto } from '../../application/dtos/DoctorFeeSettlementRequestDto';
 import { ReopenFinancialPeriodRequestDto } from '../../application/dtos/FinancialPeriodReopenRequestDto';
+import { CreateFinanceAccountMappingRequestDto } from '../../application/dtos/FinanceAccountMappingRequestDto';
 import {
   CashFlowQueryDto,
   DailyClosingReportQueryDto,
@@ -72,6 +73,9 @@ import { GetIncomeStatementReportUseCase } from '../../application/use-cases/Get
 import { GetCashFlowReportUseCase } from '../../application/use-cases/GetCashFlowReportUseCase';
 import { GetExpensesReportUseCase } from '../../application/use-cases/GetExpensesReportUseCase';
 import { GetDailyClosingReportUseCase } from '../../application/use-cases/GetDailyClosingReportUseCase';
+import { CreateFinanceAccountMappingUseCase } from '../../application/use-cases/CreateFinanceAccountMappingUseCase';
+import { ListFinanceAccountMappingsUseCase } from '../../application/use-cases/ListFinanceAccountMappingsUseCase';
+import { RecordBillingPaymentUseCase } from '../../application/use-cases/RecordBillingPaymentUseCase';
 import { JournalNumberGenerator } from '../../application/services/JournalNumberGenerator';
 import { ExpenseNumberGenerator } from '../../application/services/ExpenseNumberGenerator';
 import { DoctorFeeSettlementNumberGenerator } from '../../application/services/DoctorFeeSettlementNumberGenerator';
@@ -84,7 +88,12 @@ import { ExpenseRepository } from '../../infrastructure/repositories/ExpenseRepo
 import { DailyClosingRepository } from '../../infrastructure/repositories/DailyClosingRepository';
 import { DoctorFeeSettlementRepository } from '../../infrastructure/repositories/DoctorFeeSettlementRepository';
 import { FinanceReportRepository } from '../../infrastructure/repositories/FinanceReportRepository';
+import { FinanceAccountMappingRepository } from '../../infrastructure/repositories/FinanceAccountMappingRepository';
 import { VisitTreatmentRepository } from '../../../emr/infrastructure/repositories/VisitTreatmentRepository';
+import { PaymentMethodRepository } from '../../../master-data/infrastructure/repositories/PaymentMethodRepository';
+import { InvoiceRepository } from '../../../billing/infrastructure/repositories/InvoiceRepository';
+import { PaymentRepository } from '../../../billing/infrastructure/repositories/PaymentRepository';
+import { PAYMENT_COMPLETED_EVENT, PaymentCompletedPayload } from '../../../billing/domain/events/BillingEvents';
 import { AccountController } from '../controllers/AccountController';
 import { JournalController } from '../controllers/JournalController';
 import { FinancialPeriodController } from '../controllers/FinancialPeriodController';
@@ -94,6 +103,7 @@ import { ExpenseController } from '../controllers/ExpenseController';
 import { DailyClosingController } from '../controllers/DailyClosingController';
 import { DoctorFeeSettlementController } from '../controllers/DoctorFeeSettlementController';
 import { FinanceReportController } from '../controllers/FinanceReportController';
+import { FinanceAccountMappingController } from '../controllers/FinanceAccountMappingController';
 
 /**
  * docs/06-tasks/task-143.md..task-152.md (Epic AB Finance Foundation +
@@ -117,7 +127,52 @@ export function buildFinanceModule(
   const doctorFeeSettlementRepository = new DoctorFeeSettlementRepository();
   const visitTreatmentRepository = new VisitTreatmentRepository();
   const financeReportRepository = new FinanceReportRepository();
+  const financeAccountMappingRepository = new FinanceAccountMappingRepository();
+  const paymentMethodRepository = new PaymentMethodRepository();
+  const invoiceRepository = new InvoiceRepository();
+  const paymentRepository = new PaymentRepository();
   const reportDateRangeResolver = new ReportDateRangeResolver(financialPeriodRepository);
+
+  const financeAccountMappingController = new FinanceAccountMappingController(
+    new CreateFinanceAccountMappingUseCase(financeAccountMappingRepository, paymentMethodRepository, cashAccountRepository, accountRepository, auditService),
+    new ListFinanceAccountMappingsUseCase(financeAccountMappingRepository),
+  );
+
+  /**
+   * docs/06-tasks/task-162.md (Finance, Epic AE, UC-FIN-001). Subscribes to
+   * Billing's `PaymentCompleted`, mirroring Billing's own subscription to
+   * EMRFinished (billing.routes.ts) and Warehouse's subscription to
+   * `emr.treatment-material-finalized.v1` (warehouse.routes.ts). Wrapped in
+   * try/catch for the same reason: Finance is downstream of Billing, so an
+   * account-mapping or duplicate-posting failure here must never propagate
+   * back through the shared event bus and fail the payment transaction
+   * that triggered it. `FIN_ACCOUNT_MAPPING_MISSING` is logged at ERROR
+   * level specifically (not just the generic catch-all) per task-162's own
+   * AC that this failure must be "surfaced to an operational alert, not
+   * silently dropped."
+   */
+  const recordBillingPaymentUseCase = new RecordBillingPaymentUseCase(
+    invoiceRepository,
+    paymentRepository,
+    financeAccountMappingRepository,
+    cashAccountRepository,
+    accountRepository,
+    journalRepository,
+    new JournalNumberGenerator(journalRepository),
+    auditService,
+  );
+  eventBus.subscribe<PaymentCompletedPayload>(PAYMENT_COMPLETED_EVENT, async (payload) => {
+    try {
+      await recordBillingPaymentUseCase.execute({
+        invoiceId: payload.invoiceId,
+        paymentIds: payload.paymentIds,
+        actorUserId: 'system:billing-payment',
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[OPERATIONAL ALERT] Failed to post Billing payment to Finance', payload.invoiceId, error);
+    }
+  });
 
   const accountController = new AccountController(
     new CreateAccountUseCase(accountRepository, auditService),
@@ -434,6 +489,24 @@ export function buildFinanceModule(
     requirePermission('finance.report.read'),
     validateQuery(DailyClosingReportQueryDto),
     financeReportController.dailyClosing,
+  );
+
+  // docs/06-tasks/task-162.md Deliverable: "Account-mapping configuration
+  // lookup" needs an admin-facing CRUD surface. No literal Section 8.1
+  // permission verb exists for this (that catalog predates task-162's
+  // account-mapping concept) -- extrapolated as `finance.account-mapping.*`
+  // by the same naming convention as `finance.account.*`.
+  router.get(
+    '/finance/account-mappings',
+    requirePermission('finance.account-mapping.read'),
+    validateQuery(ListQueryDto),
+    financeAccountMappingController.list,
+  );
+  router.post(
+    '/finance/account-mappings',
+    requirePermission('finance.account-mapping.manage'),
+    validateBody(CreateFinanceAccountMappingRequestDto),
+    financeAccountMappingController.create,
   );
 
   return router;

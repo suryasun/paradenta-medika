@@ -1,4 +1,4 @@
-import { Account, CashAccount, DailyClosing, DoctorFeeSettlement, DoctorFeeSettlementItem, Expense, FinancialPeriod, Journal, JournalLine } from '@prisma/client';
+import { Account, CashAccount, DailyClosing, DoctorFeeSettlement, DoctorFeeSettlementItem, Expense, FinanceAccountMapping, FinancialPeriod, Journal, JournalLine } from '@prisma/client';
 import {
   AccountListFilter,
   CreateAccountInput,
@@ -24,6 +24,10 @@ import {
   CreateCashAccountInput,
   ICashAccountRepository,
 } from '../../src/modules/finance/domain/repositories/ICashAccountRepository';
+import {
+  CreateFinanceAccountMappingInput,
+  IFinanceAccountMappingRepository,
+} from '../../src/modules/finance/domain/repositories/IFinanceAccountMappingRepository';
 import {
   CreateExpenseInput,
   ExpenseListFilter,
@@ -451,6 +455,41 @@ export class FakeCashAccountRepository implements ICashAccountRepository {
     if (!cashAccount) throw new Error('not found');
     cashAccount.currentBalance = (Number(cashAccount.currentBalance) + delta) as never;
     return cashAccount;
+  }
+}
+
+export class FakeFinanceAccountMappingRepository implements IFinanceAccountMappingRepository {
+  mappings = new Map<string, FinanceAccountMapping>();
+
+  async create(input: CreateFinanceAccountMappingInput): Promise<FinanceAccountMapping> {
+    const mapping: FinanceAccountMapping = {
+      id: nextFakeUuid(),
+      branchId: input.branchId,
+      paymentMethodId: input.paymentMethodId,
+      cashAccountId: input.cashAccountId,
+      revenueAccountId: input.revenueAccountId,
+      isActive: true,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+      updatedAt: new Date(),
+      updatedBy: null,
+    } as FinanceAccountMapping;
+    this.mappings.set(mapping.id, mapping);
+    return mapping;
+  }
+
+  async list(query: ListQueryDto, filter: { branchId?: string }): Promise<PagedResult<FinanceAccountMapping>> {
+    const all = [...this.mappings.values()].filter((m) => !filter.branchId || m.branchId === filter.branchId);
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async findById(id: string): Promise<FinanceAccountMapping | null> {
+    return this.mappings.get(id) ?? null;
+  }
+
+  async findByBranchAndPaymentMethod(branchId: string, paymentMethodId: string): Promise<FinanceAccountMapping | null> {
+    return [...this.mappings.values()].find((m) => m.branchId === branchId && m.paymentMethodId === paymentMethodId) ?? null;
   }
 }
 

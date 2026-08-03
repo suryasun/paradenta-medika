@@ -10,5 +10,16 @@ export interface PaymentCompletedPayload {
   invoiceNo: string;
   paymentAmount: number;
   invoiceStatus: string;
+  /**
+   * docs/06-tasks/task-162.md (Finance, Epic AE): added as a documented
+   * extension of this event's original Phase 1 shape, not a contradiction
+   * of it -- `CreatePaymentUseCase` can create more than one Payment row
+   * per call (Section 10's "Multiple Payment" split, e.g. cash + card in
+   * one settlement), and Finance's `RecordBillingPaymentUseCase` needs a
+   * stable per-payment reference for idempotent posting plus each line's
+   * own `paymentMethodId` (to resolve the account mapping) -- neither of
+   * which the original `paymentAmount` total alone can provide.
+   */
+  paymentIds: string[];
   occurredAt: string;
 }
