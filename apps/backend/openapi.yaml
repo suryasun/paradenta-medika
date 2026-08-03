@@ -2169,6 +2169,117 @@ paths:
         '200': { $ref: '#/components/responses/DashboardOk' }
 
   # ---------------------------------------------------------------------
+  # Reporting - Catalog & Scheduled Reports (docs/06-tasks/task-185.md..
+  # task-191.md, Epic AH). Jobs execute synchronously in-process (no
+  # job-queue worker exists in this codebase -- see CreateReportJobUseCase's
+  # doc comment); only CSV export is generated (no XLSX/PDF dependency is
+  # approved).
+  # ---------------------------------------------------------------------
+  /reports/definitions:
+    get:
+      tags: [Reports]
+      summary: List the report catalog codes the requester is permitted to run
+      x-permission: report.catalog.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  /reports/{reportCode}:
+    get:
+      tags: [Reports]
+      summary: On-demand, synchronous report result for a catalog code
+      x-permission: report.catalog.read
+      parameters:
+        - { name: reportCode, in: path, required: true, schema: { type: string, example: "finance.trial-balance" } }
+        - { name: branchId, in: query, schema: { type: string, format: uuid } }
+        - { name: periodId, in: query, schema: { type: string, format: uuid } }
+        - { name: dateFrom, in: query, schema: { type: string, format: date } }
+        - { name: dateTo, in: query, schema: { type: string, format: date } }
+        - { name: warehouseId, in: query, schema: { type: string, format: uuid } }
+        - { name: itemId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { description: "RPT_SCOPE_FORBIDDEN", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { description: "RPT_DEFINITION_NOT_FOUND", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "RPT_FILTER_INVALID / RPT_RANGE_TOO_LARGE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '503': { description: "RPT_DATASET_UNAVAILABLE -- no backing data source for this report code yet", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /reports/{reportCode}/jobs:
+    post:
+      tags: [Reports]
+      summary: Create a report job (executed synchronously in this deployment; see snapshotId/artifactId in the response)
+      x-permission: report.job.create
+      parameters: [{ name: reportCode, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filters:
+                  type: object
+                  properties:
+                    branchIds: { type: array, maxItems: 1, items: { type: string, format: uuid } }
+                    dateFrom: { type: string, format: date }
+                    dateTo: { type: string, format: date }
+                    periodId: { type: string, format: uuid }
+                    warehouseId: { type: string, format: uuid }
+                    itemId: { type: string, format: uuid }
+                    status: { type: string }
+                format: { type: string, enum: [csv, json] }
+                timezone: { type: string }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { description: "RPT_SCOPE_FORBIDDEN", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { description: "RPT_DEFINITION_NOT_FOUND", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '409': { description: "RPT_JOB_DUPLICATE -- an equivalent active job already exists", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "RPT_FILTER_INVALID / RPT_RANGE_TOO_LARGE", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /reports/jobs/{jobId}:
+    get:
+      tags: [Reports]
+      summary: Report job progress and metadata
+      x-permission: report.job.create
+      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/jobs/{jobId}/cancel:
+    post:
+      tags: [Reports]
+      summary: "Cancel a queued/running job (no-op, not an error, if already terminal)"
+      x-permission: report.job.cancel
+      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reports/snapshots/{snapshotId}:
+    get:
+      tags: [Reports]
+      summary: Read an immutable report snapshot (checksum-verified)
+      x-permission: report.job.create
+      parameters: [{ name: snapshotId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: "RPT_SNAPSHOT_TAMPERED -- checksum verification failed", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /reports/exports/{artifactId}/download:
+    get:
+      tags: [Reports]
+      summary: Download a sanitised CSV export artifact (short-lived; retention-limited)
+      x-permission: report.export.download
+      parameters: [{ name: artifactId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: "CSV file", content: { text/csv: { schema: { type: string } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { description: "RPT_EXPORT_EXPIRED -- retention period elapsed, no file access granted", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # ---------------------------------------------------------------------
   # Warehouse - Foundation (docs/06-tasks/task-095.md..task-103.md, Epic V)
   # Literal endpoint paths per docs/03-sad/18-module-warehouse.md Section 6.1.
   # ---------------------------------------------------------------------

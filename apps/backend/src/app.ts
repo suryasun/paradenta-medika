@@ -110,7 +110,7 @@ export function createApp(config: ConfigService): Express {
   // events published by Patient/Reservation/Queue/EMR/Billing/Finance/
   // Warehouse, so this is wired last, after every source module's own
   // composition root has registered its repositories.
-  const reportsRouter = buildReportsModule(eventBus, authModule.authenticate, authModule.requirePermission);
+  const reportsRouter = buildReportsModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, reportsRouter);
 
   app.use(notFoundMiddleware);

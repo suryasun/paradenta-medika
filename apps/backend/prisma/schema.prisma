@@ -2716,8 +2716,15 @@ model ReportJob {
   @@map("report_jobs")
 }
 
-/// Section 5.3 report_snapshots -- same "schema now, worker later" note as
-/// ReportJob above.
+/// Section 5.3 report_snapshots. Epic AH (task-187-191) executes jobs
+/// synchronously in-process (no job-queue worker exists in this codebase
+/// -- see CreateReportJobUseCase's doc comment), so `payload` stores the
+/// computed report result directly as relational JSON rather than a
+/// pointer into external object storage -- Section 5.3's own text
+/// explicitly permits this ("Snapshot payload can be relational
+/// aggregates or encrypted object storage, depending on size").
+/// `payloadHash` is the sha256 of `payload`'s canonical JSON, verified by
+/// GetReportSnapshotUseCase on every read (TC-RPT-015).
 model ReportSnapshot {
   id                String    @id @default(uuid()) @db.Char(36)
   reportJobId       String?   @map("report_job_id") @db.Char(36)
@@ -2726,17 +2733,44 @@ model ReportSnapshot {
   definitionVersion String    @map("definition_version") @db.VarChar(20)
   sourceWatermark   String    @map("source_watermark") @db.VarChar(150)
   scopeHash         String    @map("scope_hash") @db.VarChar(100)
+  payload           Json
   payloadUri        String?   @map("payload_uri") @db.VarChar(500)
-  payloadHash       String?   @map("payload_hash") @db.VarChar(100)
+  payloadHash       String    @map("payload_hash") @db.VarChar(100)
   rowCount          Int?      @map("row_count")
   schemaVersion     String    @map("schema_version") @db.VarChar(20)
   retentionUntil    DateTime? @map("retention_until")
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  reportJob ReportJob? @relation(fields: [reportJobId], references: [id])
+  reportJob ReportJob?       @relation(fields: [reportJobId], references: [id])
+  artifacts ExportArtifact[]
 
   @@map("report_snapshots")
+}
+
+/// Section 5.1's recommended supporting `export_artifacts` table. Only
+/// CSV is generated in this codebase (no XLSX/PDF library is a project
+/// dependency -- introducing one is out of this task's scope per
+/// CLAUDE.md's "never introduce a new library without explicit
+/// approval"); `content` stores the already-sanitised CSV body inline,
+/// the same relational-storage choice as ReportSnapshot.payload above.
+model ExportArtifact {
+  id               String    @id @default(uuid()) @db.Char(36)
+  reportSnapshotId String    @map("report_snapshot_id") @db.Char(36)
+  format           String    @db.VarChar(10)
+  filename         String    @db.VarChar(200)
+  content          String    @db.LongText
+  contentHash      String    @map("content_hash") @db.VarChar(100)
+  retentionUntil   DateTime  @map("retention_until")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  createdBy        String?   @map("created_by") @db.Char(36)
+  downloadedAt     DateTime? @map("downloaded_at")
+  downloadCount    Int       @default(0) @map("download_count")
+
+  reportSnapshot ReportSnapshot @relation(fields: [reportSnapshotId], references: [id])
+
+  @@index([reportSnapshotId])
+  @@map("export_artifacts")
 }
 
 /// Section 5.4 dashboard_summaries: metric code + dimension keys (here,
