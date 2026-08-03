@@ -266,4 +266,4 @@ from later Phase 3 epics but no frontend yet.)
 └── Audit / Activity Log [proposed, no shipped UI]
 ```
 
-Each top-level item above maps 1:1 to the "Sidebar Section" rows in §2. Master Data is now **confirmed** (verified against shipped code, see above); the remaining sections' sub-items are still proposed screens pending confirmation, not yet reflected in a Figma frame per module (see `figma-links.md`).
+Each top-level item above maps 1:1 to the "Sidebar Section" rows in §2. Master Data is now **confirmed** (verified against shipped code, see above); the remaining sections' sub-items are still proposed screens pending confirmation.
