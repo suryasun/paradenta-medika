@@ -2670,6 +2670,31 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// docs/03-sad/21-module-system.md Section 5.4: "user-facing operational
+/// timeline" distinct from the compliance-grade `audit_logs` above --
+/// Epic AI/task-193's own scope is the read endpoint only; no module in
+/// this codebase writes to this table yet (a documented gap, not an
+/// oversight -- retrofitting every existing use case to also emit an
+/// activity-log entry is a codebase-wide change out of this task's
+/// bounds). Plain, non-FK `branchId`/`actorUserId` columns, matching the
+/// same convention already used for Reporting's dashboard_summaries.
+model ActivityLog {
+  id           String   @id @default(uuid()) @db.Char(36)
+  actorUserId  String?  @map("actor_user_id") @db.Char(36)
+  module       String   @db.VarChar(50)
+  action       String   @db.VarChar(50)
+  target       String?  @db.VarChar(200)
+  branchId     String?  @map("branch_id") @db.Char(36)
+  message      String   @db.VarChar(500)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([module])
+  @@index([actorUserId])
+  @@index([branchId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
 // ---------------------------------------------------------------------------
 // Reporting Module (docs/03-sad/20-module-report.md Section 5 Data Model,
 // Epic AG task-178-184). Reporting is a read-only projection layer over

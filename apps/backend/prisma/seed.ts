@@ -148,6 +148,8 @@ const PERMISSION_KEYS = [
   'reservation.read',
   'reservation.reschedule',
   'reservation.update',
+  'system.activity.read',
+  'system.audit.read',
   'system.permission.read',
   'system.role.manage',
   'system.role.permission.manage',

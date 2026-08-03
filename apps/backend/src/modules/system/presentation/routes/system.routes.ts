@@ -29,8 +29,15 @@ import { ListRolesUseCase } from '../../application/use-cases/ListRolesUseCase';
 import { CreateRoleUseCase } from '../../application/use-cases/CreateRoleUseCase';
 import { ListPermissionsUseCase } from '../../application/use-cases/ListPermissionsUseCase';
 import { AssignPermissionsToRoleUseCase } from '../../application/use-cases/AssignPermissionsToRoleUseCase';
+import { AuditLogQueryDto } from '../../application/dtos/AuditLogQueryDto';
+import { ActivityLogQueryDto } from '../../application/dtos/ActivityLogQueryDto';
+import { QueryAuditLogsUseCase } from '../../application/use-cases/QueryAuditLogsUseCase';
+import { QueryActivityLogsUseCase } from '../../application/use-cases/QueryActivityLogsUseCase';
+import { AuditLogRepository } from '../../infrastructure/repositories/AuditLogRepository';
+import { ActivityLogRepository } from '../../infrastructure/repositories/ActivityLogRepository';
 import { UserAdminController } from '../controllers/UserAdminController';
 import { RoleAdminController } from '../controllers/RoleAdminController';
+import { AuditController } from '../controllers/AuditController';
 
 /**
  * docs/06-tasks/task-015.md..task-020.md composition root, wired against
@@ -68,6 +75,12 @@ export function buildSystemModule(
     new AssignPermissionsToRoleUseCase(roleRepository, permissionRepository, rolePermissionRepository, auditService),
   );
 
+  // docs/06-tasks/task-192.md/task-193.md (Epic AI).
+  const auditController = new AuditController(
+    new QueryAuditLogsUseCase(new AuditLogRepository(), auditService),
+    new QueryActivityLogsUseCase(new ActivityLogRepository()),
+  );
+
   const router = Router();
   router.use('/system', authenticate);
 
@@ -98,6 +111,17 @@ export function buildSystemModule(
     requirePermission('system.role.permission.manage'),
     validateBody(AssignPermissionsRequestDto),
     roleController.assignPermissions,
+  );
+
+  // docs/06-tasks/task-192.md, UC-SYS-006: no update/delete route exists for
+  // audit_logs anywhere in this codebase, so SYS_AUDIT_IMMUTABLE is satisfied
+  // structurally -- there is no mutation endpoint to reject.
+  router.get('/system/audit-logs', requirePermission('system.audit.read'), validateQuery(AuditLogQueryDto), auditController.auditLogs);
+  router.get(
+    '/system/activity-logs',
+    requirePermission('system.activity.read'),
+    validateQuery(ActivityLogQueryDto),
+    auditController.activityLogs,
   );
 
   return router;

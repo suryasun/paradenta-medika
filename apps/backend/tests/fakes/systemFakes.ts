@@ -1,9 +1,11 @@
-import { Permission, Role, User } from '@prisma/client';
+import { ActivityLog, AuditLog, Permission, Role, User } from '@prisma/client';
 import { CreateUserAdminInput, IUserAdminRepository, PagedResult } from '../../src/modules/system/domain/repositories/IUserAdminRepository';
 import { CreateRoleInput, IRoleRepository } from '../../src/modules/system/domain/repositories/IRoleRepository';
 import { IPermissionRepository } from '../../src/modules/system/domain/repositories/IPermissionRepository';
 import { IRolePermissionRepository } from '../../src/modules/system/domain/repositories/IRolePermissionRepository';
 import { IUserRoleRepository } from '../../src/modules/system/domain/repositories/IUserRoleRepository';
+import { AuditLogFilter, IAuditLogRepository } from '../../src/modules/system/domain/repositories/IAuditLogRepository';
+import { ActivityLogFilter, IActivityLogRepository } from '../../src/modules/system/domain/repositories/IActivityLogRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { nextFakeUuid } from './uuid';
 
@@ -178,4 +180,39 @@ export function buildPermission(overrides: Partial<Permission> = {}): Permission
     description: null,
     ...overrides,
   };
+}
+
+export class FakeAuditLogRepository implements IAuditLogRepository {
+  logs: AuditLog[] = [];
+
+  async query(query: ListQueryDto, filter: AuditLogFilter): Promise<PagedResult<AuditLog>> {
+    const filtered = this.logs.filter(
+      (log) =>
+        (!filter.actorUserId || log.userId === filter.actorUserId) &&
+        (!filter.entity || log.entity === filter.entity) &&
+        (!filter.entityId || log.entityId === filter.entityId) &&
+        (!filter.action || log.action === filter.action) &&
+        (!filter.correlationId || log.correlationId === filter.correlationId) &&
+        (!filter.dateFrom || log.createdAt.getTime() >= filter.dateFrom.getTime()) &&
+        (!filter.dateTo || log.createdAt.getTime() <= filter.dateTo.getTime()),
+    );
+    return paginate(filtered, query);
+  }
+}
+
+export class FakeActivityLogRepository implements IActivityLogRepository {
+  logs: ActivityLog[] = [];
+
+  async query(query: ListQueryDto, filter: ActivityLogFilter): Promise<PagedResult<ActivityLog>> {
+    const filtered = this.logs.filter(
+      (log) =>
+        (!filter.module || log.module === filter.module) &&
+        (!filter.actorUserId || log.actorUserId === filter.actorUserId) &&
+        (!filter.branchId || log.branchId === filter.branchId) &&
+        (!filter.action || log.action === filter.action) &&
+        (!filter.dateFrom || log.createdAt.getTime() >= filter.dateFrom.getTime()) &&
+        (!filter.dateTo || log.createdAt.getTime() <= filter.dateTo.getTime()),
+    );
+    return paginate(filtered, query);
+  }
 }
