@@ -4,7 +4,7 @@ import { GetIncomeStatementReportUseCase } from '../../../finance/application/us
 import { GetStockCardReportUseCase } from '../../../warehouse/application/use-cases/GetStockCardReportUseCase';
 import { GetExpiryReportUseCase } from '../../../warehouse/application/use-cases/GetExpiryReportUseCase';
 import { DashboardMetricAssembler } from '../services/DashboardMetricAssembler';
-import { CLINICAL_DASHBOARD_METRICS } from '../services/MetricDefinitions';
+import { CLINICAL_DASHBOARD_METRICS, BILLING_REPORT_METRICS, BILLING_GLOBAL_METRICS } from '../services/MetricDefinitions';
 import { findReportDefinition } from '../services/ReportCatalog';
 import {
   ReportDatasetUnavailableException,
@@ -14,8 +14,6 @@ import {
   ReportScopeForbiddenException,
 } from '../../domain/exceptions/ReportExceptions';
 
-const BILLING_REPORT_METRICS = ['billing.collection', 'billing.outstanding'];
-const BILLING_GLOBAL_METRICS = ['billing.collection'];
 const RESERVATION_GLOBAL_METRICS = ['reservation.created.count', 'reservation.cancelled.count'];
 
 const MAX_SYNC_RANGE_DAYS = 90;

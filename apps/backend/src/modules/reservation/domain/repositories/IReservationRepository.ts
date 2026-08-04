@@ -54,4 +54,6 @@ export interface IReservationRepository {
   countByDate(date: Date, branchId?: string): Promise<number>;
   /** docs/06-tasks/task-060.md: raw rows for in-memory analytics aggregation over a date range. */
   findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string): Promise<Reservation[]>;
+  /** docs/06-tasks/task-225.md: reservations not yet in a terminal status (COMPLETED/CANCELLED/NO_SHOW), for the Branch Deactivation Guard. */
+  countOpenByBranch(branchId: string): Promise<number>;
 }

@@ -72,4 +72,18 @@ export class SystemParameterRepository implements ISystemParameterRepository {
   async findByKeyAndVersion(key: string, scopeType: string, scopeId: string | undefined, version: number): Promise<SystemParameter | null> {
     return prisma.systemParameter.findFirst({ where: { key, scopeType, scopeId: scopeId ?? null, version } });
   }
+
+  async listLatestByScope(scopeType: string, scopeId?: string): Promise<SystemParameter[]> {
+    const rows = await prisma.systemParameter.findMany({
+      where: { scopeType, scopeId: scopeId ?? null },
+      orderBy: { version: 'desc' },
+    });
+    const latestByKey = new Map<string, SystemParameter>();
+    for (const row of rows) {
+      if (!latestByKey.has(row.key)) {
+        latestByKey.set(row.key, row);
+      }
+    }
+    return [...latestByKey.values()];
+  }
 }

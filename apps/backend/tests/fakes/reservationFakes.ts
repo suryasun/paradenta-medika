@@ -139,6 +139,12 @@ export class FakeReservationRepository implements IReservationRepository {
         !r.deletedAt,
     );
   }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return [...this.reservations.values()].filter(
+      (r) => r.branchId === branchId && !r.deletedAt && !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(r.status),
+    ).length;
+  }
 }
 
 export class FakeDoctorScheduleRepository implements IDoctorScheduleRepository {

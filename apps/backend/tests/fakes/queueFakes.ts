@@ -123,6 +123,12 @@ export class FakeQueueRepository implements IQueueRepository {
     if (date) all = all.filter((q) => q.queueDate.getTime() === date.getTime());
     return all;
   }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return [...this.queues.values()].filter(
+      (q) => q.branchId === branchId && !['COMPLETED', 'CANCELLED', 'NO_SHOW', 'SKIPPED'].includes(q.status),
+    ).length;
+  }
 }
 
 export class FakeQueueHistoryRepository implements IQueueHistoryRepository {

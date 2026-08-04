@@ -4,7 +4,7 @@ import { correlationIdMiddleware } from '../../src/shared/logging/correlationId'
 import { errorHandlerMiddleware } from '../../src/shared/http/errorHandler';
 import { validateBody } from '../../src/shared/http/validateBody';
 import { validateQuery } from '../../src/shared/http/validateQuery';
-import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
+import { ListUsersQueryDto } from '../../src/modules/system/application/dtos/ListUsersQueryDto';
 import { CreateUserRequestDto } from '../../src/modules/system/application/dtos/CreateUserRequestDto';
 import { CreateUserUseCase } from '../../src/modules/system/application/use-cases/CreateUserUseCase';
 import { ListUsersUseCase } from '../../src/modules/system/application/use-cases/ListUsersUseCase';
@@ -18,7 +18,7 @@ import { UserAdminController } from '../../src/modules/system/presentation/contr
 import { requirePermission } from '../../src/modules/auth/presentation/middlewares/authorize';
 import { AuthenticatedContext } from '../../src/modules/auth/presentation/middlewares/authenticate';
 import { PasswordService } from '../../src/modules/auth/application/services/PasswordService';
-import { FakeUserAdminRepository, FakeRoleRepository, FakeUserRoleRepository } from '../fakes/systemFakes';
+import { FakeUserAdminRepository, FakeRoleRepository, FakeUserRoleRepository, FakeUserBranchRepository, buildRole } from '../fakes/systemFakes';
 import { FakeAuditService, FakeSessionRepository } from '../fakes/authFakes';
 import { testConfig } from '../fakes/testConfig';
 
@@ -26,13 +26,20 @@ function buildApp(auth?: AuthenticatedContext) {
   const userAdminRepository = new FakeUserAdminRepository();
   const roleRepository = new FakeRoleRepository();
   const userRoleRepository = new FakeUserRoleRepository(roleRepository);
+  const userBranchRepository = new FakeUserBranchRepository();
   const sessionRepository = new FakeSessionRepository();
   const auditService = new FakeAuditService();
   const passwordService = new PasswordService(testConfig());
 
+  if (auth) {
+    const adminRole = buildRole({ roleCode: 'ADMINISTRATOR', isCrossBranch: true });
+    roleRepository.seed(adminRole);
+    userRoleRepository.assignRoles(auth.userId, [adminRole.id]);
+  }
+
   const controller = new UserAdminController(
     new CreateUserUseCase(userAdminRepository, roleRepository, userRoleRepository, passwordService, auditService),
-    new ListUsersUseCase(userAdminRepository),
+    new ListUsersUseCase(userAdminRepository, userRoleRepository, userBranchRepository),
     new GetUserUseCase(userAdminRepository, userRoleRepository),
     new UpdateUserUseCase(userAdminRepository, auditService),
     new ActivateUserUseCase(userAdminRepository, auditService),
@@ -49,7 +56,7 @@ function buildApp(auth?: AuthenticatedContext) {
   router.get(
     '/system/users',
     requirePermission('system.user.read', auditService),
-    validateQuery(ListQueryDto),
+    validateQuery(ListUsersQueryDto),
     controller.list,
   );
   router.post(

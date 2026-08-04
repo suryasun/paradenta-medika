@@ -124,6 +124,10 @@ export class FakeAccountRepository implements IAccountRepository {
     account.updatedAt = new Date();
     return account;
   }
+
+  async listTemplateAccounts(): Promise<Account[]> {
+    return [...this.accounts.values()].filter((a) => a.branchId === null);
+  }
 }
 
 export class FakeJournalRepository implements IJournalRepository {
@@ -327,6 +331,10 @@ export class FakeJournalRepository implements IJournalRepository {
 
   async findByNumber(journalNo: string): Promise<Journal | null> {
     return [...this.journals.values()].find((j) => j.journalNo === journalNo) ?? null;
+  }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return [...this.journals.values()].filter((j) => j.branchId === branchId && j.status === 'DRAFT').length;
   }
 }
 

@@ -12,15 +12,22 @@ import { CreateRoleRequestDto } from '../../application/dtos/CreateRoleRequestDt
 import { AssignPermissionsRequestDto } from '../../application/dtos/AssignPermissionsRequestDto';
 import { AssignRoleRequestDto } from '../../application/dtos/AssignRoleRequestDto';
 import { RevokeSessionsRequestDto } from '../../application/dtos/RevokeSessionsRequestDto';
+import { AssignUserBranchRequestDto } from '../../application/dtos/AssignUserBranchRequestDto';
+import { ListUsersQueryDto } from '../../application/dtos/ListUsersQueryDto';
 import { UserAdminRepository } from '../../infrastructure/repositories/UserAdminRepository';
 import { RoleRepository } from '../../infrastructure/repositories/RoleRepository';
 import { PermissionRepository } from '../../infrastructure/repositories/PermissionRepository';
 import { RolePermissionRepository } from '../../infrastructure/repositories/RolePermissionRepository';
 import { UserRoleRepository } from '../../infrastructure/repositories/UserRoleRepository';
+import { UserBranchRepository } from '../../infrastructure/repositories/UserBranchRepository';
+import { BranchRepository } from '../../../master-data/infrastructure/repositories/BranchRepository';
 import { CreateUserUseCase } from '../../application/use-cases/CreateUserUseCase';
 import { ListUsersUseCase } from '../../application/use-cases/ListUsersUseCase';
 import { GetUserUseCase } from '../../application/use-cases/GetUserUseCase';
 import { GetRolePermissionsUseCase } from '../../application/use-cases/GetRolePermissionsUseCase';
+import { GetRoleBranchMatrixUseCase } from '../../application/use-cases/GetRoleBranchMatrixUseCase';
+import { UpdateRoleBranchPolicyUseCase } from '../../application/use-cases/UpdateRoleBranchPolicyUseCase';
+import { UpdateRoleBranchPolicyRequestDto } from '../../application/dtos/UpdateRoleBranchPolicyRequestDto';
 import { UpdateUserUseCase } from '../../application/use-cases/UpdateUserUseCase';
 import { ActivateUserUseCase } from '../../application/use-cases/ActivateUserUseCase';
 import { DeactivateUserUseCase } from '../../application/use-cases/DeactivateUserUseCase';
@@ -36,7 +43,10 @@ import { QueryAuditLogsUseCase } from '../../application/use-cases/QueryAuditLog
 import { QueryActivityLogsUseCase } from '../../application/use-cases/QueryActivityLogsUseCase';
 import { AuditLogRepository } from '../../infrastructure/repositories/AuditLogRepository';
 import { ActivityLogRepository } from '../../infrastructure/repositories/ActivityLogRepository';
+import { AssignUserBranchUseCase } from '../../application/use-cases/AssignUserBranchUseCase';
+import { ListUserBranchesUseCase } from '../../application/use-cases/ListUserBranchesUseCase';
 import { UserAdminController } from '../controllers/UserAdminController';
+import { UserBranchController } from '../controllers/UserBranchController';
 import { RoleAdminController } from '../controllers/RoleAdminController';
 import { AuditController } from '../controllers/AuditController';
 import { CreateNotificationTemplateRequestDto, PreviewNotificationTemplateRequestDto } from '../../application/dtos/NotificationTemplateRequestDto';
@@ -69,6 +79,7 @@ import { UpdateFeatureFlagUseCase } from '../../application/use-cases/UpdateFeat
 import { CreateMenuUseCase } from '../../application/use-cases/CreateMenuUseCase';
 import { ListMenusUseCase } from '../../application/use-cases/ListMenusUseCase';
 import { UpdateMenuPermissionsUseCase } from '../../application/use-cases/UpdateMenuPermissionsUseCase';
+import { GetBranchConfigurationUseCase } from '../../application/use-cases/GetBranchConfigurationUseCase';
 import { SystemParameterRepository } from '../../infrastructure/repositories/SystemParameterRepository';
 import { ConfigurationChangeRequestRepository } from '../../infrastructure/repositories/ConfigurationChangeRequestRepository';
 import { FeatureFlagRepository } from '../../infrastructure/repositories/FeatureFlagRepository';
@@ -99,11 +110,13 @@ export function buildSystemModule(
   const permissionRepository = new PermissionRepository();
   const rolePermissionRepository = new RolePermissionRepository();
   const userRoleRepository = new UserRoleRepository();
+  const userBranchRepository = new UserBranchRepository();
+  const branchRepository = new BranchRepository();
   const passwordService = new PasswordService(config);
 
   const userController = new UserAdminController(
     new CreateUserUseCase(userAdminRepository, roleRepository, userRoleRepository, passwordService, auditService),
-    new ListUsersUseCase(userAdminRepository),
+    new ListUsersUseCase(userAdminRepository, userRoleRepository, userBranchRepository),
     new GetUserUseCase(userAdminRepository, userRoleRepository),
     new UpdateUserUseCase(userAdminRepository, auditService),
     new ActivateUserUseCase(userAdminRepository, auditService),
@@ -112,12 +125,20 @@ export function buildSystemModule(
     new RevokeUserSessionsUseCase(userAdminRepository, sessionRepository, auditService),
   );
 
+  // docs/06-tasks/task-210.md/task-211.md (Phase 4 Epic BA).
+  const userBranchController = new UserBranchController(
+    new AssignUserBranchUseCase(userAdminRepository, branchRepository, userBranchRepository, sessionRepository, auditService),
+    new ListUserBranchesUseCase(userAdminRepository, userBranchRepository),
+  );
+
   const roleController = new RoleAdminController(
     new ListRolesUseCase(roleRepository),
     new CreateRoleUseCase(roleRepository, auditService),
     new ListPermissionsUseCase(permissionRepository),
     new AssignPermissionsToRoleUseCase(roleRepository, permissionRepository, rolePermissionRepository, auditService),
     new GetRolePermissionsUseCase(roleRepository, rolePermissionRepository),
+    new GetRoleBranchMatrixUseCase(roleRepository, branchRepository, userRoleRepository, userBranchRepository),
+    new UpdateRoleBranchPolicyUseCase(roleRepository, auditService),
   );
 
   // docs/06-tasks/task-192.md/task-193.md (Epic AI).
@@ -161,6 +182,7 @@ export function buildSystemModule(
     new CreateMenuUseCase(menuRepository, auditService),
     new ListMenusUseCase(menuRepository),
     new UpdateMenuPermissionsUseCase(menuRepository, permissionRepository, auditService),
+    new GetBranchConfigurationUseCase(branchRepository, systemParameterRepository),
   );
 
   // docs/06-tasks/task-207.md..task-209.md (Epic AL); GetOperationsHealthUseCase
@@ -177,7 +199,7 @@ export function buildSystemModule(
   const router = Router();
   router.use('/system', authenticate);
 
-  router.get('/system/users', requirePermission('system.user.read'), validateQuery(ListQueryDto), userController.list);
+  router.get('/system/users', requirePermission('system.user.read'), validateQuery(ListUsersQueryDto), userController.list);
   router.post('/system/users', requirePermission('system.user.manage'), validateBody(CreateUserRequestDto), userController.create);
   router.get('/system/users/:userId', requirePermission('system.user.read'), userController.detail);
   router.patch('/system/users/:userId', requirePermission('system.user.manage'), validateBody(UpdateUserRequestDto), userController.update);
@@ -197,6 +219,17 @@ export function buildSystemModule(
   );
 
   router.get('/system/roles', requirePermission('system.role.read'), validateQuery(ListQueryDto), roleController.listRoles);
+  // docs/06-tasks/task-215.md (Phase 4 Epic BB). Convention-derived path,
+  // not literal in the SAD's Section 6.1 table.
+  router.get('/system/roles/branch-matrix', requirePermission('system.role.read'), roleController.getRoleBranchMatrix);
+  // docs/06-tasks/task-217.md (Phase 4 Epic BC). Convention-derived path,
+  // not literal in the SAD.
+  router.patch(
+    '/system/roles/:roleId/branch-policy',
+    requirePermission('system.role.branch-policy.manage'),
+    validateBody(UpdateRoleBranchPolicyRequestDto),
+    roleController.updateBranchPolicy,
+  );
   router.post('/system/roles', requirePermission('system.role.manage'), validateBody(CreateRoleRequestDto), roleController.createRole);
   router.get('/system/permissions', requirePermission('system.permission.read'), validateQuery(ListQueryDto), roleController.listPermissions);
   // Added post-launch (docs/03-sad/21-module-system.md Section 6.1
@@ -215,6 +248,19 @@ export function buildSystemModule(
     validateBody(AssignPermissionsRequestDto),
     roleController.assignPermissions,
   );
+
+  // docs/06-tasks/task-210.md/task-211.md (Phase 4 Epic BA). The GET route
+  // is not gated by requirePermission -- task-211's own AC: "A user can
+  // always read their own branch list regardless of system.user.read" --
+  // requirePermission has no self-bypass, so that rule is enforced inside
+  // ListUserBranchesUseCase instead.
+  router.post(
+    '/system/users/:userId/branches',
+    requirePermission('system.user.branch.manage'),
+    validateBody(AssignUserBranchRequestDto),
+    userBranchController.assign,
+  );
+  router.get('/system/users/:userId/branches', userBranchController.list);
 
   // docs/06-tasks/task-192.md, UC-SYS-006: no update/delete route exists for
   // audit_logs anywhere in this codebase, so SYS_AUDIT_IMMUTABLE is satisfied
@@ -275,6 +321,13 @@ export function buildSystemModule(
     requirePermission('system.parameter.read'),
     validateQuery(ListQueryDto),
     approvalWorkflowController.listParameterVersions,
+  );
+  // docs/06-tasks/task-213.md (Phase 4 Epic BA). Convention-derived path,
+  // not literal in the SAD's Section 6.2 endpoint table.
+  router.get(
+    '/system/branches/:branchId/configuration',
+    requirePermission('system.parameter.read'),
+    approvalWorkflowController.getBranchConfiguration,
   );
   router.post(
     '/system/parameters/:parameterKey/change-requests',

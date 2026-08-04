@@ -28,4 +28,6 @@ export interface ISystemParameterRepository {
   findLatest(key: string, scopeType: string, scopeId?: string): Promise<SystemParameter | null>;
   findVersions(key: string, query: ListQueryDto): Promise<PagedResult<SystemParameter>>;
   findByKeyAndVersion(key: string, scopeType: string, scopeId: string | undefined, version: number): Promise<SystemParameter | null>;
+  /** docs/06-tasks/task-213.md: the active (highest-version) row for every distinct key at this scope -- used to aggregate a branch's full effective configuration. */
+  listLatestByScope(scopeType: string, scopeId?: string): Promise<SystemParameter[]>;
 }

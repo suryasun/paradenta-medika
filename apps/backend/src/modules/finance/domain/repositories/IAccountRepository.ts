@@ -38,4 +38,6 @@ export interface IAccountRepository {
   findByBranchAndCode(branchId: string | null, code: string): Promise<Account | null>;
   update(id: string, input: UpdateAccountInput): Promise<Account>;
   deactivate(id: string, updatedBy: string): Promise<Account>;
+  /** docs/06-tasks/task-224.md: every shared-template (branchId=null) account, mirrored into a newly bootstrapped branch's starter Chart of Accounts. */
+  listTemplateAccounts(): Promise<Account[]>;
 }

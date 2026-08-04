@@ -68,4 +68,8 @@ export class AccountRepository implements IAccountRepository {
   async deactivate(id: string, updatedBy: string): Promise<Account> {
     return prisma.account.update({ where: { id }, data: { isActive: false, updatedBy } });
   }
+
+  async listTemplateAccounts(): Promise<Account[]> {
+    return prisma.account.findMany({ where: { branchId: null } });
+  }
 }

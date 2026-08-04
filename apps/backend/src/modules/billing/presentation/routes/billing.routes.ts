@@ -22,6 +22,7 @@ import { VisitTreatmentRepository } from '../../../emr/infrastructure/repositori
 import { TreatmentRepository } from '../../../master-data/infrastructure/repositories/TreatmentRepository';
 import { PaymentMethodRepository } from '../../../master-data/infrastructure/repositories/PaymentMethodRepository';
 import { EMR_FINISHED_EVENT, EmrFinishedPayload } from '../../../emr/domain/events/EmrEvents';
+import { BranchIdExtractor } from '../../../system/infrastructure/middlewares/branchScopeGuard';
 
 /**
  * docs/06-tasks/task-054.md..task-058.md composition root. Base path
@@ -42,6 +43,7 @@ export function buildBillingModule(
   eventBus: IEventBus,
   authenticate: RequestHandler,
   requirePermission: (code: string) => RequestHandler,
+  branchScopeGuard: (getTargetBranchId: BranchIdExtractor) => RequestHandler,
 ): Router {
   const invoiceRepository = new InvoiceRepository();
   const invoiceItemRepository = new InvoiceItemRepository();
@@ -85,7 +87,15 @@ export function buildBillingModule(
   const router = Router();
   router.use(authenticate);
 
-  router.get('/billing/invoices', requirePermission('billing.invoice.read'), validateQuery(ListInvoiceQueryDto), invoiceController.list);
+  // docs/06-tasks/task-216.md retrofit demonstration: rejects an
+  // out-of-scope branchId query filter for non-cross-branch requesters.
+  router.get(
+    '/billing/invoices',
+    requirePermission('billing.invoice.read'),
+    validateQuery(ListInvoiceQueryDto),
+    branchScopeGuard((req) => (req.query as unknown as ListInvoiceQueryDto).branchId),
+    invoiceController.list,
+  );
   router.post(
     '/billing/invoices',
     requirePermission('billing.invoice.create'),

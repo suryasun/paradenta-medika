@@ -207,4 +207,8 @@ export class JournalRepository implements IJournalRepository {
   async findByNumber(journalNo: string): Promise<Journal | null> {
     return prisma.journal.findUnique({ where: { journalNo } });
   }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return prisma.journal.count({ where: { branchId, status: 'DRAFT' } });
+  }
 }

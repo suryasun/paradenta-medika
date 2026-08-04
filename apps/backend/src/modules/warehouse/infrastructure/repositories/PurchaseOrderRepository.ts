@@ -140,4 +140,10 @@ export class PurchaseOrderRepository implements IPurchaseOrderRepository {
   async count(): Promise<number> {
     return prisma.purchaseOrder.count();
   }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return prisma.purchaseOrder.count({
+      where: { branchId, status: { notIn: ['RECEIVED', 'CANCELLED', 'REJECTED'] } },
+    });
+  }
 }

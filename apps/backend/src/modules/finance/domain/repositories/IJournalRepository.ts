@@ -79,4 +79,6 @@ export interface IJournalRepository {
   listPostedLinesByAccount(accountId: string, query: ListQueryDto): Promise<PagedResult<PostedJournalLine>>;
   count(): Promise<number>;
   findByNumber(journalNo: string): Promise<Journal | null>;
+  /** docs/06-tasks/task-225.md: unposted (DRAFT) journals for a branch, for the Branch Deactivation Guard. */
+  countOpenByBranch(branchId: string): Promise<number>;
 }

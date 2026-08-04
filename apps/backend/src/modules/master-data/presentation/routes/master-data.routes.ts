@@ -1,6 +1,8 @@
 import { RequestHandler, Router } from 'express';
 import { IAuditService } from '../../../system/domain/services/IAuditService';
 import { IUserRepository } from '../../../auth/domain/repositories/IUserRepository';
+import { IEventBus } from '../../../../shared/events/EventBus';
+import { BRANCH_CREATED_EVENT, BranchCreatedPayload } from '../../domain/events/MasterDataEvents';
 import { validateBody } from '../../../../shared/http/validateBody';
 import { validateQuery } from '../../../../shared/http/validateQuery';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
@@ -15,6 +17,20 @@ import { TreatmentCategoryRepository } from '../../infrastructure/repositories/T
 import { TreatmentRepository } from '../../infrastructure/repositories/TreatmentRepository';
 import { PaymentMethodRepository } from '../../infrastructure/repositories/PaymentMethodRepository';
 import { ToothConditionRepository } from '../../infrastructure/repositories/ToothConditionRepository';
+import { MasterDataTemplateRepository } from '../../infrastructure/repositories/MasterDataTemplateRepository';
+import { MasterDataTemplateBranchLinkRepository } from '../../infrastructure/repositories/MasterDataTemplateBranchLinkRepository';
+import { ReservationRepository } from '../../../reservation/infrastructure/repositories/ReservationRepository';
+import { QueueRepository } from '../../../queue/infrastructure/repositories/QueueRepository';
+import { InvoiceRepository } from '../../../billing/infrastructure/repositories/InvoiceRepository';
+import { PurchaseOrderRepository } from '../../../warehouse/infrastructure/repositories/PurchaseOrderRepository';
+import { GoodsReceiptRepository } from '../../../warehouse/infrastructure/repositories/GoodsReceiptRepository';
+import { JournalRepository } from '../../../finance/infrastructure/repositories/JournalRepository';
+import { CheckBranchHasOpenTransactionsUseCase } from '../../application/use-cases/CheckBranchHasOpenTransactionsUseCase';
+import { BranchHasOpenTransactionsException } from '../../domain/exceptions/MasterDataExceptions';
+import { WarehouseLocationRepository } from '../../../warehouse/infrastructure/repositories/WarehouseLocationRepository';
+import { AccountRepository } from '../../../finance/infrastructure/repositories/AccountRepository';
+import { SystemParameterRepository } from '../../../system/infrastructure/repositories/SystemParameterRepository';
+import { BootstrapNewBranchUseCase } from '../../../system/application/use-cases/BootstrapNewBranchUseCase';
 
 import { CreateClinicRequestDto, UpdateClinicRequestDto } from '../../application/dtos/ClinicRequestDto';
 import { CreateBranchRequestDto, UpdateBranchRequestDto } from '../../application/dtos/BranchRequestDto';
@@ -23,6 +39,14 @@ import { CreateTreatmentCategoryRequestDto, UpdateTreatmentCategoryRequestDto } 
 import { CreateTreatmentRequestDto, UpdateTreatmentRequestDto } from '../../application/dtos/TreatmentRequestDto';
 import { CreatePaymentMethodRequestDto, UpdatePaymentMethodRequestDto } from '../../application/dtos/PaymentMethodRequestDto';
 import { CreateToothConditionRequestDto, UpdateToothConditionRequestDto } from '../../application/dtos/ToothConditionRequestDto';
+import {
+  CreateMasterDataTemplateRequestDto,
+  UpdateMasterDataTemplateRequestDto,
+  PushMasterDataTemplateRequestDto,
+} from '../../application/dtos/MasterDataTemplateRequestDto';
+import { PushMasterDataTemplateUseCase } from '../../application/use-cases/PushMasterDataTemplateUseCase';
+import { GetMasterDataDriftReportUseCase } from '../../application/use-cases/GetMasterDataDriftReportUseCase';
+import { MasterDataTemplateController } from '../controllers/MasterDataTemplateController';
 
 /**
  * docs/06-tasks/task-021.md..task-026.md composition root. Endpoint paths
@@ -37,6 +61,7 @@ export function buildMasterDataModule(
   userRepository: IUserRepository,
   authenticate: RequestHandler,
   requirePermission: (code: string) => RequestHandler,
+  eventBus: IEventBus,
 ): Router {
   const router = Router();
   router.use(authenticate);
@@ -58,6 +83,15 @@ export function buildMasterDataModule(
 
   // --- Branch (task-022) ---
   const branchRepository = new BranchRepository();
+  // docs/06-tasks/task-225.md (Phase 4 Epic BH): Branch Deactivation Guard.
+  const checkBranchHasOpenTransactionsUseCase = new CheckBranchHasOpenTransactionsUseCase(
+    new ReservationRepository(),
+    new QueueRepository(),
+    new InvoiceRepository(),
+    new PurchaseOrderRepository(),
+    new GoodsReceiptRepository(),
+    new JournalRepository(),
+  );
   const branchUseCases = buildCrudUseCases('Branch', branchRepository, auditService, {
     validateCreate: async (input) => {
       if (!(await clinicRepository.findById(input.clinicId))) {
@@ -67,12 +101,54 @@ export function buildMasterDataModule(
         throw new MasterDataCodeExistsException('Branch');
       }
     },
+    validateUpdate: async (id, input) => {
+      if (input.isActive === false) {
+        const check = await checkBranchHasOpenTransactionsUseCase.execute(id);
+        if (check.hasOpenTransactions) {
+          throw new BranchHasOpenTransactionsException(check.blockedByModules);
+        }
+      }
+    },
+    // docs/06-tasks/task-224.md + docs/04-ai-contract/07-module-contract.md
+    // MOD-018: publishes BranchCreated so BootstrapNewBranchUseCase can
+    // provision the new branch's defaults.
+    onCreated: async (entity) => {
+      const branch = entity as { id: string; clinicId: string; branchCode: string };
+      const payload: BranchCreatedPayload = {
+        event: BRANCH_CREATED_EVENT,
+        branchId: branch.id,
+        clinicId: branch.clinicId,
+        branchCode: branch.branchCode,
+        occurredAt: new Date().toISOString(),
+      };
+      await eventBus.publish(BRANCH_CREATED_EVENT, payload);
+    },
   });
   const branchController = buildCrudController(branchUseCases, 'Branch');
   router.get('/branches', requirePermission('masterdata.branch.read'), validateQuery(ListQueryDto), branchController.list);
   router.post('/branches', requirePermission('masterdata.branch.manage'), validateBody(CreateBranchRequestDto), branchController.create);
   router.get('/branches/:id', requirePermission('masterdata.branch.read'), branchController.detail);
   router.put('/branches/:id', requirePermission('masterdata.branch.manage'), validateBody(UpdateBranchRequestDto), branchController.update);
+
+  // docs/06-tasks/task-224.md (Phase 4 Epic BH): provisions a new branch's
+  // defaults across Warehouse/Finance/System. Wrapped in try/catch per the
+  // established EMR_FINISHED_EVENT/PATIENT_CHECKED_IN_EVENT consumer
+  // pattern -- a bootstrap failure must never propagate back through the
+  // shared event bus and fail the Branch-creation request that triggered it.
+  const bootstrapNewBranchUseCase = new BootstrapNewBranchUseCase(
+    new WarehouseLocationRepository(),
+    new AccountRepository(),
+    new SystemParameterRepository(),
+    auditService,
+  );
+  eventBus.subscribe<BranchCreatedPayload>(BRANCH_CREATED_EVENT, async (payload) => {
+    try {
+      await bootstrapNewBranchUseCase.execute(payload);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('BootstrapNewBranchUseCase failed for branch', payload.branchId, error);
+    }
+  });
 
   // --- Doctor (task-023) ---
   const doctorRepository = new DoctorRepository();
@@ -219,6 +295,48 @@ export function buildMasterDataModule(
     requirePermission('masterdata.tooth-condition.manage'),
     validateBody(UpdateToothConditionRequestDto),
     toothConditionController.update,
+  );
+
+  // --- Master Data Template (task-221/222/223, Phase 4 Epic BG) ---
+  const masterDataTemplateRepository = new MasterDataTemplateRepository();
+  const masterDataTemplateBranchLinkRepository = new MasterDataTemplateBranchLinkRepository();
+  const masterDataTemplateUseCases = buildCrudUseCases('MasterDataTemplate', masterDataTemplateRepository, auditService);
+  const masterDataTemplateCrudController = buildCrudController(masterDataTemplateUseCases, 'MasterDataTemplate', 'templateId');
+  const masterDataTemplateController = new MasterDataTemplateController(
+    new PushMasterDataTemplateUseCase(masterDataTemplateRepository, masterDataTemplateBranchLinkRepository, branchRepository, auditService),
+    new GetMasterDataDriftReportUseCase(masterDataTemplateRepository, masterDataTemplateBranchLinkRepository),
+  );
+  router.get(
+    '/masterdata/templates',
+    requirePermission('masterdata.template.read'),
+    validateQuery(ListQueryDto),
+    masterDataTemplateCrudController.list,
+  );
+  router.post(
+    '/masterdata/templates',
+    requirePermission('masterdata.template.manage'),
+    validateBody(CreateMasterDataTemplateRequestDto),
+    masterDataTemplateCrudController.create,
+  );
+  router.get('/masterdata/templates/:templateId', requirePermission('masterdata.template.read'), masterDataTemplateCrudController.detail);
+  router.put(
+    '/masterdata/templates/:templateId',
+    requirePermission('masterdata.template.manage'),
+    validateBody(UpdateMasterDataTemplateRequestDto),
+    masterDataTemplateCrudController.update,
+  );
+  // docs/06-tasks/task-222.md: convention-derived path, no literal SAD spec.
+  router.post(
+    '/masterdata/templates/:templateId/push',
+    requirePermission('masterdata.template.manage'),
+    validateBody(PushMasterDataTemplateRequestDto),
+    masterDataTemplateController.push,
+  );
+  // docs/06-tasks/task-223.md: convention-derived path, no literal SAD spec.
+  router.get(
+    '/masterdata/templates/:templateId/drift',
+    requirePermission('masterdata.template.manage'),
+    masterDataTemplateController.drift,
   );
 
   return router;

@@ -127,3 +127,16 @@ export const CLINICAL_DASHBOARD_METRICS = ['emr.visit.completed.count'];
 export const FINANCE_DASHBOARD_METRICS = ['finance.posted-revenue', 'finance.posted-expense', 'billing.outstanding'];
 
 export const WAREHOUSE_DASHBOARD_METRICS = ['warehouse.low-stock.count'];
+
+export const BILLING_REPORT_METRICS = ['billing.collection', 'billing.outstanding'];
+export const BILLING_GLOBAL_METRICS = ['billing.collection'];
+
+/** docs/06-tasks/task-219.md: "the same metric set per branch side-by-side for comparison" -- a curated cross-domain set, not any one existing dashboard's own set. */
+export const BRANCH_COMPARISON_METRICS = [
+  'queue.count.WAITING',
+  'queue.count.COMPLETED',
+  'billing.collection',
+  'billing.outstanding',
+  'finance.posted-revenue',
+];
+export const BRANCH_COMPARISON_GLOBAL_METRICS: string[] = [];

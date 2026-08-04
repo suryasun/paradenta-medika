@@ -13,6 +13,8 @@ export interface ActorContext {
 export interface CrudUseCaseHooks<TCreate, TUpdate> {
   validateCreate?: (input: TCreate) => Promise<void>;
   validateUpdate?: (id: string, input: TUpdate) => Promise<void>;
+  /** docs/06-tasks/task-224.md: fired after a successful create + audit record, e.g. to publish a domain event. Used only by Branch's wiring; every other entity using this factory leaves it unset. */
+  onCreated?: (entity: unknown, actor: ActorContext) => Promise<void>;
 }
 
 export interface CrudUseCases<T, TCreate, TUpdate> {
@@ -53,6 +55,9 @@ export function buildCrudUseCases<T extends { id: string }, TCreate, TUpdate>(
         input as unknown as Record<string, unknown>,
         toAuditContext(actor),
       );
+      if (hooks.onCreated) {
+        await hooks.onCreated(entity, actor);
+      }
       return entity;
     },
 

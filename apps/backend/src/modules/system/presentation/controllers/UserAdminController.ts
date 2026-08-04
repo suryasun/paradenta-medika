@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
 import { sendSuccess } from '../../../../shared/http/ApiResponse';
 import { buildPaginationMeta } from '../../../../shared/http/pagination';
-import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { AuthenticationException } from '../../../../shared/http/exceptions';
+import { ListUsersQueryDto } from '../../application/dtos/ListUsersQueryDto';
 import { CreateUserRequestDto } from '../../application/dtos/CreateUserRequestDto';
 import { UpdateUserRequestDto } from '../../application/dtos/UpdateUserRequestDto';
 import { AssignRoleRequestDto } from '../../application/dtos/AssignRoleRequestDto';
@@ -31,8 +31,9 @@ export class UserAdminController {
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const query = req.query as unknown as ListQueryDto;
-      const { items, total } = await this.listUsersUseCase.execute(query);
+      if (!req.auth) throw new AuthenticationException();
+      const query = req.query as unknown as ListUsersQueryDto;
+      const { items, total } = await this.listUsersUseCase.execute({ query, branchId: query.branchId, requesterUserId: req.auth.userId });
       sendSuccess(res, items.map((user) => toUserAdminResponse(user)), 'Users retrieved', 200, buildPaginationMeta(query.page, query.limit, total));
     } catch (error) {
       next(error);

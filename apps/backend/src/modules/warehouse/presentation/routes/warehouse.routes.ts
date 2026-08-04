@@ -4,6 +4,7 @@ import { IEventBus } from '../../../../shared/events/EventBus';
 import { validateBody } from '../../../../shared/http/validateBody';
 import { validateQuery } from '../../../../shared/http/validateQuery';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
+import { BranchIdExtractor } from '../../../system/infrastructure/middlewares/branchScopeGuard';
 import { CreateItemRequestDto, UpdateItemRequestDto } from '../../application/dtos/ItemRequestDto';
 import { CreateSupplierRequestDto } from '../../application/dtos/SupplierRequestDto';
 import { CreateWarehouseLocationRequestDto } from '../../application/dtos/WarehouseLocationRequestDto';
@@ -119,6 +120,7 @@ export function buildWarehouseModule(
   eventBus: IEventBus,
   authenticate: RequestHandler,
   requirePermission: (code: string) => RequestHandler,
+  branchScopeGuard: (getTargetBranchId: BranchIdExtractor) => RequestHandler,
 ): Router {
   const itemRepository = new ItemRepository();
   const supplierRepository = new SupplierRepository();
@@ -321,10 +323,14 @@ export function buildWarehouseModule(
     validateQuery(ListQueryDto),
     warehouseLocationController.list,
   );
+  // docs/06-tasks/task-216.md retrofit demonstration: rejects a new
+  // warehouse location targeting an out-of-scope branch for non-cross-branch
+  // requesters.
   router.post(
     '/warehouse/warehouses',
     requirePermission('warehouse.location.manage'),
     validateBody(CreateWarehouseLocationRequestDto),
+    branchScopeGuard((req) => (req.body as CreateWarehouseLocationRequestDto).branchId),
     warehouseLocationController.create,
   );
 

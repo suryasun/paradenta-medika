@@ -39,4 +39,8 @@ export class RoleRepository implements IRoleRepository {
   async findByCode(roleCode: string): Promise<Role | null> {
     return prisma.role.findUnique({ where: { roleCode } });
   }
+
+  async updateBranchPolicy(id: string, isCrossBranch: boolean): Promise<Role> {
+    return prisma.role.update({ where: { id }, data: { isCrossBranch } });
+  }
 }

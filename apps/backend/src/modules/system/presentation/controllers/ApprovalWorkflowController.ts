@@ -19,6 +19,7 @@ import { UpdateFeatureFlagUseCase } from '../../application/use-cases/UpdateFeat
 import { CreateMenuUseCase } from '../../application/use-cases/CreateMenuUseCase';
 import { ListMenusUseCase } from '../../application/use-cases/ListMenusUseCase';
 import { UpdateMenuPermissionsUseCase } from '../../application/use-cases/UpdateMenuPermissionsUseCase';
+import { GetBranchConfigurationUseCase } from '../../application/use-cases/GetBranchConfigurationUseCase';
 
 export class ApprovalWorkflowController {
   constructor(
@@ -34,6 +35,7 @@ export class ApprovalWorkflowController {
     private readonly createMenuUseCase: CreateMenuUseCase,
     private readonly listMenusUseCase: ListMenusUseCase,
     private readonly updateMenuPermissionsUseCase: UpdateMenuPermissionsUseCase,
+    private readonly getBranchConfigurationUseCase: GetBranchConfigurationUseCase,
   ) {}
 
   private auditContext(req: Request) {
@@ -64,6 +66,15 @@ export class ApprovalWorkflowController {
       const query = req.query as unknown as ListQueryDto;
       const { items, total } = await this.listParameterVersionsUseCase.execute(req.params.parameterKey, query);
       sendSuccess(res, items, 'Parameter versions retrieved', 200, buildPaginationMeta(query.page, query.limit, total));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getBranchConfiguration = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const entries = await this.getBranchConfigurationUseCase.execute(req.params.branchId);
+      sendSuccess(res, entries, 'Branch configuration retrieved');
     } catch (error) {
       next(error);
     }

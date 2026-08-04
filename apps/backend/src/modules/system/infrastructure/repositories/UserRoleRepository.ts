@@ -14,4 +14,9 @@ export class UserRoleRepository implements IUserRoleRepository {
     const userRoles = await prisma.userRole.findMany({ where: { userId }, include: { role: true } });
     return userRoles.map((ur) => ur.role);
   }
+
+  async listAllAssignments(): Promise<{ userId: string; roleId: string }[]> {
+    const userRoles = await prisma.userRole.findMany({ select: { userId: true, roleId: true } });
+    return userRoles;
+  }
 }

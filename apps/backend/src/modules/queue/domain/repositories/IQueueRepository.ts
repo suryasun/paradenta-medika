@@ -34,4 +34,6 @@ export interface IQueueRepository {
   countByStatus(branchId?: string, date?: Date): Promise<Record<string, number>>;
   countByDoctor(branchId?: string, date?: Date): Promise<Array<{ doctorId: string; count: number }>>;
   findCompletedForMetrics(branchId?: string, date?: Date): Promise<Queue[]>;
+  /** docs/06-tasks/task-225.md: queue entries not yet in a terminal status, for the Branch Deactivation Guard. */
+  countOpenByBranch(branchId: string): Promise<number>;
 }

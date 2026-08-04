@@ -1,6 +1,15 @@
-import { Branch, Clinic, Doctor, ToothCondition } from '@prisma/client';
+import { Branch, Clinic, Doctor, MasterDataTemplate, MasterDataTemplateBranchLink, ToothCondition } from '@prisma/client';
 import { CreateClinicInput, IClinicRepository, UpdateClinicInput } from '../../src/modules/master-data/domain/repositories/IClinicRepository';
 import { CreateBranchInput, IBranchRepository, UpdateBranchInput } from '../../src/modules/master-data/domain/repositories/IBranchRepository';
+import {
+  CreateMasterDataTemplateInput,
+  IMasterDataTemplateRepository,
+  UpdateMasterDataTemplateInput,
+} from '../../src/modules/master-data/domain/repositories/IMasterDataTemplateRepository';
+import {
+  CreateMasterDataTemplateBranchLinkInput,
+  IMasterDataTemplateBranchLinkRepository,
+} from '../../src/modules/master-data/domain/repositories/IMasterDataTemplateBranchLinkRepository';
 import { CreateDoctorInput, IDoctorRepository, UpdateDoctorInput } from '../../src/modules/master-data/domain/repositories/IDoctorRepository';
 import {
   CreateToothConditionInput,
@@ -91,6 +100,87 @@ export class FakeBranchRepository implements IBranchRepository {
     if (!branch) throw new Error('not found');
     Object.assign(branch, input);
     return branch;
+  }
+}
+
+export class FakeMasterDataTemplateRepository implements IMasterDataTemplateRepository {
+  templates = new Map<string, MasterDataTemplate>();
+
+  async create(input: CreateMasterDataTemplateInput): Promise<MasterDataTemplate> {
+    const template = {
+      id: nextId('template'),
+      entityType: input.entityType,
+      templatePayload: input.templatePayload,
+      version: 1,
+      ownerClinicId: input.ownerClinicId,
+      createdAt: new Date(),
+      createdBy: null,
+      updatedAt: new Date(),
+      updatedBy: null,
+    } as unknown as MasterDataTemplate;
+    this.templates.set(template.id, template);
+    return template;
+  }
+
+  async list(query: ListQueryDto): Promise<PagedResult<MasterDataTemplate>> {
+    return paginate([...this.templates.values()], query);
+  }
+
+  async findById(id: string): Promise<MasterDataTemplate | null> {
+    return this.templates.get(id) ?? null;
+  }
+
+  async update(id: string, input: UpdateMasterDataTemplateInput): Promise<MasterDataTemplate> {
+    const template = this.templates.get(id);
+    if (!template) throw new Error('not found');
+    if (input.templatePayload) {
+      template.templatePayload = input.templatePayload as never;
+      template.version += 1;
+    }
+    return template;
+  }
+}
+
+export class FakeMasterDataTemplateBranchLinkRepository implements IMasterDataTemplateBranchLinkRepository {
+  links = new Map<string, MasterDataTemplateBranchLink>();
+
+  async findByTemplateAndBranch(templateId: string, branchId: string): Promise<MasterDataTemplateBranchLink | null> {
+    return [...this.links.values()].find((l) => l.templateId === templateId && l.branchId === branchId) ?? null;
+  }
+
+  async listByTemplate(templateId: string): Promise<MasterDataTemplateBranchLink[]> {
+    return [...this.links.values()].filter((l) => l.templateId === templateId);
+  }
+
+  async create(input: CreateMasterDataTemplateBranchLinkInput): Promise<MasterDataTemplateBranchLink> {
+    const link = {
+      id: nextId('template-link'),
+      templateId: input.templateId,
+      branchId: input.branchId,
+      pushedVersion: input.pushedVersion,
+      snapshotPayload: input.snapshotPayload,
+      currentPayload: input.currentPayload,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as MasterDataTemplateBranchLink;
+    this.links.set(link.id, link);
+    return link;
+  }
+
+  async overwriteWithPush(id: string, pushedVersion: number, payload: Record<string, unknown>): Promise<MasterDataTemplateBranchLink> {
+    const link = this.links.get(id);
+    if (!link) throw new Error('not found');
+    link.pushedVersion = pushedVersion;
+    link.snapshotPayload = payload as never;
+    link.currentPayload = payload as never;
+    return link;
+  }
+
+  /** Test-only helper: simulates a branch having locally edited its synced record outside of any push, since no such write endpoint exists in this phase's scope. */
+  simulateLocalEdit(id: string, payload: Record<string, unknown>): void {
+    const link = this.links.get(id);
+    if (!link) throw new Error('not found');
+    link.currentPayload = payload as never;
   }
 }
 

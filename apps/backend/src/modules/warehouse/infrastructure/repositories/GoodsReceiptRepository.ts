@@ -50,4 +50,10 @@ export class GoodsReceiptRepository implements IGoodsReceiptRepository {
   async count(): Promise<number> {
     return prisma.goodsReceipt.count();
   }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return prisma.goodsReceipt.count({
+      where: { status: 'DRAFT', warehouse: { branchId } },
+    });
+  }
 }

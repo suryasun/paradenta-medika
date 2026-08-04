@@ -12,7 +12,9 @@ import {
   Role,
   SystemParameter,
   User,
+  UserBranch,
 } from '@prisma/client';
+import { IUserBranchRepository, UserBranchAssignmentInput } from '../../src/modules/system/domain/repositories/IUserBranchRepository';
 import { CreateSystemParameterInput, ISystemParameterRepository, SystemParameterListFilter } from '../../src/modules/system/domain/repositories/ISystemParameterRepository';
 import {
   ChangeRequestListFilter,
@@ -94,8 +96,19 @@ export class FakeUserAdminRepository implements IUserAdminRepository {
     return user;
   }
 
-  async list(query: ListQueryDto): Promise<PagedResult<User>> {
-    return paginate([...this.users.values()], query);
+  async list(query: ListQueryDto, filter?: { branchIds?: string[] }): Promise<PagedResult<User>> {
+    let users = [...this.users.values()];
+    if (filter?.branchIds) {
+      const branchIdSet = new Set(filter.branchIds);
+      users = users.filter((u) => (this.branchAssignments.get(u.id) ?? []).some((branchId) => branchIdSet.has(branchId)));
+    }
+    return paginate(users, query);
+  }
+
+  branchAssignments = new Map<string, string[]>();
+
+  seedBranchAssignments(userId: string, branchIds: string[]): void {
+    this.branchAssignments.set(userId, branchIds);
   }
 
   async findById(id: string): Promise<User | null> {
@@ -137,6 +150,7 @@ export class FakeRoleRepository implements IRoleRepository {
       roleName: input.roleName,
       description: input.description ?? null,
       isSystem: false,
+      isCrossBranch: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -154,6 +168,13 @@ export class FakeRoleRepository implements IRoleRepository {
 
   async findByCode(roleCode: string): Promise<Role | null> {
     return [...this.roles.values()].find((r) => r.roleCode === roleCode) ?? null;
+  }
+
+  async updateBranchPolicy(id: string, isCrossBranch: boolean): Promise<Role> {
+    const role = this.roles.get(id);
+    if (!role) throw new Error('not found');
+    role.isCrossBranch = isCrossBranch;
+    return role;
   }
 }
 
@@ -203,6 +224,36 @@ export class FakeUserRoleRepository implements IUserRoleRepository {
     const ids = this.assignments.get(userId) ?? new Set<string>();
     return [...ids].map((id) => this.roleRepository.roles.get(id)).filter((r): r is Role => Boolean(r));
   }
+
+  async listAllAssignments(): Promise<{ userId: string; roleId: string }[]> {
+    return [...this.assignments.entries()].flatMap(([userId, roleIds]) => [...roleIds].map((roleId) => ({ userId, roleId })));
+  }
+}
+
+export class FakeUserBranchRepository implements IUserBranchRepository {
+  assignments = new Map<string, UserBranch[]>();
+
+  async replaceAssignments(userId: string, assignments: UserBranchAssignmentInput[], actorUserId: string): Promise<UserBranch[]> {
+    const records = assignments.map((assignment) => ({
+      id: nextId('userbranch'),
+      userId,
+      branchId: assignment.branchId,
+      isDefault: assignment.isDefault,
+      effectiveFrom: assignment.effectiveFrom ?? null,
+      createdAt: new Date(),
+      createdBy: actorUserId,
+    }));
+    this.assignments.set(userId, records);
+    return records;
+  }
+
+  async listForUser(userId: string): Promise<UserBranch[]> {
+    return this.assignments.get(userId) ?? [];
+  }
+
+  async listAllAssignments(): Promise<UserBranch[]> {
+    return [...this.assignments.values()].flat();
+  }
 }
 
 export function buildRole(overrides: Partial<Role> = {}): Role {
@@ -212,6 +263,7 @@ export function buildRole(overrides: Partial<Role> = {}): Role {
     roleName: 'Cashier',
     description: null,
     isSystem: false,
+    isCrossBranch: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -425,6 +477,18 @@ export class FakeSystemParameterRepository implements ISystemParameterRepository
         (p) => p.key === key && p.scopeType === scopeType && p.scopeId === (scopeId ?? null) && p.version === version,
       ) ?? null
     );
+  }
+
+  async listLatestByScope(scopeType: string, scopeId?: string): Promise<SystemParameter[]> {
+    const rows = [...this.parameters.values()].filter((p) => p.scopeType === scopeType && p.scopeId === (scopeId ?? null));
+    const latestByKey = new Map<string, SystemParameter>();
+    for (const row of rows) {
+      const existing = latestByKey.get(row.key);
+      if (!existing || row.version > existing.version) {
+        latestByKey.set(row.key, row);
+      }
+    }
+    return [...latestByKey.values()];
   }
 }
 

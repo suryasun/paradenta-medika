@@ -3,18 +3,25 @@ info:
   title: Parakita API
   description: >
     Dental Clinic Management System — Phase 1 (Foundation/MVP) + Phase 2
-    (Core Clinical Operations). Generated from the actual implemented
+    (Core Clinical Operations) + Phase 3 (Operational Excellence: Warehouse,
+    Finance, Advanced Reporting, System Ops) + Phase 4 (Multi Branch
+    Platform, task-210-225). Generated from the actual implemented
     routes/DTOs under src/modules/*/presentation, not hand-invented — every
     path, permission code, and status code here mirrors the corresponding
     *.routes.ts file. See docs/06-tasks/phase-1-documentation/ for the
-    Phase 1 per-epic build record; Phase 2 covers Epic K-U (task-060-094):
-    Appointment Analytics, Medical History/Allergy, Odontogram, Treatment
-    Planning, Prescription, Periodontal Assessment, Clinical Attachment,
-    Consent, Referral/Follow Up, Medical Certificate, and Clinical Timeline.
-  # Minor bump only: Phase 2 is purely additive (new endpoints/optional
+    Phase 1 per-epic build record; Phase 2 covers Epic K-U (task-060-094);
+    Phase 3 covers Epic V-AL (task-095-209); Phase 4 covers Epic BA-BH
+    (task-210-225): Branch Assignment, Default Branch Policy, Centralized
+    User Management, Branch-Level Access Control, Branch Dashboard, Cross
+    Branch Reporting, Branch Performance Monitoring, Centralized Master
+    Data, and Branch Synchronization. Every Phase 4 endpoint path not
+    literally enumerated in its module's SAD Section 6 table is
+    convention-derived (documented per-endpoint in each task's own
+    Definition of Done) rather than invented.
+  # Minor bump only: each phase is purely additive (new endpoints/optional
   # fields), no breaking change per API-006 -- the API route version stays
   # /api/v1 (API-004).
-  version: 1.1.0
+  version: 1.2.0
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development
@@ -42,6 +49,7 @@ tags:
   - name: Reports
   - name: Warehouse
   - name: Finance
+  - name: Master Data - Templates
 
 paths:
   # ---------------------------------------------------------------------
@@ -197,6 +205,14 @@ paths:
     get:
       tags: [System - Users]
       summary: List users
+      description: >
+        docs/06-tasks/task-214.md: an unfiltered request from a cross-branch
+        role (Owner/Administrator/Security Admin, Role.isCrossBranch) returns
+        every user across every branch; an unfiltered request from any other
+        role is automatically intersected with the requester's own branch
+        assignment(s) -- never silently widened. An explicit branchId is
+        honoured only when it falls within a non-cross-branch requester's
+        own assignments.
       x-permission: system.user.read
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -204,6 +220,9 @@ paths:
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Order'
+        - name: branchId
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         '200': { $ref: '#/components/responses/PagedOk' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -310,6 +329,51 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ---------------------------------------------------------------------
+  # System - Multi Branch Platform (Phase 4, Epic BA, docs/06-tasks/
+  # task-210.md/task-211.md). Every branchAssignments POST replaces the
+  # user's full branch-assignment set (not additive).
+  # ---------------------------------------------------------------------
+  /system/users/{userId}/branches:
+    parameters: [{ $ref: '#/components/parameters/UserId' }]
+    post:
+      tags: [System - Users]
+      summary: Replace a user's branch assignments (exactly one must be isDefault)
+      x-permission: system.user.branch.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchAssignments]
+              properties:
+                branchAssignments:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [branchId, isDefault]
+                    properties:
+                      branchId: { type: string, format: uuid }
+                      isDefault: { type: boolean }
+                      effectiveFrom: { type: string, format: date-time }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { description: "SYS_SELF_ESCALATION_FORBIDDEN -- a user cannot change their own branch assignments", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "SYS_BRANCH_SCOPE_INVALID -- non-existent/inactive branch, zero or more than one isDefault, or a duplicate branchId", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+    get:
+      tags: [System - Users]
+      summary: List a user's branch assignments
+      description: "docs/06-tasks/task-211.md: a user can always read their own branch list regardless of system.user.read."
+      x-permission: system.user.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------------
   # System - Roles (docs/06-tasks/task-017.md, task-018.md)
   # ---------------------------------------------------------------------
   /system/roles:
@@ -377,6 +441,62 @@ paths:
                 permissionIds: { type: array, items: { type: string, format: uuid } }
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # docs/06-tasks/task-215.md (Phase 4 Epic BB). Convention-derived path,
+  # not literal in the SAD's Section 6.1 table.
+  /system/roles/branch-matrix:
+    get:
+      tags: [System - Roles]
+      summary: Role x branch x user-count aggregation, reflecting concurrent multi-branch assignments
+      x-permission: system.role.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+
+  # docs/06-tasks/task-217.md (Phase 4 Epic BC). Convention-derived path.
+  /system/roles/{roleId}/branch-policy:
+    patch:
+      tags: [System - Roles]
+      summary: Flip a role's cross-branch policy (bypasses task-216's BranchScopeGuard when true)
+      x-permission: system.role.branch-policy.manage
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isCrossBranch]
+              properties:
+                isCrossBranch: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { description: "SYS_ROLE_SYSTEM_PROTECTED -- built-in roles (isSystem=true) cannot have their branch policy changed", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # docs/06-tasks/task-213.md (Phase 4 Epic BA). Convention-derived path,
+  # not literal in the SAD's Section 6.2 table.
+  /system/branches/{branchId}/configuration:
+    get:
+      tags: [System - Roles]
+      summary: A branch's full effective configuration -- every branch-level System Parameter override, plus every inherited clinic-level (GLOBAL) default not overridden at branch level
+      x-permission: system.parameter.read
+      parameters:
+        - name: branchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: "Array of { key, value, valueType, source: BRANCH|GLOBAL }, distinguishing overrides from inherited defaults"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   # ---------------------------------------------------------------------
@@ -864,12 +984,118 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [Master Data - Branches]
-      summary: Update branch
+      summary: Update branch (isActive:false triggers task-225's Branch Deactivation Guard)
       x-permission: masterdata.branch.manage
       requestBody: { $ref: '#/components/requestBodies/GenericJson' }
       responses:
         '200': { $ref: '#/components/responses/Ok' }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: "MD_BRANCH_HAS_OPEN_TRANSACTIONS -- rejected because an open Reservation/Queue/Billing/Warehouse/Finance transaction still exists for this branch; the error message names the blocking module(s)", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # ---------------------------------------------------------------------
+  # Master Data - Templates (Phase 4, Epic BG, docs/06-tasks/task-221.md/
+  # task-222.md/task-223.md). No literal Section 6 API spec exists for
+  # Master Data (unlike Warehouse/Finance) -- paths are convention-derived.
+  # ---------------------------------------------------------------------
+  /masterdata/templates:
+    get:
+      tags: [Master Data - Templates]
+      summary: List Head-Office reference-data templates
+      x-permission: masterdata.template.read
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Search' }, { $ref: '#/components/parameters/Sort' }, { $ref: '#/components/parameters/Order' }]
+      responses:
+        '200': { $ref: '#/components/responses/PagedOk' }
+    post:
+      tags: [Master Data - Templates]
+      summary: Create a reference-data template (version starts at 1)
+      x-permission: masterdata.template.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entityType, templatePayload, ownerClinicId]
+              properties:
+                entityType: { type: string, example: "TREATMENT" }
+                templatePayload: { type: object }
+                ownerClinicId: { type: string, format: uuid }
+      responses:
+        '201': { $ref: '#/components/responses/Created' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+
+  /masterdata/templates/{templateId}:
+    parameters: [{ name: templateId, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      tags: [Master Data - Templates]
+      summary: Template detail
+      x-permission: masterdata.template.read
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Master Data - Templates]
+      summary: Update a template's payload (auto-increments version so already-synced branches can be diffed)
+      x-permission: masterdata.template.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                templatePayload: { type: object }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /masterdata/templates/{templateId}/push:
+    post:
+      tags: [Master Data - Templates]
+      summary: Push a template to one or more branches (create-if-absent, update-if-undiverged, flag-if-diverged)
+      description: >
+        docs/06-tasks/task-222.md: for each target branchId, creates the
+        branch-scoped link if absent, or updates it if the branch's live
+        copy hasn't diverged from what was last pushed. A branch whose live
+        copy has locally diverged since the last push is flagged CONFLICT
+        and left untouched rather than silently overwritten; one
+        conflicting branch does not block the push to the other requested
+        branches.
+      x-permission: masterdata.template.manage
+      parameters: [{ name: templateId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branchIds]
+              properties:
+                branchIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: "Array of { branchId, status: CREATED|UPDATED|CONFLICT }, one entry per requested branchId"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { description: "Template or one of the requested branches does not exist", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  /masterdata/templates/{templateId}/drift:
+    get:
+      tags: [Master Data - Templates]
+      summary: Field-by-field divergence report for every branch this template has been pushed to
+      description: "docs/06-tasks/task-223.md: compares each pushed branch's live copy against what was pushed (not just a boolean); also flags a branch as stale when the template has been updated since that branch's last push."
+      x-permission: masterdata.template.manage
+      parameters: [{ name: templateId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: "Array of { branchId, pushedVersion, isStale, fieldDrifts: [{ field, pushedValue, currentValue }] }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /doctors:
@@ -1319,6 +1545,7 @@ paths:
                               weeklyReservations: { type: integer }
                               monthlyReservations: { type: integer }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { description: "SYS_BRANCH_SCOPE_FORBIDDEN -- docs/06-tasks/task-216.md BranchScopeGuard retrofit demonstration: the requested branchId is outside a non-cross-branch requester's assignment", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
   /reservations/{id}:
     parameters: [{ $ref: '#/components/parameters/Id' }]
@@ -2459,6 +2686,7 @@ paths:
           schema: { type: string, format: date }
       responses:
         '200': { $ref: '#/components/responses/PagedOk' }
+        '403': { description: "SYS_BRANCH_SCOPE_FORBIDDEN -- docs/06-tasks/task-216.md BranchScopeGuard retrofit demonstration: the requested branchId is outside a non-cross-branch requester's assignment", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
     post:
       tags: [Billing]
       summary: Generate invoice from a completed Visit (also event-triggered by EMRFinished)
@@ -2596,6 +2824,26 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/DashboardOk' }
 
+  # docs/06-tasks/task-218.md (Phase 4 Epic BD). Convention-derived path,
+  # not a literal row in the Report SAD's Section 6.1 table.
+  /reports/dashboards/branch:
+    get:
+      tags: [Reports]
+      summary: Single-branch operational summary (Queue Manager Dashboard fields + Billing daily summary)
+      x-permission: report.dashboard.branch.read
+      parameters:
+        - name: branchId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: "{ scope, dataAsOf, freshness, definitionVersion, queue: QueueDashboard, billing: DashboardMetric[] }"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+        '403': { description: "RPT_SCOPE_FORBIDDEN -- a Clinic Manager cannot request a branch outside their assignment", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
   # ---------------------------------------------------------------------
   # Reporting - Catalog & Scheduled Reports (docs/06-tasks/task-185.md..
   # task-191.md, Epic AH). Jobs execute synchronously in-process (no
@@ -2610,6 +2858,56 @@ paths:
       x-permission: report.catalog.read
       responses:
         '200': { $ref: '#/components/responses/Ok' }
+
+  # docs/06-tasks/task-219.md (Phase 4 Epic BE). Convention-derived path.
+  /reports/branch-comparison:
+    get:
+      tags: [Reports]
+      summary: Point-in-time, side-by-side metric comparison across multiple branches
+      description: "docs/06-tasks/task-219.md TC-RPT-008: rejects the whole request (RPT_SCOPE_FORBIDDEN) if any requested branch is outside the requester's authorized scope -- scope is intersected/rejected, never silently widened."
+      x-permission: report.branch-comparison.read
+      parameters:
+        - name: branchIds
+          in: query
+          required: true
+          description: Comma-separated branch UUIDs
+          schema: { type: string, example: "11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222" }
+      responses:
+        '200':
+          description: "Array of { branchId, branchName, dataAsOf, freshness, metrics: DashboardMetric[] }, same metric set per branch"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+        '403': { description: "RPT_SCOPE_FORBIDDEN", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+
+  # docs/06-tasks/task-220.md (Phase 4 Epic BF). Convention-derived path.
+  /reports/branch-performance:
+    get:
+      tags: [Reports]
+      summary: Queue throughput/wait-time, doctor productivity, and billing collection for one branch, trended day-by-day over a period
+      description: "docs/06-tasks/task-220.md: distinct from task-219's point-in-time comparison -- one entry per day in the requested range (max 90 days, same sync policy limit as GetReportUseCase)."
+      x-permission: report.branch-performance.read
+      parameters:
+        - name: branchId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: dateFrom
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: dateTo
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: "Array of { date, totalPatients, averageWaitingTimeMinutes, completionRate, doctorProductivity: [{doctorId, queueCount}], billingCollected }, one entry per day"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiSuccessEnvelope' }
+        '403': { description: "RPT_SCOPE_FORBIDDEN", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
+        '422': { description: "RPT_FILTER_INVALID (invalid/out-of-order dates) or RPT_RANGE_TOO_LARGE (> 90 days)", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
   /reports/{reportCode}:
     get:
@@ -2830,6 +3128,7 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/Created' }
         '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { description: "SYS_BRANCH_SCOPE_FORBIDDEN -- docs/06-tasks/task-216.md BranchScopeGuard retrofit demonstration: the payload's branchId is outside a non-cross-branch requester's assignment", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
         '409': { description: "WAREHOUSE_LOCATION_CODE_EXISTS (duplicate code within the same branch)", content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorEnvelope' } } } }
 
   /warehouse/stocks:

@@ -31,6 +31,45 @@ export class RoleNotFoundException extends NotFoundException {
 }
 
 // ---------------------------------------------------------------------------
+// Multi Branch Platform (docs/03-sad/21-module-system.md UC-SYS-002,
+// Phase 4 Epic BA task-210/211).
+// ---------------------------------------------------------------------------
+
+/** Literal per task-210's own Security Impact: "SYS_BRANCH_SCOPE_INVALID (422) returned for an invalid default/assigned branch." */
+export class BranchScopeInvalidException extends BusinessException {
+  constructor(reason: string) {
+    super('SYS_BRANCH_SCOPE_INVALID', reason);
+  }
+}
+
+/** UC-SYS-002's "no self-escalation policy" -- a user cannot grant themselves a new branch. */
+export class SelfEscalationForbiddenException extends AuthorizationException {
+  constructor() {
+    super('You cannot change your own branch assignments', 'SYS_SELF_ESCALATION_FORBIDDEN');
+  }
+}
+
+/**
+ * task-216's BranchScopeGuard rejection. Distinct from BranchScopeInvalidException
+ * (SYS_BRANCH_SCOPE_INVALID, 422, task-210): that one flags an invalid/inactive
+ * branchId in an assignment payload; this one is an authorization-time
+ * rejection (403) of a request targeting a branch the requester isn't
+ * assigned to.
+ */
+export class BranchOutOfScopeException extends AuthorizationException {
+  constructor() {
+    super('The requested branch is outside your assigned branch scope', 'SYS_BRANCH_SCOPE_FORBIDDEN');
+  }
+}
+
+/** Literal per task-217's own Backend Scope: "SYS_ROLE_SYSTEM_PROTECTED" for built-in roles. */
+export class RoleSystemProtectedException extends AuthorizationException {
+  constructor() {
+    super('Built-in system roles cannot have their branch policy changed', 'SYS_ROLE_SYSTEM_PROTECTED');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Notification Center (docs/03-sad/21-module-system.md UC-SYS-005,
 // Epic AJ task-195-199). No literal Section 6.4 code exists for template
 // content/variable validation -- extrapolated by the same

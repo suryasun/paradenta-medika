@@ -2,7 +2,7 @@ import { Prisma, User } from '@prisma/client';
 import { prisma } from '../../../../shared/infrastructure/prisma';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { sanitizeSortField } from '../../../../shared/http/pagination';
-import { CreateUserAdminInput, IUserAdminRepository, PagedResult } from '../../domain/repositories/IUserAdminRepository';
+import { CreateUserAdminInput, IUserAdminRepository, PagedResult, UserAdminListFilter } from '../../domain/repositories/IUserAdminRepository';
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'username', 'email', 'status'] as const;
 
@@ -13,12 +13,13 @@ export class UserAdminRepository implements IUserAdminRepository {
     });
   }
 
-  async list(query: ListQueryDto): Promise<PagedResult<User>> {
+  async list(query: ListQueryDto, filter?: UserAdminListFilter): Promise<PagedResult<User>> {
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
       ...(query.search
         ? { OR: [{ username: { contains: query.search } }, { email: { contains: query.search } }] }
         : {}),
+      ...(filter?.branchIds ? { userBranches: { some: { branchId: { in: filter.branchIds } } } } : {}),
     };
 
     const [items, total] = await Promise.all([

@@ -57,4 +57,6 @@ export interface IPurchaseOrderRepository {
   incrementReceivedQuantity(purchaseOrderItemId: string, quantity: number): Promise<void>;
   hasPostedGoodsReceipts(purchaseOrderId: string): Promise<boolean>;
   count(): Promise<number>;
+  /** docs/06-tasks/task-225.md: purchase orders not yet in a terminal status (RECEIVED/CANCELLED/REJECTED), for the Branch Deactivation Guard. */
+  countOpenByBranch(branchId: string): Promise<number>;
 }

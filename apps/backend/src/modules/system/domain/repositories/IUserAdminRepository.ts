@@ -21,9 +21,14 @@ export interface PagedResult<T> {
  * (create/list/update-profile/activate/deactivate) while modules/auth's
  * IUserRepository covers the login/session-facing operations.
  */
+export interface UserAdminListFilter {
+  /** docs/06-tasks/task-214.md: restricts results to users assigned to one of these branches. */
+  branchIds?: string[];
+}
+
 export interface IUserAdminRepository {
   create(input: CreateUserAdminInput): Promise<User>;
-  list(query: ListQueryDto): Promise<PagedResult<User>>;
+  list(query: ListQueryDto, filter?: UserAdminListFilter): Promise<PagedResult<User>>;
   findById(id: string): Promise<User | null>;
   existsByUsernameOrEmail(username: string, email: string, excludeUserId?: string): Promise<boolean>;
   updateEmail(id: string, email: string): Promise<User>;

@@ -10,6 +10,9 @@ import { CreateRoleUseCase } from '../../application/use-cases/CreateRoleUseCase
 import { ListPermissionsUseCase } from '../../application/use-cases/ListPermissionsUseCase';
 import { AssignPermissionsToRoleUseCase } from '../../application/use-cases/AssignPermissionsToRoleUseCase';
 import { GetRolePermissionsUseCase } from '../../application/use-cases/GetRolePermissionsUseCase';
+import { GetRoleBranchMatrixUseCase } from '../../application/use-cases/GetRoleBranchMatrixUseCase';
+import { UpdateRoleBranchPolicyUseCase } from '../../application/use-cases/UpdateRoleBranchPolicyUseCase';
+import { UpdateRoleBranchPolicyRequestDto } from '../../application/dtos/UpdateRoleBranchPolicyRequestDto';
 
 export class RoleAdminController {
   constructor(
@@ -18,7 +21,35 @@ export class RoleAdminController {
     private readonly listPermissionsUseCase: ListPermissionsUseCase,
     private readonly assignPermissionsToRoleUseCase: AssignPermissionsToRoleUseCase,
     private readonly getRolePermissionsUseCase: GetRolePermissionsUseCase,
+    private readonly getRoleBranchMatrixUseCase: GetRoleBranchMatrixUseCase,
+    private readonly updateRoleBranchPolicyUseCase: UpdateRoleBranchPolicyUseCase,
   ) {}
+
+  getRoleBranchMatrix = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const matrix = await this.getRoleBranchMatrixUseCase.execute();
+      sendSuccess(res, matrix, 'Role-branch matrix retrieved');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateBranchPolicy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.auth) throw new AuthenticationException();
+      const body = req.body as UpdateRoleBranchPolicyRequestDto;
+      const role = await this.updateRoleBranchPolicyUseCase.execute({
+        roleId: req.params.roleId,
+        isCrossBranch: body.isCrossBranch,
+        actorUserId: req.auth.userId,
+        ipAddress: req.ip,
+        correlationId: req.correlationId,
+      });
+      sendSuccess(res, role, 'Role branch policy updated');
+    } catch (error) {
+      next(error);
+    }
+  };
 
   getPermissionsForRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

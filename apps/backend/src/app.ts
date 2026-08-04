@@ -8,6 +8,9 @@ import { permissionsPolicyMiddleware } from './shared/http/securityHeaders';
 import { buildHealthRouter } from './shared/http/healthRoutes';
 import { errorHandlerMiddleware, notFoundMiddleware } from './shared/http/errorHandler';
 import { AuditService } from './modules/system/infrastructure/services/AuditService';
+import { UserRoleRepository } from './modules/system/infrastructure/repositories/UserRoleRepository';
+import { UserBranchRepository } from './modules/system/infrastructure/repositories/UserBranchRepository';
+import { createBranchScopeGuard } from './modules/system/infrastructure/middlewares/branchScopeGuard';
 import { buildAuthModule } from './modules/auth/presentation/routes/auth.routes';
 import { buildSystemModule } from './modules/system/presentation/routes/system.routes';
 import { buildMasterDataModule } from './modules/master-data/presentation/routes/master-data.routes';
@@ -62,6 +65,12 @@ export function createApp(config: ConfigService): Express {
   const authModule = buildAuthModule(config, auditService);
   app.use(API_V1_PREFIX, authModule.router);
 
+  // docs/06-tasks/task-216.md: shared BranchScopeGuard instance, reused by
+  // any module's route file that retrofits it onto a branch-scoped endpoint.
+  const branchScopeGuardUserRoleRepository = new UserRoleRepository();
+  const branchScopeGuardUserBranchRepository = new UserBranchRepository();
+  const branchScopeGuard = createBranchScopeGuard.bind(null, branchScopeGuardUserRoleRepository, branchScopeGuardUserBranchRepository);
+
   const systemRouter = buildSystemModule(
     config,
     auditService,
@@ -77,13 +86,14 @@ export function createApp(config: ConfigService): Express {
     authModule.userRepository,
     authModule.authenticate,
     authModule.requirePermission,
+    eventBus,
   );
   app.use(API_V1_PREFIX, masterDataRouter);
 
   const patientRouter = buildPatientModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, patientRouter);
 
-  const reservationRouter = buildReservationModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
+  const reservationRouter = buildReservationModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission, branchScopeGuard);
   app.use(API_V1_PREFIX, reservationRouter);
 
   const queueRouter = buildQueueModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
@@ -92,14 +102,14 @@ export function createApp(config: ConfigService): Express {
   const emrRouter = buildEmrModule(config, auditService, eventBus, authModule.authenticate, authModule.requirePermission);
   app.use(API_V1_PREFIX, emrRouter);
 
-  const billingRouter = buildBillingModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
+  const billingRouter = buildBillingModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission, branchScopeGuard);
   app.use(API_V1_PREFIX, billingRouter);
 
   // Phase 1 module composition is now complete (Epics J, A-I / task-001..059).
   // Phase 2 modules are mounted here as each is implemented, reusing
   // authModule.authenticate / authModule.requirePermission for protected routes.
 
-  const warehouseRouter = buildWarehouseModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
+  const warehouseRouter = buildWarehouseModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission, branchScopeGuard);
   app.use(API_V1_PREFIX, warehouseRouter);
 
   const financeRouter = buildFinanceModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);

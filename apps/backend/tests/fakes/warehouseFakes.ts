@@ -511,11 +511,23 @@ export class FakePurchaseOrderRepository implements IPurchaseOrderRepository {
   async count(): Promise<number> {
     return this.purchaseOrders.size;
   }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return [...this.purchaseOrders.values()].filter(
+      (po) => po.branchId === branchId && !['RECEIVED', 'CANCELLED', 'REJECTED'].includes(po.status),
+    ).length;
+  }
 }
 
 export class FakeGoodsReceiptRepository implements IGoodsReceiptRepository {
   receipts = new Map<string, GoodsReceiptWithItems>();
+  /** Test-only warehouseId -> branchId lookup, since GoodsReceipt has no direct branchId column (joins through WarehouseLocation in the real repository). */
+  warehouseBranchMap = new Map<string, string>();
   private itemSequence = 0;
+
+  seedWarehouseBranch(warehouseId: string, branchId: string): void {
+    this.warehouseBranchMap.set(warehouseId, branchId);
+  }
 
   async create(input: CreateGoodsReceiptInput): Promise<GoodsReceiptWithItems> {
     const receipt: GoodsReceiptWithItems = {
@@ -573,6 +585,12 @@ export class FakeGoodsReceiptRepository implements IGoodsReceiptRepository {
 
   async count(): Promise<number> {
     return this.receipts.size;
+  }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return [...this.receipts.values()].filter(
+      (r) => r.status === 'DRAFT' && this.warehouseBranchMap.get(r.warehouseId) === branchId,
+    ).length;
   }
 }
 

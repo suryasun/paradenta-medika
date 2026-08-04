@@ -155,4 +155,14 @@ export class ReservationRepository implements IReservationRepository {
       },
     });
   }
+
+  async countOpenByBranch(branchId: string): Promise<number> {
+    return prisma.reservation.count({
+      where: {
+        branchId,
+        deletedAt: null,
+        status: { notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] },
+      },
+    });
+  }
 }

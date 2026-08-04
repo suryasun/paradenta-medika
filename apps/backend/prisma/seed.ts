@@ -110,6 +110,8 @@ const PERMISSION_KEYS = [
   'masterdata.treatment-category.read',
   'masterdata.tooth-condition.manage',
   'masterdata.tooth-condition.read',
+  'masterdata.template.manage',
+  'masterdata.template.read',
   'patient.archive',
   'patient.create',
   'patient.read',
@@ -137,6 +139,9 @@ const PERMISSION_KEYS = [
   'report.dashboard.finance.read',
   'report.dashboard.operations.read',
   'report.dashboard.warehouse.read',
+  'report.dashboard.branch.read',
+  'report.branch-comparison.read',
+  'report.branch-performance.read',
   'report.finance.read',
   'report.hr.payroll.read',
   'report.hr.read',
@@ -167,6 +172,7 @@ const PERMISSION_KEYS = [
   'system.job.read',
   'system.permission.read',
   'system.role.manage',
+  'system.role.branch-policy.manage',
   'system.role.permission.manage',
   'system.role.read',
   'system.user.activate',
@@ -174,6 +180,7 @@ const PERMISSION_KEYS = [
   'system.user.manage',
   'system.user.read',
   'system.user.role.manage',
+  'system.user.branch.manage',
   'system.user.session.revoke',
   'warehouse.batch.quarantine',
   'warehouse.batch.read',
@@ -528,12 +535,17 @@ async function seedPermissionsAndRoles() {
 
   const adminRole = await prisma.role.upsert({
     where: { roleCode: 'ADMINISTRATOR' },
-    update: {},
+    // docs/06-tasks/task-216.md/task-217.md (Phase 4 Epic BC): Administrator
+    // is a cross-branch role by definition, per the Actor Matrix pattern
+    // (Owner/Administrator/Security Admin) referenced throughout Phase 4.
+    // `update` also sets it so pre-Phase-4 seeded databases upgrade correctly.
+    update: { isCrossBranch: true },
     create: {
       roleCode: 'ADMINISTRATOR',
       roleName: 'Administrator',
       description: 'Full-access seeded role for local development.',
       isSystem: true,
+      isCrossBranch: true,
     },
   });
   await Promise.all(

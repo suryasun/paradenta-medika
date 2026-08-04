@@ -42,6 +42,7 @@ model User {
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
   userRoles           UserRole[]
+  userBranches        UserBranch[]
   userSessions        UserSession[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
@@ -52,11 +53,14 @@ model User {
 }
 
 model Role {
-  id          String  @id @default(uuid()) @db.Char(36)
-  roleCode    String  @unique @map("role_code") @db.VarChar(30)
-  roleName    String  @map("role_name") @db.VarChar(100)
-  description String? @db.Text
-  isSystem    Boolean @default(false) @map("is_system")
+  id            String  @id @default(uuid()) @db.Char(36)
+  roleCode      String  @unique @map("role_code") @db.VarChar(30)
+  roleName      String  @map("role_name") @db.VarChar(100)
+  description   String? @db.Text
+  isSystem      Boolean @default(false) @map("is_system")
+  /// task-217 (Phase 4, Epic BC): cross-branch roles (Owner/Administrator/
+  /// Security Admin) bypass BranchScopeGuard's intersection entirely.
+  isCrossBranch Boolean @default(false) @map("is_cross_branch")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -103,6 +107,30 @@ model UserRole {
 
   @@unique([userId, roleId])
   @@map("user_roles")
+}
+
+/// task-210/211 (Phase 4, Epic BA): a user's branch memberships, with
+/// exactly one flagged isDefault per user (enforced in
+/// AssignUserBranchUseCase, not at the schema level -- Prisma has no
+/// partial-unique-index support portable across this project's MySQL
+/// target). BranchScopeGuard (task-216) and ResolveDefaultBranchUseCase
+/// (task-212) both read this table.
+model UserBranch {
+  id            String    @id @default(uuid()) @db.Char(36)
+  userId        String    @map("user_id") @db.Char(36)
+  branchId      String    @map("branch_id") @db.Char(36)
+  isDefault     Boolean   @default(false) @map("is_default")
+  effectiveFrom DateTime? @map("effective_from")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+
+  user   User   @relation(fields: [userId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([userId, branchId])
+  @@index([branchId])
+  @@map("system_user_branches")
 }
 
 model UserSession {
@@ -191,6 +219,7 @@ model Clinic {
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
   branches Branch[]
+  masterDataTemplates MasterDataTemplate[]
 
   @@map("clinics")
 }
@@ -229,8 +258,60 @@ model Branch {
   dailyClosings          DailyClosing[]
   doctorFeeSettlements   DoctorFeeSettlement[]
   financeAccountMappings FinanceAccountMapping[]
+  userBranches           UserBranch[]
+  masterDataTemplateLinks MasterDataTemplateBranchLink[]
 
   @@map("branches")
+}
+
+/// task-221 (Phase 4, Epic BG): a Head-Office-defined reference-data
+/// template (e.g. a standard Service or clinical master item) that can be
+/// pushed to multiple branches. `version` is bumped by
+/// UpdateMasterDataTemplateUseCase whenever templatePayload changes, so a
+/// branch already synced to a prior version can be diffed against the
+/// current one (task-223).
+model MasterDataTemplate {
+  id              String @id @default(uuid()) @db.Char(36)
+  entityType      String @map("entity_type") @db.VarChar(50)
+  templatePayload Json   @map("template_payload")
+  version         Int    @default(1)
+  ownerClinicId   String @map("owner_clinic_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Char(36)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Char(36)
+
+  clinic      Clinic                         @relation(fields: [ownerClinicId], references: [id])
+  branchLinks MasterDataTemplateBranchLink[]
+
+  @@map("masterdata_templates")
+}
+
+/// task-222/223: tracks each branch a template has been pushed to.
+/// `snapshotPayload` is what was pushed at `pushedVersion`; `currentPayload`
+/// represents the branch's live copy of the record -- equal to
+/// snapshotPayload immediately after a push, and would in a full system be
+/// kept in sync by the real branch-scoped entity's own update flow (out of
+/// this phase's 16-task scope, see PushMasterDataTemplateUseCase). Divergence
+/// (task-222's conflict detection, task-223's drift report) compares
+/// currentPayload against snapshotPayload/the template's latest payload.
+model MasterDataTemplateBranchLink {
+  id              String @id @default(uuid()) @db.Char(36)
+  templateId      String @map("template_id") @db.Char(36)
+  branchId        String @map("branch_id") @db.Char(36)
+  pushedVersion   Int    @map("pushed_version")
+  snapshotPayload Json   @map("snapshot_payload")
+  currentPayload  Json   @map("current_payload")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  template MasterDataTemplate @relation(fields: [templateId], references: [id])
+  branch   Branch             @relation(fields: [branchId], references: [id])
+
+  @@unique([templateId, branchId])
+  @@map("masterdata_template_branch_links")
 }
 
 model TreatmentCategory {

@@ -46,6 +46,17 @@ import { WarehouseReportRepository } from '../../../warehouse/infrastructure/rep
 import { BatchRepository } from '../../../warehouse/infrastructure/repositories/BatchRepository';
 import { GetStockCardReportUseCase } from '../../../warehouse/application/use-cases/GetStockCardReportUseCase';
 import { GetExpiryReportUseCase } from '../../../warehouse/application/use-cases/GetExpiryReportUseCase';
+import { PaymentRepository } from '../../../billing/infrastructure/repositories/PaymentRepository';
+import { UserRoleRepository } from '../../../system/infrastructure/repositories/UserRoleRepository';
+import { UserBranchRepository } from '../../../system/infrastructure/repositories/UserBranchRepository';
+import { BranchAuthorizationService } from '../../application/services/BranchAuthorizationService';
+import { BranchDashboardQueryDto } from '../../application/dtos/BranchDashboardQueryDto';
+import { BranchComparisonQueryDto } from '../../application/dtos/BranchComparisonQueryDto';
+import { BranchPerformanceQueryDto } from '../../application/dtos/BranchPerformanceQueryDto';
+import { GetBranchDashboardUseCase } from '../../application/use-cases/GetBranchDashboardUseCase';
+import { GetBranchComparisonReportUseCase } from '../../application/use-cases/GetBranchComparisonReportUseCase';
+import { GetBranchPerformanceReportUseCase } from '../../application/use-cases/GetBranchPerformanceReportUseCase';
+import { BranchReportsController } from '../controllers/BranchReportsController';
 
 /**
  * docs/06-tasks/task-178.md..task-191.md (Epic AG + Epic AH) composition
@@ -88,6 +99,14 @@ export function buildReportsModule(
     new GetClinicalDashboardUseCase(assembler),
     new GetFinanceDashboardUseCase(assembler),
     new GetWarehouseDashboardUseCase(assembler),
+  );
+
+  // docs/06-tasks/task-218.md/task-219.md/task-220.md (Phase 4 Epics BD/BE/BF).
+  const branchAuthorizationService = new BranchAuthorizationService(new UserRoleRepository(), new UserBranchRepository());
+  const branchReportsController = new BranchReportsController(
+    new GetBranchDashboardUseCase(new QueueDashboardUseCase(new QueueRepository()), assembler, branchAuthorizationService),
+    new GetBranchComparisonReportUseCase(assembler, branchRepository, branchAuthorizationService),
+    new GetBranchPerformanceReportUseCase(new QueueDashboardUseCase(new QueueRepository()), new PaymentRepository(), branchAuthorizationService),
   );
 
   // docs/06-tasks/task-185.md/task-186.md (Epic AH). GetReportUseCase
@@ -139,6 +158,23 @@ export function buildReportsModule(
   router.get('/reports/snapshots/:snapshotId', requirePermission('report.job.create'), reportJobController.snapshot);
   router.get('/reports/exports/:artifactId/download', requirePermission('report.export.download'), reportJobController.download);
 
+  // docs/06-tasks/task-219.md/task-220.md: single-segment literal paths
+  // under /reports/ -- must be registered before the generic
+  // /reports/:reportCode catch-all or Express would treat
+  // "branch-comparison"/"branch-performance" as a :reportCode value.
+  router.get(
+    '/reports/branch-comparison',
+    requirePermission('report.branch-comparison.read'),
+    validateQuery(BranchComparisonQueryDto),
+    branchReportsController.comparison,
+  );
+  router.get(
+    '/reports/branch-performance',
+    requirePermission('report.branch-performance.read'),
+    validateQuery(BranchPerformanceQueryDto),
+    branchReportsController.performance,
+  );
+
   router.get(
     '/reports/:reportCode',
     requirePermission('report.catalog.read'),
@@ -175,6 +211,13 @@ export function buildReportsModule(
     requirePermission('report.dashboard.warehouse.read'),
     validateQuery(DashboardQueryDto),
     dashboardController.warehouse,
+  );
+  // docs/06-tasks/task-218.md (Phase 4 Epic BD).
+  router.get(
+    '/reports/dashboards/branch',
+    requirePermission('report.dashboard.branch.read'),
+    validateQuery(BranchDashboardQueryDto),
+    branchReportsController.dashboard,
   );
 
   return router;

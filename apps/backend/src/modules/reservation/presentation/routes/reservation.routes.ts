@@ -1,6 +1,7 @@
 import { RequestHandler, Router } from 'express';
 import { IAuditService } from '../../../system/domain/services/IAuditService';
 import { IEventBus } from '../../../../shared/events/EventBus';
+import { BranchIdExtractor } from '../../../system/infrastructure/middlewares/branchScopeGuard';
 import { validateBody } from '../../../../shared/http/validateBody';
 import { validateQuery } from '../../../../shared/http/validateQuery';
 import { CreatePatientReservationRequestDto } from '../../application/dtos/CreateReservationRequestDto';
@@ -48,6 +49,7 @@ export function buildReservationModule(
   eventBus: IEventBus,
   authenticate: RequestHandler,
   requirePermission: (code: string) => RequestHandler,
+  branchScopeGuard: (getTargetBranchId: BranchIdExtractor) => RequestHandler,
 ): Router {
   const reservationRepository = new ReservationRepository();
   const scheduleRepository = new DoctorScheduleRepository();
@@ -97,10 +99,13 @@ export function buildReservationModule(
   );
   // docs/06-tasks/task-060.md: registered before /reservations/:id so
   // Express doesn't match "analytics" as the :id param.
+  // docs/06-tasks/task-216.md retrofit demonstration: rejects an
+  // out-of-scope branchId query filter for non-cross-branch requesters.
   router.get(
     '/reservations/analytics',
     requirePermission('reservation.analytics.read'),
     validateQuery(ReservationAnalyticsQueryDto),
+    branchScopeGuard((req) => (req.query as unknown as ReservationAnalyticsQueryDto).branchId),
     reservationController.analytics,
   );
   router.get('/reservations/:id', requirePermission('reservation.read'), reservationController.detail);
