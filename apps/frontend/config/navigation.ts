@@ -34,6 +34,19 @@ export const NAV_ITEMS: NavItem[] = [
   // is only ever reached via Queue's "Open Visit" action on a CALLED entry.
   { label: "Billing", href: "/billing", permission: "billing.invoice.read" },
   {
+    label: "Dashboards",
+    href: "/reports/dashboards/executive",
+    permission: "report.dashboard.executive.read",
+    children: [
+      { label: "Executive", href: "/reports/dashboards/executive", permission: "report.dashboard.executive.read" },
+      { label: "Operations", href: "/reports/dashboards/operations", permission: "report.dashboard.operations.read" },
+      { label: "Clinical", href: "/reports/dashboards/clinical", permission: "report.dashboard.clinical.read" },
+      { label: "Finance", href: "/reports/dashboards/finance", permission: "report.dashboard.finance.read" },
+      { label: "Warehouse", href: "/reports/dashboards/warehouse", permission: "report.dashboard.warehouse.read" },
+    ],
+  },
+  { label: "Reports", href: "/reports/catalog", permission: "report.catalog.read" },
+  {
     label: "Master Data",
     href: "/master-data/clinics",
     permission: "masterdata.clinic.read",
