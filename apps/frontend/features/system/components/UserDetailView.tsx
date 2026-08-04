@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -13,26 +12,30 @@ import { useRoles } from "../hooks/useRoles";
 import { useUser } from "../hooks/useUser";
 import { useActivateUser, useAssignRoles, useDeactivateUser, useRevokeSessions, useUpdateUserEmail } from "../hooks/useUserMutations";
 
-// docs/02-design/pages/system.md §4 flagged the same class of bug as
-// RolePermissionsModal for this view's role checkboxes -- and it has the
-// same root cause, confirmed against the real backend: `SystemUser`
-// (apps/frontend/features/system/types/system.types.ts, mirroring
-// UserAdminResponseDto) has no roles/roleIds field, `GET
-// /system/users/:userId` doesn't return one, and `POST
-// /system/users/:userId/roles` is write-only. There is no way to know a
-// user's current roles from any endpoint in apps/backend today. Flagged,
-// not silently worked around -- see the warning Alert below.
-
+// docs/02-design/pages/system.md §4's flagged pre-population bug is fixed:
+// GET /system/users/:userId now includes roleIds (added post-launch, see
+// docs/03-sad/21-module-system.md Section 6.1 addendum), so the role
+// checkboxes below initialize from the user's actual current roles
+// instead of opening blank.
 export function UserDetailView({ userId }: { userId: string }) {
   const { data: user, isLoading, isError, error, refetch } = useUser(userId);
   const { data: rolesData } = useRoles();
   const [email, setEmail] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
+  const [syncedRoleIds, setSyncedRoleIds] = useState(user?.roleIds);
   const updateEmail = useUpdateUserEmail(userId);
   const activateUser = useActivateUser(userId);
   const deactivateUser = useDeactivateUser(userId);
   const assignRoles = useAssignRoles(userId);
   const revokeSessions = useRevokeSessions(userId);
+
+  // React-docs "adjusting state when a prop changes" pattern (setState
+  // during render, not in an effect) -- avoids the flash of an empty
+  // checklist a useEffect-based sync would cause on first paint.
+  if (user?.roleIds && user.roleIds !== syncedRoleIds) {
+    setSyncedRoleIds(user.roleIds);
+    setRoleIds(user.roleIds);
+  }
 
   if (isLoading) return <LoadingState label="Loading user..." />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
@@ -91,10 +94,6 @@ export function UserDetailView({ userId }: { userId: string }) {
       <PermissionGuard permission="system.user.role.manage">
         <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
           <span className="text-sm font-medium text-foreground">Assign Roles</span>
-          <Alert tone="warning">
-            This user&apos;s current roles aren&apos;t available to show here yet. No box below is pre-checked — that does not mean
-            this user has no roles today. Saving replaces this user&apos;s entire role assignment with only what&apos;s checked.
-          </Alert>
           <div className="flex flex-wrap gap-3">
             {rolesData?.items.map((role) => (
               <label key={role.id} className="flex items-center gap-2 text-sm text-foreground">

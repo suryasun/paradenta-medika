@@ -48,11 +48,13 @@ import {
 import {
   CreateStockTransferInput,
   IStockTransferRepository,
+  StockTransferListFilter,
   StockTransferWithItems,
 } from '../../src/modules/warehouse/domain/repositories/IStockTransferRepository';
 import {
   CreateStockAdjustmentInput,
   IStockAdjustmentRepository,
+  StockAdjustmentListFilter,
   StockAdjustmentWithItems,
 } from '../../src/modules/warehouse/domain/repositories/IStockAdjustmentRepository';
 import {
@@ -615,6 +617,17 @@ export class FakeStockTransferRepository implements IStockTransferRepository {
     return transfer;
   }
 
+  async list(query: ListQueryDto, filter: StockTransferListFilter): Promise<PagedResult<StockTransferWithItems>> {
+    const all = [...this.transfers.values()].filter(
+      (t) =>
+        (!filter.sourceWarehouseId || t.sourceWarehouseId === filter.sourceWarehouseId) &&
+        (!filter.destinationWarehouseId || t.destinationWarehouseId === filter.destinationWarehouseId) &&
+        (!filter.status || t.status === filter.status),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
   async findById(id: string): Promise<StockTransferWithItems | null> {
     return this.transfers.get(id) ?? null;
   }
@@ -684,6 +697,17 @@ export class FakeStockAdjustmentRepository implements IStockAdjustmentRepository
     });
     this.adjustments.set(adjustment.id, adjustment);
     return adjustment;
+  }
+
+  async list(query: ListQueryDto, filter: StockAdjustmentListFilter): Promise<PagedResult<StockAdjustmentWithItems>> {
+    const all = [...this.adjustments.values()].filter(
+      (a) =>
+        (!filter.warehouseId || a.warehouseId === filter.warehouseId) &&
+        (!filter.direction || a.direction === filter.direction) &&
+        (!filter.status || a.status === filter.status),
+    );
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
   }
 
   async findById(id: string): Promise<StockAdjustmentWithItems | null> {

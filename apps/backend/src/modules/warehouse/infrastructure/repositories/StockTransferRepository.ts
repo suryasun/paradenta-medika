@@ -1,10 +1,15 @@
-import { StockTransfer, StockTransferStatus } from '@prisma/client';
+import { Prisma, StockTransfer, StockTransferStatus } from '@prisma/client';
 import { prisma } from '../../../../shared/infrastructure/prisma';
+import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
+import { PagedResult, sanitizeSortField } from '../../../../shared/http/pagination';
 import {
   CreateStockTransferInput,
   IStockTransferRepository,
+  StockTransferListFilter,
   StockTransferWithItems,
 } from '../../domain/repositories/IStockTransferRepository';
+
+const ALLOWED_SORT_FIELDS = ['createdAt', 'transferNumber'] as const;
 
 export class StockTransferRepository implements IStockTransferRepository {
   async create(input: CreateStockTransferInput): Promise<StockTransferWithItems> {
@@ -19,6 +24,25 @@ export class StockTransferRepository implements IStockTransferRepository {
       },
       include: { items: true },
     });
+  }
+
+  async list(query: ListQueryDto, filter: StockTransferListFilter): Promise<PagedResult<StockTransferWithItems>> {
+    const where: Prisma.StockTransferWhereInput = {
+      sourceWarehouseId: filter.sourceWarehouseId,
+      destinationWarehouseId: filter.destinationWarehouseId,
+      status: filter.status,
+    };
+    const [items, total] = await Promise.all([
+      prisma.stockTransfer.findMany({
+        where,
+        include: { items: true },
+        orderBy: { [sanitizeSortField(query.sort, ALLOWED_SORT_FIELDS)]: query.order },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.stockTransfer.count({ where }),
+    ]);
+    return { items, total };
   }
 
   async findById(id: string): Promise<StockTransferWithItems | null> {

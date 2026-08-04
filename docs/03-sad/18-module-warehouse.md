@@ -451,16 +451,22 @@ Create goods receipt example:
 
 | Method | Endpoint | Purpose |
 |---|---|---|
+| GET | `/warehouse/transfers` | List transfers (filter by source/destination warehouse, status) |
+| GET | `/warehouse/transfers/{transferId}` | Transfer detail |
 | POST | `/warehouse/transfers` | Create transfer draft |
 | POST | `/warehouse/transfers/{transferId}/submit` | Submit transfer |
 | POST | `/warehouse/transfers/{transferId}/approve` | Approve transfer |
 | POST | `/warehouse/transfers/{transferId}/dispatch` | Remove/reserve source stock |
 | POST | `/warehouse/transfers/{transferId}/receive` | Add destination stock |
+| GET | `/warehouse/adjustments` | List adjustments (filter by warehouse, direction, status) |
+| GET | `/warehouse/adjustments/{adjustmentId}` | Adjustment detail |
 | POST | `/warehouse/adjustments` | Create adjustment draft |
 | POST | `/warehouse/adjustments/{adjustmentId}/approve` | Approve adjustment |
 | POST | `/warehouse/adjustments/{adjustmentId}/post` | Post ledger transaction |
 | POST | `/warehouse/reservations` | Reserve available stock |
 | POST | `/warehouse/reservations/{reservationId}/release` | Release reservation |
+
+> **Addendum (post-launch):** the 4 `GET` rows above were not part of task-115–124's original scope (Epic X, UC-WHS-004/005) — the original task set only ever specified the write-path rows. They were added afterward because the frontend had no way to browse a transfer/adjustment after creating it. Both reuse the existing `warehouse.stock.read` permission (no new permission code) — see `docs/06-tasks/task-115.md`–`task-124.md` for the original scope these deviate from.
 
 ## 6.4 Stock Opname dan Batch
 

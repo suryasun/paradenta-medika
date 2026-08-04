@@ -87,11 +87,12 @@ describe("UserDetailView", () => {
     await waitFor(() => expect(mockedUserService.deactivate).toHaveBeenCalledWith("u1"));
   });
 
-  it("warns that current roles aren't shown, since the backend has no read endpoint for them", async () => {
-    mockedUserService.detail.mockResolvedValue(buildUser());
+  it("pre-populates the role checkboxes from the user's current roles", async () => {
+    mockedUserService.detail.mockResolvedValue(buildUser({ roleIds: ["r1"] }));
 
     renderView();
+    await screen.findByRole("heading", { name: "jdoe" });
 
-    expect(await screen.findByText(/current roles aren.t available/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Doctor")).toBeChecked();
   });
 });

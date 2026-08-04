@@ -1,5 +1,5 @@
-import { StockTransferPage } from "@/features/warehouse/components/StockTransferPage";
+import { StockTransferListPage } from "@/features/warehouse/components/StockTransferListPage";
 
 export default function WarehouseTransfersPage() {
-  return <StockTransferPage />;
+  return <StockTransferListPage />;
 }

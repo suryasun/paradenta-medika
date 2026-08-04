@@ -22,6 +22,7 @@ import { ListExpenseQueryDto } from '../../application/dtos/ExpenseQueryDto';
 import { CreateDailyClosingRequestDto } from '../../application/dtos/DailyClosingRequestDto';
 import { ListDailyClosingQueryDto } from '../../application/dtos/DailyClosingQueryDto';
 import { GenerateDoctorFeeSettlementRequestDto, PayDoctorFeeSettlementRequestDto } from '../../application/dtos/DoctorFeeSettlementRequestDto';
+import { ListDoctorFeeSettlementQueryDto } from '../../application/dtos/DoctorFeeSettlementQueryDto';
 import { ReopenFinancialPeriodRequestDto } from '../../application/dtos/FinancialPeriodReopenRequestDto';
 import { CreateFinanceAccountMappingRequestDto } from '../../application/dtos/FinanceAccountMappingRequestDto';
 import {
@@ -64,6 +65,8 @@ import { ListDailyClosingsUseCase } from '../../application/use-cases/ListDailyC
 import { GenerateDoctorFeeSettlementUseCase } from '../../application/use-cases/GenerateDoctorFeeSettlementUseCase';
 import { ApproveDoctorFeeSettlementUseCase } from '../../application/use-cases/ApproveDoctorFeeSettlementUseCase';
 import { PayDoctorFeeSettlementUseCase } from '../../application/use-cases/PayDoctorFeeSettlementUseCase';
+import { ListDoctorFeeSettlementUseCase } from '../../application/use-cases/ListDoctorFeeSettlementUseCase';
+import { GetDoctorFeeSettlementUseCase } from '../../application/use-cases/GetDoctorFeeSettlementUseCase';
 import { LockFinancialPeriodUseCase } from '../../application/use-cases/LockFinancialPeriodUseCase';
 import { CloseFinancialPeriodUseCase } from '../../application/use-cases/CloseFinancialPeriodUseCase';
 import { ReopenFinancialPeriodUseCase } from '../../application/use-cases/ReopenFinancialPeriodUseCase';
@@ -256,6 +259,8 @@ export function buildFinanceModule(
       new JournalNumberGenerator(journalRepository),
       auditService,
     ),
+    new ListDoctorFeeSettlementUseCase(doctorFeeSettlementRepository),
+    new GetDoctorFeeSettlementUseCase(doctorFeeSettlementRepository),
   );
 
   const financeReportController = new FinanceReportController(
@@ -429,10 +434,22 @@ export function buildFinanceModule(
     dailyClosingController.list,
   );
 
-  // docs/06-tasks/task-166.md/task-167.md (Epic AE, UC-FIN-006). Literal
-  // `finance.settlement.*` Section 8.1 verbs (read/generate/approve/pay
-  // -- `read` unused since no list/get endpoint is in this task set's
-  // scope).
+  // docs/06-tasks/task-166.md/task-167.md (Epic AE, UC-FIN-006). List/detail
+  // added post-launch (docs/03-sad/17-module-finance.md Section 6.4
+  // addendum) to activate the previously-reserved `finance.settlement.read`
+  // permission -- the frontend had no way to browse/re-open a settlement
+  // after creating it, since only generate/approve/pay were ever wired.
+  router.get(
+    '/finance/doctor-fee-settlements',
+    requirePermission('finance.settlement.read'),
+    validateQuery(ListDoctorFeeSettlementQueryDto),
+    doctorFeeSettlementController.list,
+  );
+  router.get(
+    '/finance/doctor-fee-settlements/:settlementId',
+    requirePermission('finance.settlement.read'),
+    doctorFeeSettlementController.detail,
+  );
   router.post(
     '/finance/doctor-fee-settlements/generate',
     requirePermission('finance.settlement.generate'),

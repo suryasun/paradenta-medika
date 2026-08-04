@@ -1,10 +1,15 @@
-import { StockAdjustment, StockAdjustmentStatus } from '@prisma/client';
+import { Prisma, StockAdjustment, StockAdjustmentStatus } from '@prisma/client';
 import { prisma } from '../../../../shared/infrastructure/prisma';
+import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
+import { PagedResult, sanitizeSortField } from '../../../../shared/http/pagination';
 import {
   CreateStockAdjustmentInput,
   IStockAdjustmentRepository,
+  StockAdjustmentListFilter,
   StockAdjustmentWithItems,
 } from '../../domain/repositories/IStockAdjustmentRepository';
+
+const ALLOWED_SORT_FIELDS = ['createdAt', 'adjustmentNumber'] as const;
 
 export class StockAdjustmentRepository implements IStockAdjustmentRepository {
   async create(input: CreateStockAdjustmentInput): Promise<StockAdjustmentWithItems> {
@@ -19,6 +24,25 @@ export class StockAdjustmentRepository implements IStockAdjustmentRepository {
       },
       include: { items: true },
     });
+  }
+
+  async list(query: ListQueryDto, filter: StockAdjustmentListFilter): Promise<PagedResult<StockAdjustmentWithItems>> {
+    const where: Prisma.StockAdjustmentWhereInput = {
+      warehouseId: filter.warehouseId,
+      direction: filter.direction,
+      status: filter.status,
+    };
+    const [items, total] = await Promise.all([
+      prisma.stockAdjustment.findMany({
+        where,
+        include: { items: true },
+        orderBy: { [sanitizeSortField(query.sort, ALLOWED_SORT_FIELDS)]: query.order },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.stockAdjustment.count({ where }),
+    ]);
+    return { items, total };
   }
 
   async findById(id: string): Promise<StockAdjustmentWithItems | null> {

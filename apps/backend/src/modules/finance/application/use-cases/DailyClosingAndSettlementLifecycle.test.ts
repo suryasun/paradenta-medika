@@ -6,6 +6,8 @@ import { ApproveDailyClosingUseCase } from './ApproveDailyClosingUseCase';
 import { GenerateDoctorFeeSettlementUseCase } from './GenerateDoctorFeeSettlementUseCase';
 import { ApproveDoctorFeeSettlementUseCase } from './ApproveDoctorFeeSettlementUseCase';
 import { PayDoctorFeeSettlementUseCase } from './PayDoctorFeeSettlementUseCase';
+import { ListDoctorFeeSettlementUseCase } from './ListDoctorFeeSettlementUseCase';
+import { GetDoctorFeeSettlementUseCase } from './GetDoctorFeeSettlementUseCase';
 import { LockFinancialPeriodUseCase } from './LockFinancialPeriodUseCase';
 import { CloseFinancialPeriodUseCase } from './CloseFinancialPeriodUseCase';
 import { ReopenFinancialPeriodUseCase } from './ReopenFinancialPeriodUseCase';
@@ -26,6 +28,7 @@ import {
   DailyClosingDuplicateException,
   DailyClosingSegregationOfDutiesException,
   DailyClosingVarianceReasonRequiredException,
+  DoctorFeeSettlementNotFoundException,
   FinancialPeriodNotInStatusException,
   SettlementNotApprovedException,
   SettlementSegregationOfDutiesException,
@@ -71,6 +74,8 @@ function buildSut() {
       new JournalNumberGenerator(journalRepository),
       auditService,
     ),
+    listSettlementUseCase: new ListDoctorFeeSettlementUseCase(settlementRepository),
+    getSettlementUseCase: new GetDoctorFeeSettlementUseCase(settlementRepository),
     lockPeriodUseCase: new LockFinancialPeriodUseCase(financialPeriodRepository, auditService),
     closePeriodUseCase: new CloseFinancialPeriodUseCase(financialPeriodRepository, auditService, eventBus),
     reopenPeriodUseCase: new ReopenFinancialPeriodUseCase(financialPeriodRepository, auditService),
@@ -287,6 +292,35 @@ describe('Doctor Fee Settlement lifecycle (task-166-167, UC-FIN-006)', () => {
 
     const cashAccount = sut.cashAccountRepository.cashAccounts.get(cash.id);
     expect(Number(cashAccount?.currentBalance)).toBe(-75000);
+  });
+
+  it('lists settlements filtered by doctor/status and fetches one by id, 404s on unknown id', async () => {
+    const sut = buildSut();
+    const { feeLedger } = await seedFeeAccountAndCash(sut);
+    sut.visitTreatmentRepository.manualDoctorFeeSources = [
+      { visitTreatmentId: 'vt-1', visitId: 'v-1', treatmentId: 't-1', quantity: 1, doctorFee: 50000, amount: 50000, visitDate: new Date('2026-07-10') },
+    ];
+    const settlement = await sut.generateSettlementUseCase.execute({
+      branchId: 'branch-1',
+      doctorId: 'doctor-1',
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+      feeAccountId: feeLedger.id,
+      actorUserId: 'staff-1',
+    });
+
+    const { items, total } = await sut.listSettlementUseCase.execute({ page: 1, limit: 20, sort: 'createdAt', order: 'desc', doctorId: 'doctor-1' });
+    expect(total).toBe(1);
+    expect(items[0].id).toBe(settlement.id);
+
+    const { total: otherDoctorTotal } = await sut.listSettlementUseCase.execute({ page: 1, limit: 20, sort: 'createdAt', order: 'desc', doctorId: 'doctor-2' });
+    expect(otherDoctorTotal).toBe(0);
+
+    const fetched = await sut.getSettlementUseCase.execute(settlement.id);
+    expect(fetched.id).toBe(settlement.id);
+    expect(fetched.grossAmount).toBe(50000);
+
+    await expect(sut.getSettlementUseCase.execute('unknown-id')).rejects.toBeInstanceOf(DoctorFeeSettlementNotFoundException);
   });
 });
 

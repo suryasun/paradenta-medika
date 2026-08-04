@@ -96,6 +96,8 @@ export const goodsReceiptService = {
 };
 
 export const stockTransferService = {
+  list: (params?: Record<string, unknown>) => list<StockTransfer>("/warehouse/transfers", params),
+  detail: (id: string) => detail<StockTransfer>(`/warehouse/transfers/${id}`),
   create: (payload: { sourceWarehouseId: string; destinationWarehouseId: string; notes?: string; items: StockTransferItemEntry[] }) =>
     post<StockTransfer>("/warehouse/transfers", payload),
   submit: (id: string) => post<StockTransfer>(`/warehouse/transfers/${id}/submit`),
@@ -105,6 +107,8 @@ export const stockTransferService = {
 };
 
 export const stockAdjustmentService = {
+  list: (params?: Record<string, unknown>) => list<StockAdjustment>("/warehouse/adjustments", params),
+  detail: (id: string) => detail<StockAdjustment>(`/warehouse/adjustments/${id}`),
   create: (payload: { warehouseId: string; direction: StockAdjustmentDirection; reasonCode: string; items: StockAdjustmentItemEntry[] }) =>
     post<StockAdjustment>("/warehouse/adjustments", payload),
   approve: (id: string) => post<StockAdjustment>(`/warehouse/adjustments/${id}/approve`),

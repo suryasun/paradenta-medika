@@ -1,4 +1,7 @@
-// Mirrors apps/backend/src/modules/system/application/dtos/UserAdminResponseDto.ts
+// Mirrors apps/backend/src/modules/system/application/dtos/UserAdminResponseDto.ts.
+// `roleIds` is only populated by the detail endpoint (added post-launch,
+// see docs/03-sad/21-module-system.md Section 6.1 addendum) -- list/create
+// responses omit it, same asymmetry as the backend DTO.
 export interface SystemUser {
   id: string;
   username: string;
@@ -6,6 +9,7 @@ export interface SystemUser {
   status: "ACTIVE" | "INACTIVE";
   lastLoginAt: string | null;
   createdAt: string;
+  roleIds?: string[];
 }
 
 // Roles/Permissions have no dedicated response DTO -- apps/backend's

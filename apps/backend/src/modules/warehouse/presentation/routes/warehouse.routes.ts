@@ -17,7 +17,9 @@ import {
 import { ListPurchaseOrderQueryDto } from '../../application/dtos/PurchaseOrderQueryDto';
 import { CreateGoodsReceiptRequestDto } from '../../application/dtos/GoodsReceiptRequestDto';
 import { CreateStockTransferRequestDto } from '../../application/dtos/StockTransferRequestDto';
+import { ListStockTransferQueryDto } from '../../application/dtos/StockTransferQueryDto';
 import { CreateStockAdjustmentRequestDto } from '../../application/dtos/StockAdjustmentRequestDto';
+import { ListStockAdjustmentQueryDto } from '../../application/dtos/StockAdjustmentQueryDto';
 import { CreateStockReservationRequestDto } from '../../application/dtos/StockReservationRequestDto';
 import { CreateStockOpnameRequestDto, SubmitStockOpnameRequestDto, UpdateStockOpnameRequestDto } from '../../application/dtos/StockOpnameRequestDto';
 import { ListStockOpnameQueryDto } from '../../application/dtos/StockOpnameQueryDto';
@@ -49,9 +51,13 @@ import { SubmitStockTransferUseCase } from '../../application/use-cases/SubmitSt
 import { ApproveStockTransferUseCase } from '../../application/use-cases/ApproveStockTransferUseCase';
 import { DispatchStockTransferUseCase } from '../../application/use-cases/DispatchStockTransferUseCase';
 import { ReceiveStockTransferUseCase } from '../../application/use-cases/ReceiveStockTransferUseCase';
+import { ListStockTransferUseCase } from '../../application/use-cases/ListStockTransferUseCase';
+import { GetStockTransferUseCase } from '../../application/use-cases/GetStockTransferUseCase';
 import { CreateStockAdjustmentUseCase } from '../../application/use-cases/CreateStockAdjustmentUseCase';
 import { ApproveStockAdjustmentUseCase } from '../../application/use-cases/ApproveStockAdjustmentUseCase';
 import { PostStockAdjustmentUseCase } from '../../application/use-cases/PostStockAdjustmentUseCase';
+import { ListStockAdjustmentUseCase } from '../../application/use-cases/ListStockAdjustmentUseCase';
+import { GetStockAdjustmentUseCase } from '../../application/use-cases/GetStockAdjustmentUseCase';
 import { ReserveStockUseCase } from '../../application/use-cases/ReserveStockUseCase';
 import { ReleaseStockReservationUseCase } from '../../application/use-cases/ReleaseStockReservationUseCase';
 import { CreateStockOpnameUseCase } from '../../application/use-cases/CreateStockOpnameUseCase';
@@ -230,6 +236,8 @@ export function buildWarehouseModule(
     new ApproveStockTransferUseCase(stockTransferRepository, auditService),
     new DispatchStockTransferUseCase(stockTransferRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
     new ReceiveStockTransferUseCase(stockTransferRepository, stockRepository, new StockTransactionNumberGenerator(stockRepository), auditService),
+    new ListStockTransferUseCase(stockTransferRepository),
+    new GetStockTransferUseCase(stockTransferRepository),
   );
 
   const stockAdjustmentController = new StockAdjustmentController(
@@ -242,6 +250,8 @@ export function buildWarehouseModule(
       auditService,
       eventBus,
     ),
+    new ListStockAdjustmentUseCase(stockAdjustmentRepository),
+    new GetStockAdjustmentUseCase(stockAdjustmentRepository),
   );
 
   const stockReservationController = new StockReservationController(
@@ -398,6 +408,18 @@ export function buildWarehouseModule(
   // at the use-case level (WarehouseSegregationOfDutiesException), the
   // same pattern as PO/Adjustment approval, since Section 8.1 has no
   // distinct per-step permission split for Transfer.
+  //
+  // List/detail added post-launch (docs/03-sad/18-module-warehouse.md
+  // Section 6.3 addendum) -- reuses `warehouse.stock.read` rather than a
+  // new permission, since the original task set never scoped a GET route
+  // and the frontend had no way to browse a transfer after creating it.
+  router.get(
+    '/warehouse/transfers',
+    requirePermission('warehouse.stock.read'),
+    validateQuery(ListStockTransferQueryDto),
+    stockTransferController.list,
+  );
+  router.get('/warehouse/transfers/:transferId', requirePermission('warehouse.stock.read'), stockTransferController.detail);
   router.post(
     '/warehouse/transfers',
     requirePermission('warehouse.stock.transfer'),
@@ -416,6 +438,17 @@ export function buildWarehouseModule(
   // separate from Approve for segregation of duties and Section 8.1 has
   // no distinct "post" verb (same reasoning as `warehouse.purchase.post`
   // in Epic W).
+  //
+  // List/detail added post-launch (docs/03-sad/18-module-warehouse.md
+  // Section 6.3 addendum), same reasoning as Stock Transfer's list/detail
+  // above -- reuses `warehouse.stock.read`.
+  router.get(
+    '/warehouse/adjustments',
+    requirePermission('warehouse.stock.read'),
+    validateQuery(ListStockAdjustmentQueryDto),
+    stockAdjustmentController.list,
+  );
+  router.get('/warehouse/adjustments/:adjustmentId', requirePermission('warehouse.stock.read'), stockAdjustmentController.detail);
   router.post(
     '/warehouse/adjustments',
     requirePermission('warehouse.stock.adjust'),

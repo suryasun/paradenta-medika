@@ -1,6 +1,8 @@
 import { CreateStockAdjustmentUseCase } from './CreateStockAdjustmentUseCase';
 import { ApproveStockAdjustmentUseCase } from './ApproveStockAdjustmentUseCase';
 import { PostStockAdjustmentUseCase } from './PostStockAdjustmentUseCase';
+import { ListStockAdjustmentUseCase } from './ListStockAdjustmentUseCase';
+import { GetStockAdjustmentUseCase } from './GetStockAdjustmentUseCase';
 import { StockAdjustmentNumberGenerator } from '../services/StockAdjustmentNumberGenerator';
 import { StockTransactionNumberGenerator } from '../services/StockTransactionNumberGenerator';
 import { FakeStockAdjustmentRepository, FakeStockRepository } from '../../../../../tests/fakes/warehouseFakes';
@@ -10,6 +12,7 @@ import {
   AdjustmentApprovalRequiredException,
   NegativeStockForbiddenException,
   StockAdjustmentAlreadyPostedException,
+  StockAdjustmentNotFoundException,
   WarehouseSegregationOfDutiesException,
 } from '../../domain/exceptions/WarehouseExceptions';
 
@@ -31,7 +34,9 @@ function buildSut() {
     auditService,
     eventBus,
   );
-  return { stockRepository, createUseCase, approveUseCase, postUseCase, eventBus };
+  const listUseCase = new ListStockAdjustmentUseCase(stockAdjustmentRepository);
+  const getUseCase = new GetStockAdjustmentUseCase(stockAdjustmentRepository);
+  return { stockRepository, createUseCase, approveUseCase, postUseCase, eventBus, listUseCase, getUseCase };
 }
 
 describe('Stock Adjustment lifecycle (task-121-124, UC-WHS-005)', () => {
@@ -103,5 +108,32 @@ describe('Stock Adjustment lifecycle (task-121-124, UC-WHS-005)', () => {
     await expect(postUseCase.execute({ adjustmentId: adjustment.id, actorUserId: 'manager-1' })).rejects.toBeInstanceOf(
       StockAdjustmentAlreadyPostedException,
     );
+  });
+
+  it('lists adjustments filtered by direction and fetches one by id, 404s on unknown id', async () => {
+    const { createUseCase, listUseCase, getUseCase } = buildSut();
+    const inAdjustment = await createUseCase.execute({
+      warehouseId: 'wh-1',
+      direction: 'IN',
+      reasonCode: 'FOUND_SURPLUS',
+      items: [{ itemId: 'item-1', quantity: 5 }],
+      actorUserId: 'staff-1',
+    });
+    await createUseCase.execute({
+      warehouseId: 'wh-1',
+      direction: 'OUT',
+      reasonCode: 'DAMAGED',
+      items: [{ itemId: 'item-1', quantity: 1 }],
+      actorUserId: 'staff-1',
+    });
+
+    const { items, total } = await listUseCase.execute({ page: 1, limit: 20, sort: 'createdAt', order: 'desc', direction: 'IN' });
+    expect(total).toBe(1);
+    expect(items[0].id).toBe(inAdjustment.id);
+
+    const fetched = await getUseCase.execute(inAdjustment.id);
+    expect(fetched.id).toBe(inAdjustment.id);
+
+    await expect(getUseCase.execute('unknown-id')).rejects.toBeInstanceOf(StockAdjustmentNotFoundException);
   });
 });

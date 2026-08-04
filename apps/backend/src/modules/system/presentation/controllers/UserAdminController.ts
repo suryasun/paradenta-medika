@@ -33,7 +33,7 @@ export class UserAdminController {
     try {
       const query = req.query as unknown as ListQueryDto;
       const { items, total } = await this.listUsersUseCase.execute(query);
-      sendSuccess(res, items.map(toUserAdminResponse), 'Users retrieved', 200, buildPaginationMeta(query.page, query.limit, total));
+      sendSuccess(res, items.map((user) => toUserAdminResponse(user)), 'Users retrieved', 200, buildPaginationMeta(query.page, query.limit, total));
     } catch (error) {
       next(error);
     }
@@ -60,8 +60,8 @@ export class UserAdminController {
 
   detail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const user = await this.getUserUseCase.execute(req.params.userId);
-      sendSuccess(res, toUserAdminResponse(user), 'User retrieved');
+      const { user, roleIds } = await this.getUserUseCase.execute(req.params.userId);
+      sendSuccess(res, toUserAdminResponse(user, roleIds), 'User retrieved');
     } catch (error) {
       next(error);
     }

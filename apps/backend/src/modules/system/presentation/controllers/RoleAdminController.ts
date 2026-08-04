@@ -9,6 +9,7 @@ import { ListRolesUseCase } from '../../application/use-cases/ListRolesUseCase';
 import { CreateRoleUseCase } from '../../application/use-cases/CreateRoleUseCase';
 import { ListPermissionsUseCase } from '../../application/use-cases/ListPermissionsUseCase';
 import { AssignPermissionsToRoleUseCase } from '../../application/use-cases/AssignPermissionsToRoleUseCase';
+import { GetRolePermissionsUseCase } from '../../application/use-cases/GetRolePermissionsUseCase';
 
 export class RoleAdminController {
   constructor(
@@ -16,7 +17,17 @@ export class RoleAdminController {
     private readonly createRoleUseCase: CreateRoleUseCase,
     private readonly listPermissionsUseCase: ListPermissionsUseCase,
     private readonly assignPermissionsToRoleUseCase: AssignPermissionsToRoleUseCase,
+    private readonly getRolePermissionsUseCase: GetRolePermissionsUseCase,
   ) {}
+
+  getPermissionsForRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const permissions = await this.getRolePermissionsUseCase.execute(req.params.roleId);
+      sendSuccess(res, permissions, 'Role permissions retrieved');
+    } catch (error) {
+      next(error);
+    }
+  };
 
   listRoles = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

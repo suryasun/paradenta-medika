@@ -3,6 +3,8 @@ import { SubmitStockTransferUseCase } from './SubmitStockTransferUseCase';
 import { ApproveStockTransferUseCase } from './ApproveStockTransferUseCase';
 import { DispatchStockTransferUseCase } from './DispatchStockTransferUseCase';
 import { ReceiveStockTransferUseCase } from './ReceiveStockTransferUseCase';
+import { ListStockTransferUseCase } from './ListStockTransferUseCase';
+import { GetStockTransferUseCase } from './GetStockTransferUseCase';
 import { StockTransferNumberGenerator } from '../services/StockTransferNumberGenerator';
 import { StockTransactionNumberGenerator } from '../services/StockTransactionNumberGenerator';
 import { FakeStockRepository, FakeStockTransferRepository } from '../../../../../tests/fakes/warehouseFakes';
@@ -11,6 +13,7 @@ import {
   SourceDestinationSameException,
   StockInsufficientException,
   StockTransferAlreadyReceivedException,
+  StockTransferNotFoundException,
   StockTransferNotInStatusException,
   WarehouseSegregationOfDutiesException,
 } from '../../domain/exceptions/WarehouseExceptions';
@@ -38,7 +41,9 @@ function buildSut() {
     new StockTransactionNumberGenerator(stockRepository),
     auditService,
   );
-  return { stockRepository, createUseCase, submitUseCase, approveUseCase, dispatchUseCase, receiveUseCase };
+  const listUseCase = new ListStockTransferUseCase(stockTransferRepository);
+  const getUseCase = new GetStockTransferUseCase(stockTransferRepository);
+  return { stockRepository, createUseCase, submitUseCase, approveUseCase, dispatchUseCase, receiveUseCase, listUseCase, getUseCase };
 }
 
 async function seedSourceStock(stockRepository: FakeStockRepository, warehouseId: string, itemId: string, quantity: number) {
@@ -135,5 +140,31 @@ describe('Stock Transfer lifecycle (task-115-120, UC-WHS-004)', () => {
     await expect(dispatchUseCase.execute({ transferId: transfer.id, actorUserId: 'staff-1' })).rejects.toBeInstanceOf(
       StockTransferNotInStatusException,
     );
+  });
+
+  it('lists transfers filtered by destination warehouse and fetches one by id, 404s on unknown id', async () => {
+    const { createUseCase, listUseCase, getUseCase } = buildSut();
+    const transfer = await createUseCase.execute({
+      sourceWarehouseId: 'wh-1',
+      destinationWarehouseId: 'wh-2',
+      items: [{ itemId: 'item-1', quantity: 5 }],
+      actorUserId: 'staff-1',
+    });
+    await createUseCase.execute({
+      sourceWarehouseId: 'wh-1',
+      destinationWarehouseId: 'wh-3',
+      items: [{ itemId: 'item-1', quantity: 2 }],
+      actorUserId: 'staff-1',
+    });
+
+    const { items, total } = await listUseCase.execute({ page: 1, limit: 20, sort: 'createdAt', order: 'desc', destinationWarehouseId: 'wh-2' });
+    expect(total).toBe(1);
+    expect(items[0].id).toBe(transfer.id);
+
+    const fetched = await getUseCase.execute(transfer.id);
+    expect(fetched.id).toBe(transfer.id);
+    expect(fetched.items).toHaveLength(1);
+
+    await expect(getUseCase.execute('unknown-id')).rejects.toBeInstanceOf(StockTransferNotFoundException);
   });
 });

@@ -351,7 +351,10 @@ All endpoints use `/api/v1`, JWT and authorization from Authentication, standard
 | POST | `/system/users/{userId}/revoke-sessions` | `system.user.session.revoke` |
 | GET/POST | `/system/roles` | `system.role.read` / `system.role.manage` |
 | GET | `/system/permissions` | `system.permission.read` |
+| GET | `/system/roles/{roleId}/permissions` | `system.permission.read` |
 | PATCH | `/system/roles/{roleId}/permissions` | `system.role.permission.manage` |
+
+> **Addendum (post-launch):** `GET /system/roles/{roleId}/permissions` was not part of task-017/018's original scope — neither task specified a read endpoint for a role's current permission grants, only the catalog list and the replace-all `PATCH`. Its absence meant the Role-Permissions admin screen always opened with every checkbox unchecked, regardless of the role's actual grants. It reuses `system.permission.read` (no new permission code). Same addendum applies to `GET /system/users/{userId}` above: its response now also includes `roleIds` (via `IUserRoleRepository.listRolesForUser`, already used server-side by the write path but never read-facing before), fixing the identical pre-population gap for User-Detail's role checkboxes. See `docs/06-tasks/task-017.md`–`task-020.md` for the original scope these deviate from.
 
 Role assignment example:
 

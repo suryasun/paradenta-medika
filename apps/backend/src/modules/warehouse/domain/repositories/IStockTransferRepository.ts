@@ -1,4 +1,6 @@
 import { StockTransfer, StockTransferItem, StockTransferStatus } from '@prisma/client';
+import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
+import { PagedResult } from '../../../../shared/http/pagination';
 
 export type StockTransferWithItems = StockTransfer & { items: StockTransferItem[] };
 
@@ -16,8 +18,15 @@ export interface CreateStockTransferInput {
   createdBy: string;
 }
 
+export interface StockTransferListFilter {
+  sourceWarehouseId?: string;
+  destinationWarehouseId?: string;
+  status?: StockTransferStatus;
+}
+
 export interface IStockTransferRepository {
   create(input: CreateStockTransferInput): Promise<StockTransferWithItems>;
+  list(query: ListQueryDto, filter: StockTransferListFilter): Promise<PagedResult<StockTransferWithItems>>;
   findById(id: string): Promise<StockTransferWithItems | null>;
   updateStatus(
     id: string,

@@ -33,7 +33,7 @@ function buildApp(auth?: AuthenticatedContext) {
   const controller = new UserAdminController(
     new CreateUserUseCase(userAdminRepository, roleRepository, userRoleRepository, passwordService, auditService),
     new ListUsersUseCase(userAdminRepository),
-    new GetUserUseCase(userAdminRepository),
+    new GetUserUseCase(userAdminRepository, userRoleRepository),
     new UpdateUserUseCase(userAdminRepository, auditService),
     new ActivateUserUseCase(userAdminRepository, auditService),
     new DeactivateUserUseCase(userAdminRepository, sessionRepository, auditService),

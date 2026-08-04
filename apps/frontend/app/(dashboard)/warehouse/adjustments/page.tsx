@@ -1,5 +1,5 @@
-import { StockAdjustmentPage } from "@/features/warehouse/components/StockAdjustmentPage";
+import { StockAdjustmentListPage } from "@/features/warehouse/components/StockAdjustmentListPage";
 
 export default function WarehouseAdjustmentsPage() {
-  return <StockAdjustmentPage />;
+  return <StockAdjustmentListPage />;
 }

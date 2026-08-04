@@ -22,4 +22,12 @@ export const roleService = {
   async assignPermissions(roleId: string, permissionIds: string[]): Promise<void> {
     await apiClient.patch(`/system/roles/${roleId}/permissions`, { permissionIds });
   },
+
+  // GET /system/roles/:roleId/permissions -- added post-launch (see
+  // docs/03-sad/21-module-system.md Section 6.1 addendum) to fix the
+  // Role-Permissions modal opening with every checkbox unchecked.
+  async getPermissionsForRole(roleId: string): Promise<Permission[]> {
+    const response = await apiClient.get<ApiSuccessBody<Permission[]>>(`/system/roles/${roleId}/permissions`);
+    return response.data.data;
+  },
 };

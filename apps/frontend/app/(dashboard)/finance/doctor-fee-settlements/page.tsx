@@ -1,5 +1,5 @@
-import { DoctorFeeSettlementPage } from "@/features/finance/components/DoctorFeeSettlementPage";
+import { DoctorFeeSettlementListPage } from "@/features/finance/components/DoctorFeeSettlementListPage";
 
 export default function FinanceDoctorFeeSettlementsPage() {
-  return <DoctorFeeSettlementPage />;
+  return <DoctorFeeSettlementListPage />;
 }

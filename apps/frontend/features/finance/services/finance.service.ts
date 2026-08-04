@@ -107,6 +107,8 @@ export const dailyClosingService = {
 };
 
 export const doctorFeeSettlementService = {
+  list: (params?: Record<string, unknown>) => list<DoctorFeeSettlement>("/finance/doctor-fee-settlements", params),
+  detail: (id: string) => detail<DoctorFeeSettlement>(`/finance/doctor-fee-settlements/${id}`),
   generate: (payload: { branchId: string; doctorId: string; periodStart: string; periodEnd: string; feeAccountId: string }) =>
     post<DoctorFeeSettlement>("/finance/doctor-fee-settlements/generate", payload),
   approve: (id: string) => post<DoctorFeeSettlement>(`/finance/doctor-fee-settlements/${id}/approve`),

@@ -14,3 +14,11 @@ export function usePermissions() {
     queryFn: () => roleService.listPermissions(),
   });
 }
+
+export function useRolePermissions(roleId: string) {
+  return useQuery({
+    queryKey: ["system", "roles", "permissions", roleId],
+    queryFn: () => roleService.getPermissionsForRole(roleId),
+    enabled: Boolean(roleId),
+  });
+}

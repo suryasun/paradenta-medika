@@ -30,6 +30,7 @@ describe("RolePermissionsModal", () => {
       ],
       meta: { page: 1, limit: 500, total: 3, totalPages: 1 },
     });
+    mockedRoleService.getPermissionsForRole.mockResolvedValue([]);
   });
 
   it("groups permissions by module", async () => {
@@ -54,9 +55,15 @@ describe("RolePermissionsModal", () => {
     await waitFor(() => expect(mockedRoleService.assignPermissions).toHaveBeenCalledWith("r1", ["p1", "p3"]));
   });
 
-  it("warns that current permissions aren't shown, since the backend has no read endpoint for them", async () => {
-    renderModal(ROLE);
+  it("pre-populates checkboxes from the role's current permission grants", async () => {
+    mockedRoleService.getPermissionsForRole.mockResolvedValue([
+      { id: "p2", module: "billing", permissionKey: "billing.payment.create", permissionName: "Create Payments", description: null },
+    ]);
 
-    expect(await screen.findByText(/current permissions aren.t available/i)).toBeInTheDocument();
+    renderModal(ROLE);
+    await screen.findByText("View Invoices");
+
+    expect(screen.getByLabelText(/Create Payments/)).toBeChecked();
+    expect(screen.getByLabelText(/View Invoices/)).not.toBeChecked();
   });
 });

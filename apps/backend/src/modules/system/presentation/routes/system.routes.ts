@@ -20,6 +20,7 @@ import { UserRoleRepository } from '../../infrastructure/repositories/UserRoleRe
 import { CreateUserUseCase } from '../../application/use-cases/CreateUserUseCase';
 import { ListUsersUseCase } from '../../application/use-cases/ListUsersUseCase';
 import { GetUserUseCase } from '../../application/use-cases/GetUserUseCase';
+import { GetRolePermissionsUseCase } from '../../application/use-cases/GetRolePermissionsUseCase';
 import { UpdateUserUseCase } from '../../application/use-cases/UpdateUserUseCase';
 import { ActivateUserUseCase } from '../../application/use-cases/ActivateUserUseCase';
 import { DeactivateUserUseCase } from '../../application/use-cases/DeactivateUserUseCase';
@@ -103,7 +104,7 @@ export function buildSystemModule(
   const userController = new UserAdminController(
     new CreateUserUseCase(userAdminRepository, roleRepository, userRoleRepository, passwordService, auditService),
     new ListUsersUseCase(userAdminRepository),
-    new GetUserUseCase(userAdminRepository),
+    new GetUserUseCase(userAdminRepository, userRoleRepository),
     new UpdateUserUseCase(userAdminRepository, auditService),
     new ActivateUserUseCase(userAdminRepository, auditService),
     new DeactivateUserUseCase(userAdminRepository, sessionRepository, auditService),
@@ -116,6 +117,7 @@ export function buildSystemModule(
     new CreateRoleUseCase(roleRepository, auditService),
     new ListPermissionsUseCase(permissionRepository),
     new AssignPermissionsToRoleUseCase(roleRepository, permissionRepository, rolePermissionRepository, auditService),
+    new GetRolePermissionsUseCase(roleRepository, rolePermissionRepository),
   );
 
   // docs/06-tasks/task-192.md/task-193.md (Epic AI).
@@ -197,6 +199,16 @@ export function buildSystemModule(
   router.get('/system/roles', requirePermission('system.role.read'), validateQuery(ListQueryDto), roleController.listRoles);
   router.post('/system/roles', requirePermission('system.role.manage'), validateBody(CreateRoleRequestDto), roleController.createRole);
   router.get('/system/permissions', requirePermission('system.permission.read'), validateQuery(ListQueryDto), roleController.listPermissions);
+  // Added post-launch (docs/03-sad/21-module-system.md Section 6.1
+  // addendum) -- task-017/018 never scoped a read endpoint for a role's
+  // current grants, so the Role-Permissions modal opened blank every
+  // time. `getPermissionsForRole` already existed on the repository
+  // (used internally by the write side); this just exposes it.
+  router.get(
+    '/system/roles/:roleId/permissions',
+    requirePermission('system.permission.read'),
+    roleController.getPermissionsForRole,
+  );
   router.patch(
     '/system/roles/:roleId/permissions',
     requirePermission('system.role.permission.manage'),

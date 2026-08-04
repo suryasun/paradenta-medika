@@ -506,6 +506,8 @@ Pay expense request:
 | POST | `/finance/daily-closings` |
 | POST | `/finance/daily-closings/{closingId}/approve` |
 | GET | `/finance/daily-closings` |
+| GET | `/finance/doctor-fee-settlements` |
+| GET | `/finance/doctor-fee-settlements/{settlementId}` |
 | POST | `/finance/doctor-fee-settlements/generate` |
 | POST | `/finance/doctor-fee-settlements/{settlementId}/approve` |
 | POST | `/finance/doctor-fee-settlements/{settlementId}/pay` |
@@ -513,6 +515,8 @@ Pay expense request:
 | POST | `/finance/periods/{periodId}/lock` |
 | POST | `/finance/periods/{periodId}/close` |
 | POST | `/finance/periods/{periodId}/reopen` |
+
+> **Addendum (post-launch):** the 2 `GET .../doctor-fee-settlements*` rows were not part of task-166/167's original scope (Epic AE, UC-FIN-006) — the frontend had no way to browse a settlement after generating it. `finance.settlement.read` was already a defined-but-unused permission in Section 8.1 (the routes file's own inline comment flagged it as reserved); these two routes are what finally activate it — no new permission code was added. See `docs/06-tasks/task-166.md`/`task-167.md` for the original scope this deviates from.
 
 Daily close request:
 
