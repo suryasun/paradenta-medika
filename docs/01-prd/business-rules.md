@@ -65,6 +65,10 @@ Contoh:
 | Room | Branch |
 | Dental Chair | Branch |
 | Doctor Schedule | Branch |
+| Province / Regency / District / Village | Global |
+| Referral Source | Global |
+
+New this pass: wilayah administratif Indonesia (Provinsi → Kabupaten/Kota → Kecamatan → Kelurahan/Desa) selalu FK berjenjang, tidak pernah teks bebas; setiap level mengacu ke parent-nya. Lihat `docs/03-sad/11-module-master-data.md` §8.5/§11.21–11.25.
 
 ---
 
@@ -93,7 +97,10 @@ Contoh:
 - MRN tidak boleh berubah setelah dibuat.
 - Nomor identitas harus unik apabila diisi.
 - Pasien dapat memiliki lebih dari satu nomor telepon.
-- Pasien dapat memiliki lebih dari satu alamat.
+- Pasien dapat memiliki lebih dari satu alamat, namun hanya satu yang ditandai sebagai alamat utama (`isPrimary`).
+- Setiap level alamat (Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan/Desa) mengacu pada tabel referensi Master Data — tidak diisi sebagai teks bebas.
+- Nomor asuransi, akun Instagram/Facebook/TikTok, dan nomor WhatsApp bersifat opsional dan tidak divalidasi keunikannya.
+- Sumber rujukan (referral source) bersifat opsional; jika sumbernya "Staf Klinik", identitas staf perujuk (`referredByUserId`) dicatat. Konsep ini berbeda dari "Referral" klinis pada Modul EMR (rujukan pasien ke spesialis/rumah sakit/laboratorium) — keduanya tidak boleh disatukan.
 - Soft Delete hanya dapat dilakukan apabila pasien belum memiliki transaksi klinik.
 
 ---
@@ -127,6 +134,15 @@ Apabila ditemukan data dengan tingkat kemiripan tinggi, sistem menampilkan perin
 - Riwayat kunjungan tidak boleh dihapus.
 - Perubahan data pasien dicatat pada Audit Trail.
 - Perubahan identitas pasien hanya dapat dilakukan oleh pengguna yang memiliki izin.
+
+---
+
+## 5.5 Quick Add Patient Rules
+
+- Registrasi cepat (Quick Add Patient) hanya mengharuskan empat field: nama, alamat (teks bebas, bukan alamat berjenjang), nomor telepon, dan nomor identitas.
+- Pasien yang dibuat melalui Quick Add tetap mendapatkan MRN dan status `Registered` yang sah — bukan record sementara/placeholder.
+- Data yang belum lengkap (alamat berjenjang, kontak darurat, sumber rujukan, dsb.) dapat dilengkapi kemudian melalui alur Update Patient biasa.
+- Fitur ini hanya dapat diakses dari layar booking Reservation ketika pencarian pasien tidak menemukan hasil — bukan endpoint registrasi paralel yang berdiri sendiri di luar konteks tersebut.
 
 ---
 

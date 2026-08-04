@@ -86,6 +86,7 @@ Reservation Module menyediakan seluruh fungsi yang dibutuhkan untuk mengelola ja
 | RSV-010 | Check-in Patient | Mengubah reservasi menjadi antrean |
 | RSV-011 | Reservation Timeline | Riwayat perubahan status |
 | RSV-012 | Reservation History | Riwayat reservasi pasien |
+| RSV-013 | Quick Add Patient | Registrasi cepat pasien baru (nama, alamat bebas, telepon, nomor identitas) langsung dari layar booking, tanpa berpindah ke Modul Patient — lihat `docs/03-sad/12-module-patient.md` §17.1/§21.1a dan `docs/06-tasks/task-289.md` |
 
 ---
 

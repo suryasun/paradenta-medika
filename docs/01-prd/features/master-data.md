@@ -41,6 +41,10 @@ Modul Master Data mencakup pengelolaan seluruh data referensi yang digunakan ole
 - Data Religion
 - Data Occupation
 - Data Education
+- Data Wilayah (Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan/Desa)
+- Data Sumber Rujukan Pasien (Referral Source)
+
+New this pass (task-285, `docs/06-tasks/task-285.md`): a full 4-level Indonesian administrative-region catalog (Province → Regency → District → Village, each FK'd to its parent), plus a small Referral Source catalog used by Patient (task-287). See `docs/03-sad/11-module-master-data.md` §8.5/§11.21–11.25.
 
 ---
 

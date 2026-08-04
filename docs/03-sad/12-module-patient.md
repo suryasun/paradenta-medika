@@ -101,7 +101,9 @@ Modul Patient mencakup seluruh proses administrasi data pasien sebelum pasien me
 - Riwayat pembayaran
 - Upload foto pasien
 - Pengelolaan kontak darurat
-- Pengelolaan alamat pasien
+- Pengelolaan alamat pasien (berjenjang: Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan/Desa — referensi Master Data)
+- Pencatatan sumber rujukan pasien (referral source)
+- Registrasi cepat pasien (Quick Add Patient) dari layar Reservasi
 - Merge data pasien (Administrator)
 - Soft Delete pasien
 
@@ -266,7 +268,10 @@ Sistem mendukung kombinasi filter untuk mempercepat proses pencarian.
 - MRN tidak boleh berubah setelah dibuat.
 - Nomor identitas harus unik apabila diisi.
 - Pasien dapat memiliki lebih dari satu nomor telepon.
-- Pasien dapat memiliki lebih dari satu alamat.
+- Pasien dapat memiliki lebih dari satu alamat, namun hanya satu yang ditandai sebagai alamat utama (`isPrimary`).
+- Setiap level alamat (Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan/Desa) mengacu pada tabel referensi Master Data — tidak diisi sebagai teks bebas, agar dapat digunakan untuk pencarian dan pelaporan wilayah yang konsisten.
+- Nomor asuransi (insurance number), akun Instagram, Facebook, TikTok, dan nomor WhatsApp bersifat opsional dan tidak divalidasi keunikannya.
+- Sumber rujukan (referral source) bersifat opsional. Jika diisi, sistem mencatat jenis sumber (mis. Google, Instagram, Facebook, TikTok, Teman, Datang Sendiri, Alodokter, Lain-lain) dan — khusus untuk sumber yang berasal dari staf klinik (dokter, perawat, pegawai) — mencatat identitas staf yang memberi rujukan (`referredByUserId`). Konsep ini berbeda dari "Referral" klinis pada Modul EMR (rujukan pasien ke spesialis/rumah sakit/laboratorium dari sebuah Visit); keduanya tidak boleh disatukan.
 - Soft Delete hanya dapat dilakukan apabila pasien belum memiliki transaksi klinik.
 
 ---
@@ -439,6 +444,9 @@ Modul Patient menyediakan seluruh fungsi yang diperlukan untuk mengelola data pa
 | FR-PAT-015 | Merge data pasien | Medium |
 | FR-PAT-016 | Soft Delete pasien | Low |
 | FR-PAT-017 | Export daftar pasien | Medium |
+| FR-PAT-018 | Mengisi nomor asuransi dan akun media sosial (Instagram/Facebook/TikTok/WhatsApp) | Low |
+| FR-PAT-019 | Mencatat sumber rujukan pasien (referral source) | Medium |
+| FR-PAT-020 | Registrasi cepat pasien (Quick Add Patient) dari layar Reservasi | High |
 
 ---
 
@@ -499,6 +507,8 @@ Modul Patient memiliki beberapa use case utama yang digunakan oleh petugas regis
 | UC-PAT-010 | Merge Duplicate Patient | Administrator |
 | UC-PAT-011 | Archive Patient | Administrator |
 | UC-PAT-012 | Export Patient List | Administrator |
+| UC-PAT-013 | Record Patient Referral Source | Registration Staff |
+| UC-PAT-014 | Quick Add Patient (from Reservation) | Registration Staff |
 
 ---
 
@@ -566,6 +576,8 @@ Administrator
 | patient.export | Export data pasien |
 | patient.photo.upload | Upload foto pasien |
 | patient.history.read | Melihat riwayat pasien |
+
+Catatan: pencatatan sumber rujukan (UC-PAT-013) dan Quick Add Patient (UC-PAT-014) menggunakan permission yang sudah ada (`patient.update` dan `patient.create`) — tidak ada permission baru yang dibuat khusus, karena kedua fitur ini adalah bagian dari alur registrasi/pembaruan pasien yang sudah dikontrol permission tersebut, bukan kapabilitas administratif terpisah.
 
 ---
 
@@ -867,7 +879,14 @@ Merupakan entity utama yang menyimpan identitas pasien.
 | phoneNumber | String | Nomor telepon utama |
 | email | String | Email |
 | status | Enum | Status pasien |
-| photoUrl | String | Lokasi foto |
+| photoUrl | String | Lokasi foto profil pasien |
+| insuranceNumber | String | Nomor asuransi (opsional, tidak divalidasi format/keunikan) |
+| instagramHandle | String | Username Instagram (opsional) |
+| facebookHandle | String | Username/URL Facebook (opsional) |
+| tiktokHandle | String | Username TikTok (opsional) |
+| whatsappNumber | String | Nomor WhatsApp (opsional, dapat berbeda dari phoneNumber utama) |
+| referralSourceId | UUID | Referensi ke katalog sumber rujukan (Master Data), nullable |
+| referredByUserId | UUID | Referensi ke `User` (staf) yang memberi rujukan, nullable — hanya diisi ketika `referralSourceId` menunjuk ke jenis sumber "Staf Klinik" |
 | createdAt | Timestamp | Waktu dibuat |
 | updatedAt | Timestamp | Waktu diubah |
 
@@ -885,6 +904,14 @@ PhoneNumber
 EmailAddress
 MedicalRecordNumber
 ```
+
+---
+
+## 14.5 Referral Source (disambiguation)
+
+`referralSourceId`/`referredByUserId` pada Patient mencatat **dari mana pasien mengetahui klinik** (marketing/lead source) pada saat registrasi — jenisnya dikelola sebagai katalog Master Data (lihat `docs/03-sad/11-module-master-data.md`), bukan entity milik Modul Patient sendiri, mengikuti pola referensi yang sama seperti `religionId`/`occupationId`.
+
+Ini **bukan** entity `Referral` yang sudah ada pada Modul EMR (rujukan klinis pasien ke spesialis/rumah sakit/laboratorium, dibuat dari sebuah Visit). Kedua konsep memakai kata "referral" dalam bahasa Inggris sehari-hari tetapi merepresentasikan hal yang sepenuhnya berbeda; implementasi tidak boleh menyatukan atau menamai ulang salah satu agar bertabrakan dengan yang lain.
 
 ---
 
@@ -914,6 +941,7 @@ PATIENT ||--o{ PAYMENT : owns
 |----------|-------------|-------------|
 | Patient Address | One To Many | Pasien memiliki banyak alamat |
 | Emergency Contact | One To Many | Banyak kontak darurat |
+| Referral Source (Master Data) | Many To One | Setiap pasien mengacu ke maksimal satu entri katalog sumber rujukan; katalog dimiliki oleh Master Data, bukan Patient |
 | Reservation | One To Many | Banyak reservasi |
 | Visit | One To Many | Banyak kunjungan |
 | Invoice | One To Many | Banyak invoice |
@@ -1003,7 +1031,10 @@ ArchivePatientUseCase
 RestorePatientUseCase
 GetPatientHistoryUseCase
 ExportPatientUseCase
+QuickAddPatientUseCase
 ```
+
+`QuickAddPatientUseCase` is a distinct, reduced-field use case (`fullName`, `address` free text, `phoneNumber`, `identityNumber` only) — not a variant of `CreatePatientUseCase`'s full validation path. It exists for the Reservation booking screen, where a walk-in/unregistered patient needs to be created in-flow without leaving the booking form. A patient created this way still receives a real MRN and a `status` of `Registered`, and can later be completed via the normal `UpdatePatientUseCase` once the rest of their profile (address detail, emergency contact, referral source, etc.) is known. Referral source and the new profile fields (insurance number, social media handles) are captured through the existing `CreatePatientUseCase`/`UpdatePatientUseCase` as additional optional fields — no separate use case is needed for those.
 
 ---
 
@@ -1229,6 +1260,7 @@ Semua endpoint:
 | GET | /patients | Daftar pasien |
 | GET | /patients/{id} | Detail pasien |
 | POST | /patients | Registrasi pasien |
+| POST | /patients/quick-add | Registrasi cepat pasien (nama, alamat bebas, telepon, nomor identitas) — dipanggil dari layar Reservasi |
 | PUT | /patients/{id} | Update pasien |
 | PATCH | /patients/{id}/archive | Arsip pasien |
 | PATCH | /patients/{id}/restore | Restore pasien |
@@ -1300,9 +1332,16 @@ Semua endpoint:
   "email": "john@example.com",
   "identityType": "NIK",
   "identityNumber": "317xxxxxxxxxxxxx",
+  "insuranceNumber": "BPJS-000123456",
+  "instagramHandle": "@johndoe",
+  "facebookHandle": null,
+  "tiktokHandle": null,
+  "whatsappNumber": "08123456789",
+  "referralSourceId": "uuid",
+  "referredByUserId": null,
   "address": {
     "provinceId": "uuid",
-    "cityId": "uuid",
+    "regencyId": "uuid",
     "districtId": "uuid",
     "villageId": "uuid",
     "postalCode": "40111",
@@ -1310,6 +1349,23 @@ Semua endpoint:
   }
 }
 ```
+
+`insuranceNumber`, the four social handles, `referralSourceId`, and `referredByUserId` are all optional. `referredByUserId` is only meaningful when `referralSourceId` points at the "Staf Klinik" catalog entry (see §14.5) — the client should hide/disable it otherwise, and the server does not require it even then.
+
+---
+
+## 21.1a QuickAddPatientRequest
+
+```json
+{
+  "fullName": "John Doe",
+  "address": "Jl. Contoh No. 10, Bandung",
+  "phoneNumber": "08123456789",
+  "identityNumber": "317xxxxxxxxxxxxx"
+}
+```
+
+Deliberately flat and minimal — `address` here is a plain string, not the structured `provinceId/regencyId/districtId/villageId` object used by `CreatePatientRequest`. The resulting patient can be completed later via `UpdatePatientRequest`.
 
 ---
 
@@ -1320,9 +1376,11 @@ Semua endpoint:
   "fullName": "John Doe",
   "phoneNumber": "081298765432",
   "email": "john.doe@example.com",
+  "insuranceNumber": "BPJS-000123456",
+  "whatsappNumber": "08123456789",
   "address": {
     "provinceId": "uuid",
-    "cityId": "uuid",
+    "regencyId": "uuid",
     "districtId": "uuid",
     "villageId": "uuid",
     "postalCode": "40111",
@@ -1412,7 +1470,7 @@ Patient --> Reporting
 | Module | Purpose |
 |----------|----------------------------|
 | Authentication | Authentication & Authorization |
-| Master Data | Referensi Agama, Pekerjaan, Wilayah |
+| Master Data | Referensi Agama, Pekerjaan, Wilayah (Provinsi/Kabupaten-Kota/Kecamatan/Kelurahan), Sumber Rujukan (Referral Source) |
 | Reservation | Registrasi reservasi |
 | Queue | Informasi pasien pada antrian |
 | EMR | Rekam medis pasien |
@@ -1672,6 +1730,8 @@ Modul Patient memiliki beberapa tabel utama yang digunakan untuk menyimpan infor
 | patient_merge_logs | Riwayat merge pasien |
 | patient_audit_logs | Audit perubahan data pasien |
 
+Katalog sumber rujukan (referral source types) dan tabel wilayah (provinces/regencies/districts/villages) **dimiliki oleh Master Data**, bukan Patient — lihat `docs/03-sad/11-module-master-data.md`. Tabel `patients` hanya menyimpan FK ke katalog tersebut (`referral_source_id`, `province_id`, dst.), sesuai aturan modul-boundary bahwa Patient tidak boleh memiliki tabel referensi lintas-modul-nya sendiri.
+
 ---
 
 ## 26.3 Table Relationship
@@ -1706,6 +1766,14 @@ PATIENTS ||--o{ PATIENT_AUDIT_LOGS : has
 | phone_number | VARCHAR(30) | Nomor telepon utama |
 | email | VARCHAR(150) | Email |
 | status | ENUM | Status pasien |
+| photo_url | VARCHAR(255) | Lokasi foto profil pasien (nullable) |
+| insurance_number | VARCHAR(50) | Nomor asuransi, opsional, tidak unik |
+| instagram_handle | VARCHAR(100) | Username Instagram, opsional |
+| facebook_handle | VARCHAR(100) | Username/URL Facebook, opsional |
+| tiktok_handle | VARCHAR(100) | Username TikTok, opsional |
+| whatsapp_number | VARCHAR(30) | Nomor WhatsApp, opsional |
+| referral_source_id | UUID | FK ke katalog Master Data (nullable) |
+| referred_by_user_id | UUID | FK ke `users` (nullable, hanya untuk sumber "Staf Klinik") |
 | created_at | DATETIME | Dibuat pada |
 | updated_at | DATETIME | Diubah pada |
 
@@ -1717,13 +1785,15 @@ PATIENTS ||--o{ PATIENT_AUDIT_LOGS : has
 |---------|------|
 | id | UUID |
 | patient_id | UUID |
-| province_id | UUID |
-| city_id | UUID |
-| district_id | UUID |
-| village_id | UUID |
+| province_id | UUID — FK ke Master Data `provinces` |
+| regency_id | UUID — FK ke Master Data `regencies` (Kabupaten/Kota) |
+| district_id | UUID — FK ke Master Data `districts` (Kecamatan) |
+| village_id | UUID — FK ke Master Data `villages` (Kelurahan/Desa) |
 | postal_code | VARCHAR(10) |
 | address_line | TEXT |
-| is_primary | BOOLEAN |
+| is_primary | BOOLEAN — tepat satu baris `true` per pasien, ditegakkan di application layer |
+
+Definisi ini adalah definisi tunggal dan otoritatif untuk `patient_addresses` — lihat `docs/03-sad/07-data-dictionary.md` §12.4, yang sebelumnya mendefinisikan tabel yang sama dengan kolom teks bebas (`city`/`province` VARCHAR) dan sekarang diselaraskan mengikuti definisi FK-based ini.
 
 ---
 
@@ -1884,6 +1954,8 @@ Contoh:
 - Email
 - Nomor Telepon
 - Alamat
+- Nomor Asuransi
+- Akun Media Sosial (Instagram/Facebook/TikTok/WhatsApp)
 
 Strategi:
 
@@ -1932,7 +2004,7 @@ Fitur berikut direncanakan untuk versi berikutnya.
 | Family Relationship | Hubungan antar anggota keluarga |
 | Patient Portal | Portal pasien |
 | Digital Consent | Persetujuan digital |
-| Insurance Integration | Integrasi BPJS / Asuransi |
+| Insurance Integration | Integrasi API BPJS/Asuransi (verifikasi eligibilitas, klaim) — berbeda dari `insuranceNumber` (§14.3), yang hanya kolom teks bebas tanpa validasi/integrasi apa pun |
 | National Health Integration | Integrasi SATUSEHAT / platform nasional |
 | Biometric Identification | Sidik jari / Face Recognition |
 | QR Code Patient Card | Kartu pasien digital |

@@ -866,6 +866,98 @@ Master supplier barang dan obat.
 
 ---
 
+# 10.21 Table : province
+
+## Description
+
+Master wilayah level 1 (Provinsi) — lihat `docs/03-sad/11-module-master-data.md` §11.21 untuk business rules lengkap.
+
+| Column | Type | Null | Key | Description |
+|---------|------|------|-----|-------------|
+| id | CHAR(36) | No | PK | UUID |
+| province_code | VARCHAR(10) | No | UK | Kode Provinsi |
+| province_name | VARCHAR(100) | No | | Nama Provinsi |
+| is_active | BOOLEAN | No | | Status |
+
+---
+
+# 10.22 Table : regency
+
+## Description
+
+Master wilayah level 2 (Kabupaten/Kota).
+
+### Foreign Key
+
+- province_id → province.id
+
+| Column | Type | Null | Key | Description |
+|---------|------|------|-----|-------------|
+| id | CHAR(36) | No | PK | UUID |
+| province_id | CHAR(36) | No | FK | Provinsi |
+| regency_code | VARCHAR(10) | No | UK | Kode Kabupaten/Kota |
+| regency_name | VARCHAR(100) | No | | Nama Kabupaten/Kota |
+| is_active | BOOLEAN | No | | Status |
+
+---
+
+# 10.23 Table : district
+
+## Description
+
+Master wilayah level 3 (Kecamatan).
+
+### Foreign Key
+
+- regency_id → regency.id
+
+| Column | Type | Null | Key | Description |
+|---------|------|------|-----|-------------|
+| id | CHAR(36) | No | PK | UUID |
+| regency_id | CHAR(36) | No | FK | Kabupaten/Kota |
+| district_code | VARCHAR(10) | No | UK | Kode Kecamatan |
+| district_name | VARCHAR(100) | No | | Nama Kecamatan |
+| is_active | BOOLEAN | No | | Status |
+
+---
+
+# 10.24 Table : village
+
+## Description
+
+Master wilayah level 4 (Kelurahan/Desa) — level paling spesifik yang direferensikan oleh `patient_address`.
+
+### Foreign Key
+
+- district_id → district.id
+
+| Column | Type | Null | Key | Description |
+|---------|------|------|-----|-------------|
+| id | CHAR(36) | No | PK | UUID |
+| district_id | CHAR(36) | No | FK | Kecamatan |
+| village_code | VARCHAR(10) | No | UK | Kode Kelurahan/Desa |
+| village_name | VARCHAR(100) | No | | Nama Kelurahan/Desa |
+| postal_code | VARCHAR(10) | Yes | | Kode Pos default (saran) |
+| is_active | BOOLEAN | No | | Status |
+
+---
+
+# 10.25 Table : referral_source
+
+## Description
+
+Master jenis sumber rujukan pasien (marketing/lead source) — lihat `docs/03-sad/12-module-patient.md` §14.5 untuk disambiguasi terhadap `referral` klinis pada Modul EMR (tabel yang sepenuhnya berbeda, tidak didokumentasikan pada bagian ini).
+
+| Column | Type | Null | Key | Description |
+|---------|------|------|-----|-------------|
+| id | CHAR(36) | No | PK | UUID |
+| referral_source_code | VARCHAR(30) | No | UK | Kode |
+| referral_source_name | VARCHAR(100) | No | | Nama (Google, Instagram, Facebook, TikTok, Teman, Datang Sendiri, Alodokter, Staf Klinik, Lain-lain) |
+| requires_referrer | BOOLEAN | No | | Jika true, Frontend Patient wajib menampilkan pemilihan staf perujuk |
+| is_active | BOOLEAN | No | | Status |
+
+---
+
 # Summary Part 2
 
 Part 2 mendokumentasikan seluruh **Master Data** yang menjadi referensi utama bagi modul-modul transaksi pada sistem Parakita. Tabel-tabel master ini mencakup referensi identitas pasien, organisasi klinik, layanan medis, diagnosis, obat, inventori, supplier, hingga konfigurasi operasional yang digunakan secara konsisten oleh modul **Patient**, **Reservation**, **EMR**, **Billing**, **Warehouse**, dan **Human Resource**.
@@ -955,6 +1047,14 @@ Menyimpan data utama pasien.
 | patient_group_id | CHAR(36) | No | FK | Kelompok Pasien |
 | email | VARCHAR(150) | Yes | | Email |
 | phone | VARCHAR(30) | Yes | | Nomor HP |
+| photo_url | VARCHAR(255) | Yes | | Foto profil pasien |
+| insurance_number | VARCHAR(50) | Yes | | Nomor asuransi milik pasien, teks bebas — **berbeda dari tabel `patient_insurance` (§12.6)**, lihat catatan di §12.6 |
+| instagram_handle | VARCHAR(100) | Yes | | Username Instagram |
+| facebook_handle | VARCHAR(100) | Yes | | Username/URL Facebook |
+| tiktok_handle | VARCHAR(100) | Yes | | Username TikTok |
+| whatsapp_number | VARCHAR(30) | Yes | | Nomor WhatsApp |
+| referral_source_id | CHAR(36) | Yes | FK | Sumber rujukan (→ referral_source.id, §10.25) |
+| referred_by_user_id | CHAR(36) | Yes | FK | Staf perujuk (→ user.id), hanya diisi ketika referral_source "Staf Klinik" |
 | is_active | BOOLEAN | No | | Status |
 
 ---
@@ -996,17 +1096,27 @@ Nomor kontak pasien.
 
 ## Description
 
-Alamat pasien.
+Alamat pasien. **Definisi berikut menggantikan versi sebelumnya** yang menyimpan `city`/`province` sebagai teks bebas — versi tersebut tidak sejalan dengan `docs/03-sad/12-module-patient.md` §21.1/§26.5 (yang sejak awal memakai referensi FK) maupun dengan katalog wilayah baru pada `docs/03-sad/11-module-master-data.md` §8.5. Kolom teks bebas dihapus dan digantikan referensi berjenjang ke Master Data.
+
+### Foreign Key
+
+- patient_id → patient.id
+- province_id → province.id
+- regency_id → regency.id
+- district_id → district.id
+- village_id → village.id
 
 | Column | Type | Null | Key | Description |
 |---------|------|------|-----|-------------|
 | id | CHAR(36) | No | PK | UUID |
 | patient_id | CHAR(36) | No | FK | Pasien |
-| address | TEXT | No | | Alamat |
-| city | VARCHAR(100) | No | | Kota |
-| province | VARCHAR(100) | No | | Provinsi |
+| province_id | CHAR(36) | No | FK | Provinsi |
+| regency_id | CHAR(36) | No | FK | Kabupaten/Kota |
+| district_id | CHAR(36) | No | FK | Kecamatan |
+| village_id | CHAR(36) | No | FK | Kelurahan/Desa |
+| address_line | TEXT | No | | Detail alamat (nama jalan, nomor, RT/RW) |
 | postal_code | VARCHAR(10) | Yes | | Kode Pos |
-| is_primary | BOOLEAN | No | | Alamat Utama |
+| is_primary | BOOLEAN | No | | Alamat Utama — tepat satu baris `true` per pasien |
 
 ---
 
@@ -1031,7 +1141,9 @@ Kontak darurat pasien.
 
 ## Description
 
-Asuransi yang dimiliki pasien.
+Asuransi yang dimiliki pasien — mendukung multi-asuransi per pasien, masing-masing terhubung ke perusahaan asuransi (`insurance`, §10.8) dengan nomor polis/member sendiri.
+
+**Catatan (Patient Module Enhancement, task-284):** ini adalah tabel/konsep yang **berbeda** dari `patient.insurance_number` (§12.1) yang baru ditambahkan — `insurance_number` adalah satu kolom teks bebas sederhana pada tabel `patient` itu sendiri (tanpa relasi ke perusahaan asuransi manapun, tanpa validasi format), sedangkan `patient_insurance` di sini tetap merupakan model multi-baris yang lebih lengkap. Kedua-duanya tetap ada; implementasi tidak perlu — dan tidak boleh — menyatukan keduanya dalam pass dokumentasi ini. Keputusan mana yang sebaiknya dipakai (atau apakah `insurance_number` sebaiknya justru dihapus dan digantikan sepenuhnya oleh `patient_insurance`) adalah keputusan implementasi/produk di luar cakupan pembaruan dokumentasi ini dan perlu diklarifikasi terpisah sebelum task-284 diimplementasikan.
 
 ### Foreign Key
 

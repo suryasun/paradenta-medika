@@ -121,6 +121,8 @@ Modul Master Data mencakup pengelolaan seluruh data referensi yang digunakan ole
 - Data Religion
 - Data Occupation
 - Data Education
+- Data Wilayah (Provinsi, Kabupaten/Kota, Kecamatan, Kelurahan/Desa)
+- Data Sumber Rujukan Pasien (Referral Source)
 
 ---
 
@@ -381,6 +383,22 @@ MasterData --> System
 | Religion | Agama |
 | Nationality | Kewarganegaraan |
 | Currency | Mata Uang |
+| Referral Source | Sumber rujukan pasien (Google, Instagram, Facebook, TikTok, Teman, Datang Sendiri, Alodokter, Staf Klinik, Lain-lain) |
+
+---
+
+## 8.5 Regional Master Data (Wilayah)
+
+Katalog wilayah administratif Indonesia berjenjang 4 level, mengikuti struktur standar Kemendagri/BPS. Digunakan terutama oleh `patient_addresses` (Modul Patient), dan tersedia untuk modul lain yang membutuhkan alamat berjenjang di masa depan (mis. Supplier, Employee).
+
+| Master Data | Description | Parent |
+|--------------|-------------|--------|
+| Province | Provinsi | — |
+| Regency | Kabupaten/Kota | Province |
+| District | Kecamatan | Regency |
+| Village | Kelurahan/Desa | District |
+
+Setiap level FK ke level di atasnya — tidak ada level yang diisi sebagai teks bebas. Data ini bersifat referensi murni (jarang berubah setelah seeding awal) dan tidak melalui Approval Flow (§15).
 
 ---
 
@@ -1053,9 +1071,136 @@ Mengelola program promosi klinik.
 
 ---
 
+## 11.21 Province (Provinsi)
+
+### Purpose
+
+Level pertama hierarki wilayah administratif Indonesia.
+
+### Business Rules
+
+- Province Code unik (disarankan mengikuti kode wilayah resmi Kemendagri/BPS 2 digit).
+- Diseed sekali di awal (data referensi nasional, jarang berubah) — tidak melalui Approval Flow.
+- Tidak dapat dihapus apabila memiliki Regency aktif atau digunakan oleh `patient_addresses`.
+
+### Main Attributes
+
+| Field | Type |
+|---------|------|
+| Code | String |
+| Name | String |
+| Status | Boolean |
+
+---
+
+## 11.22 Regency (Kabupaten/Kota)
+
+### Purpose
+
+Level kedua hierarki wilayah — mencakup baik Kabupaten maupun Kota (Indonesia tidak membedakan keduanya secara struktural, hanya penamaan).
+
+### Business Rules
+
+- Regency berada di bawah satu Province.
+- Regency Code unik dalam satu Province.
+- Tidak dapat dihapus apabila memiliki District aktif atau digunakan oleh `patient_addresses`.
+
+### Main Attributes
+
+| Field | Type |
+|---------|------|
+| Code | String |
+| Name | String |
+| Province ID | UUID |
+| Status | Boolean |
+
+---
+
+## 11.23 District (Kecamatan)
+
+### Purpose
+
+Level ketiga hierarki wilayah.
+
+### Business Rules
+
+- District berada di bawah satu Regency.
+- District Code unik dalam satu Regency.
+- Tidak dapat dihapus apabila memiliki Village aktif atau digunakan oleh `patient_addresses`.
+
+### Main Attributes
+
+| Field | Type |
+|---------|------|
+| Code | String |
+| Name | String |
+| Regency ID | UUID |
+| Status | Boolean |
+
+---
+
+## 11.24 Village (Kelurahan/Desa)
+
+### Purpose
+
+Level keempat (terkecil) hierarki wilayah.
+
+### Business Rules
+
+- Village berada di bawah satu District.
+- Village Code unik dalam satu District.
+- Merupakan level terakhir — `patient_addresses.village_id` adalah level paling spesifik yang disimpan.
+
+### Main Attributes
+
+| Field | Type |
+|---------|------|
+| Code | String |
+| Name | String |
+| District ID | UUID |
+| Postal Code | String (opsional, sebagai default saran — pengguna tetap dapat mengisi kode pos berbeda pada alamat) |
+| Status | Boolean |
+
+---
+
+## 11.25 Referral Source
+
+### Purpose
+
+Katalog jenis sumber rujukan pasien — mencatat dari mana pasien mengetahui klinik saat registrasi (kebutuhan marketing/analitik), digunakan oleh Modul Patient (lihat `docs/03-sad/12-module-patient.md` §14.5). **Bukan** rujukan klinis (lihat disambiguation pada dokumen tersebut).
+
+### Example
+
+- Google
+- Instagram
+- Facebook
+- TikTok
+- Teman (Friend)
+- Datang Sendiri (Walk-in)
+- Alodokter
+- Staf Klinik (Referred by Staff — mengaktifkan `patient.referredByUserId`)
+- Lain-lain (Other)
+
+### Business Rules
+
+- Referral Source Name unik.
+- Salah satu entri (mis. "Staf Klinik") ditandai dengan flag `requiresReferrer: true`, yang memberi tahu Frontend Patient untuk menampilkan field pemilihan staf/dokter/perawat perujuk.
+- Entri baru dapat ditambahkan oleh Administrator tanpa perubahan kode aplikasi.
+
+### Main Attributes
+
+| Field | Type |
+|---------|------|
+| Code | String |
+| Name | String |
+| Requires Referrer | Boolean |
+| Status | Boolean |
+
+---
+
 # Summary Part 2
 
-Part 2 menjelaskan seluruh Master Data utama yang digunakan dalam sistem Parakita, meliputi data organisasi, sumber daya klinik, tenaga medis, layanan, inventaris, keuangan, dan promosi. Setiap master data memiliki tujuan, atribut utama, serta business rules yang menjadi acuan implementasi pada Backend, Frontend, Database, dan API agar seluruh modul menggunakan referensi data yang konsisten.
+Part 2 menjelaskan seluruh Master Data utama yang digunakan dalam sistem Parakita, meliputi data organisasi, sumber daya klinik, tenaga medis, layanan, inventaris, keuangan, wilayah administratif, sumber rujukan, dan promosi. Setiap master data memiliki tujuan, atribut utama, serta business rules yang menjadi acuan implementasi pada Backend, Frontend, Database, dan API agar seluruh modul menggunakan referensi data yang konsisten.
 
 # Parakita Software Architecture Document (SAD)
 
@@ -1141,6 +1286,8 @@ Contoh:
 | Treatment | Global |
 | Payment Method | Global |
 | Tax | Global |
+| Province / Regency / District / Village | Global |
+| Referral Source | Global |
 | Promotion | Branch |
 | Room | Branch |
 | Dental Chair | Branch |
@@ -1673,6 +1820,12 @@ SUPPLIER ||--o{ MEDICINE : supplies
 SUPPLIER ||--o{ MEDICAL_ITEM : supplies
 
 BANK ||--o{ PAYMENT_METHOD : supports
+
+PROVINCE ||--o{ REGENCY : has
+
+REGENCY ||--o{ DISTRICT : has
+
+DISTRICT ||--o{ VILLAGE : has
 ```
 
 ---
@@ -1693,6 +1846,8 @@ BANK ||--o{ PAYMENT_METHOD : supports
 | Tax | Billing |
 | Promotion | Billing |
 | Discount | Billing |
+| Province / Regency / District / Village | Patient (`patient_addresses`) |
+| Referral Source | Patient |
 
 ---
 
@@ -1758,6 +1913,11 @@ Part 3 mendefinisikan aturan bisnis, validasi, alur CRUD, mekanisme approval, ve
 | mst_nationalities | Kewarganegaraan |
 | mst_occupations | Pekerjaan |
 | mst_educations | Pendidikan |
+| mst_provinces | Provinsi |
+| mst_regencies | Kabupaten/Kota |
+| mst_districts | Kecamatan |
+| mst_villages | Kelurahan/Desa |
+| mst_referral_sources | Sumber rujukan pasien |
 
 ---
 
@@ -1793,6 +1953,9 @@ Seluruh tabel Master Data menggunakan standar kolom berikut.
 | mst_medicines | supplier_id |
 | mst_payment_methods | code |
 | mst_promotions | start_date, end_date |
+| mst_regencies | province_id |
+| mst_districts | regency_id |
+| mst_villages | district_id |
 
 ---
 
@@ -1884,7 +2047,7 @@ Master Data menggunakan Domain Event untuk memberi tahu modul lain ketika terjad
 | Module | Integration |
 |----------|-------------|
 | Authentication | Authorization & Permission |
-| Patient | Branch, Insurance |
+| Patient | Branch, Insurance, Province/Regency/District/Village, Referral Source |
 | Reservation | Branch, Doctor, Chair |
 | Queue | Branch |
 | EMR | Doctor, Treatment, Medicine |

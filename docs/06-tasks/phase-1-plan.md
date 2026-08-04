@@ -74,6 +74,8 @@ This document is the Phase 1 index: Task List, Dependencies, Implementation Orde
 | task-029 | Update Patient (PUT /patients/{id}) | P1 - High | [task-029.md](./task-029.md) |
 | task-030 | Archive / Restore Patient | P2 - Medium | [task-030.md](./task-030.md) |
 
+> **Addendum (post-launch, Patient Module Enhancement):** task-284–289 extend this epic with 6 new capabilities — profile fields (insurance number, social media handles), patient photo, regional address (real Province/Regency/District/Village catalog, replacing the single free-text `address` column with a proper multi-address `patient_addresses` table), referral source tracking, emergency contacts, and Quick Add Patient (reduced-field registration from the Reservation booking screen). These are documented as a separate ad-hoc epic ("PE. Patient Module Enhancement") outside this phase's own numbering, not inserted here, since Phase 1 is already complete — see `docs/06-tasks/task-284.md`–`task-289.md` and `docs/03-sad/12-module-patient.md`'s corresponding updates.
+
 ### Epic E. Reservation Management
 
 | Task ID | Task Name | Priority | File |
