@@ -65,3 +65,56 @@ No permission-to-role table was read in this pass beyond the route-level permiss
 ## 7. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
 
 **This module is where interactive charts matter most system-wide** — it's the centralized home for exactly the KPI/trend visualization every other module's reports (Finance, Warehouse) and analytics pages (Reservation, Queue) individually flagged as chart-less. All 5 dashboards (§2) and every catalog report (§3) render via Recharts (`design-system.md` §11.4) with the mandatory "View as table" toggle and `motion-complex` transitions on filter change. **Live update** is the other headline fit: the freshness badge (§2, fresh/refreshing/stale/partial/failed) is only meaningful if the dashboard actually re-polls and animates incoming data — a freshness badge next to data that only updates on manual page reload is misleading regardless of how well-designed the badge itself is; `ui-guidelines.md` §9.2's diff-animation rule applies directly to every KPI card here. Async report jobs (§3) get a **micro-interaction** progress indicator (queued→running→completed, per that section's own status description) using the existing `Progress` component (`design-system.md` §7) rather than a static "check back later" message. Not applicable: drag-and-drop, inline edit, odontogram — this module is read-heavy by nature, nothing here is user-editable data.
+
+---
+
+## 8. Multi Branch Platform Addendum (Phase 4, task-218/219/220 — `docs/06-tasks/phase-4-documentation/`)
+
+Three new pages, distinct in shape from the 5 fixed dashboards in §2: those are current-value-only (no time series in the backend response, per §2's own note); these three genuinely differ from each other in exactly that dimension, and each page's shape should match what its own endpoint actually returns rather than defaulting all three to the same KPI-card layout.
+
+### 8.1 Branch Dashboard (`/reports/dashboards/branch`, new page)
+
+```text
+Branch Dashboard
+├── Header: H1 + Branch selector (required — unlike the 5 fixed
+│   dashboards, this endpoint has no "all branches" mode) + freshness
+│   Badge + dataAsOf (same shape as §2's existing dashboards)
+└── KPI grid: Queue summary cards (Total Queue, Average Waiting,
+    Doctor Performance) + Billing daily-summary cards, one grid —
+    current-value-only, same as §2, no fabricated trend chart here
+```
+
+Gated `report.dashboard.branch.read`. `403 RPT_SCOPE_FORBIDDEN` (requester's branch assignment doesn't include the selected branch) renders via the standard inline `getApiErrorMessage` pattern.
+
+### 8.2 Branch Comparison (`/reports/branch-comparison`, new page)
+
+```text
+Branch Comparison
+├── Header: H1 + multi-branch selector
+├── Comparison Table: metric rows × branch columns (same metric set per
+│   branch, side-by-side — task-219's own AC)
+└── One TrendChart per key metric, branch on the category axis (reuses
+    the existing TrendChart component's "view as table" toggle —
+    xKey=branchName, yKey=metricValue — not a new chart component)
+```
+
+Gated `report.branch-comparison.read`. TC-RPT-008: a requested branch outside the requester's authority rejects the **whole** request (`403 RPT_SCOPE_FORBIDDEN`) — the UI should not attempt partial rendering of the branches that *did* pass, since the backend never returns a partial result for this endpoint.
+
+### 8.3 Branch Performance (`/reports/branch-performance`, new page)
+
+```text
+Branch Performance
+├── Header: H1 + branch selector + date-range picker (max 90 days —
+│   backend rejects a larger range with 422 RPT_RANGE_TOO_LARGE)
+├── TrendChart: date on the x-axis (the one Phase 4 report whose data
+│   is genuinely a day-by-day series, per the backend's per-day fan-out
+│   design — not fabricated) — one chart per metric (total patients,
+│   avg waiting time, billing collected)
+└── Underlying data table (TrendChart's built-in toggle)
+```
+
+Gated `report.branch-performance.read`. Distinct from §8.2 by construction, not just by name: Comparison is one point in time across branches, Performance is one branch across time — the two pages should never be visually interchangeable.
+
+### 8.4 Interactivity
+
+§8.2/§8.3 are this addendum's own contribution to §7's "interactive charts" theme — both reuse `TrendChart` directly rather than introducing a second chart component. §8.1 stays KPI-cards-only, consistent with §2's own current-value-only constraint. Not applicable: drag-and-drop, inline edit, odontogram.

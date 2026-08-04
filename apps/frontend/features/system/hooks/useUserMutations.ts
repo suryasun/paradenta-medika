@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { userService } from "../services/user.service";
-import { CreateUserInput } from "../types/system.types";
+import { BranchAssignmentEntry, CreateUserInput } from "../types/system.types";
 
 function invalidateUsers(queryClient: ReturnType<typeof useQueryClient>, userId?: string) {
   queryClient.invalidateQueries({ queryKey: ["system", "users", "list"] });
@@ -55,5 +55,14 @@ export function useAssignRoles(userId: string) {
 export function useRevokeSessions(userId: string) {
   return useMutation({
     mutationFn: (sessionId?: string) => userService.revokeSessions(userId, sessionId),
+  });
+}
+
+// Phase 4, task-210.
+export function useAssignBranches(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (branchAssignments: BranchAssignmentEntry[]) => userService.assignBranches(userId, branchAssignments),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["system", "users", "branches", userId] }),
   });
 }

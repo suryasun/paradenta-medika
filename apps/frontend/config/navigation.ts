@@ -43,9 +43,19 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Clinical", href: "/reports/dashboards/clinical", permission: "report.dashboard.clinical.read" },
       { label: "Finance", href: "/reports/dashboards/finance", permission: "report.dashboard.finance.read" },
       { label: "Warehouse", href: "/reports/dashboards/warehouse", permission: "report.dashboard.warehouse.read" },
+      { label: "Branch", href: "/reports/dashboards/branch", permission: "report.dashboard.branch.read" },
     ],
   },
-  { label: "Reports", href: "/reports/catalog", permission: "report.catalog.read" },
+  {
+    label: "Reports",
+    href: "/reports/catalog",
+    permission: "report.catalog.read",
+    children: [
+      { label: "Catalog", href: "/reports/catalog", permission: "report.catalog.read" },
+      { label: "Branch Comparison", href: "/reports/branch-comparison", permission: "report.branch-comparison.read" },
+      { label: "Branch Performance", href: "/reports/branch-performance", permission: "report.branch-performance.read" },
+    ],
+  },
   {
     label: "Master Data",
     href: "/master-data/clinics",
@@ -59,6 +69,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Payment Methods", href: "/master-data/payment-methods", permission: "masterdata.payment-method.read" },
       { label: "Tooth Conditions", href: "/master-data/tooth-conditions", permission: "masterdata.tooth-condition.read" },
       { label: "Consent Templates", href: "/master-data/consent-templates", permission: "emr.consent-template.read" },
+      { label: "Templates", href: "/master-data/templates", permission: "masterdata.template.read" },
     ],
   },
   {
@@ -103,6 +114,7 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Users", href: "/system/users", permission: "system.user.read" },
       { label: "Roles", href: "/system/roles", permission: "system.role.read" },
+      { label: "Role-Branch Matrix", href: "/system/roles/branch-matrix", permission: "system.role.read" },
       { label: "Audit Log", href: "/system/audit-logs", permission: "system.audit.read" },
       { label: "Activity Log", href: "/system/activity-logs", permission: "system.activity.read" },
       { label: "Operations Health", href: "/system/operations-health", permission: "system.health.read" },

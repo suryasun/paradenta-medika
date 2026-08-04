@@ -11,6 +11,7 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { useRoles } from "../hooks/useRoles";
 import { useUser } from "../hooks/useUser";
 import { useActivateUser, useAssignRoles, useDeactivateUser, useRevokeSessions, useUpdateUserEmail } from "../hooks/useUserMutations";
+import { BranchAssignmentPanel } from "./BranchAssignmentPanel";
 
 // docs/02-design/pages/system.md §4's flagged pre-population bug is fixed:
 // GET /system/users/:userId now includes roleIds (added post-launch, see
@@ -117,6 +118,8 @@ export function UserDetailView({ userId }: { userId: string }) {
           </Button>
         </div>
       </PermissionGuard>
+
+      <BranchAssignmentPanel userId={userId} />
     </div>
   );
 }

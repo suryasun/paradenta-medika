@@ -61,3 +61,37 @@ export interface ConsentTemplate {
   body: string;
   isActive: boolean;
 }
+
+// Phase 4, Epic BG (task-221/222/223 --
+// docs/06-tasks/phase-4-documentation/epic-bg-centralized-master-data.md).
+// `entityType` deliberately never collides with EMR's clinical `Referral`
+// concept -- see docs/03-sad/12-module-patient.md §14.5's disambiguation.
+export interface MasterDataTemplate {
+  id: string;
+  entityType: string;
+  templatePayload: Record<string, unknown>;
+  version: number;
+  ownerClinicId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TemplatePushStatus = "CREATED" | "UPDATED" | "CONFLICT";
+
+export interface TemplatePushResult {
+  branchId: string;
+  status: TemplatePushStatus;
+}
+
+export interface TemplateFieldDrift {
+  field: string;
+  pushedValue: unknown;
+  currentValue: unknown;
+}
+
+export interface TemplateDriftEntry {
+  branchId: string;
+  pushedVersion: number;
+  isStale: boolean;
+  fieldDrifts: TemplateFieldDrift[];
+}

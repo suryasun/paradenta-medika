@@ -19,5 +19,13 @@ export function createCrudService<T>(resourcePath: string) {
       const response = await apiClient.put<ApiSuccessBody<T>>(`${resourcePath}/${id}`, payload);
       return response.data.data;
     },
+    // Phase 4 (task-213): Branch Configuration needs a single entity's
+    // name, not the full list -- every Master Data entity already exposes
+    // GET /<resource>/{id} on the backend (crudControllerFactory), this
+    // was just never called from the frontend before.
+    async get(id: string): Promise<T> {
+      const response = await apiClient.get<ApiSuccessBody<T>>(`${resourcePath}/${id}`);
+      return response.data.data;
+    },
   };
 }

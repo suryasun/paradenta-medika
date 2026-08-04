@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { branchService, Branch } from "../services/branch.service";
@@ -44,6 +45,11 @@ export function BranchesAdminPage() {
       ]}
       fields={fields}
       service={branchService}
+      extraRowActions={(branch) => (
+        <Link href={`/master-data/branches/${branch.id}/configuration`} className="text-sm font-medium text-primary hover:underline">
+          Configuration
+        </Link>
+      )}
     />
   );
 }

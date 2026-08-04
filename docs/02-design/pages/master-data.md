@@ -176,3 +176,64 @@ Source: `docs/03-sad/11-module-master-data.md` §9. **Gap flagged:** Import/Expo
 ## 9. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
 
 Master Data's 8 catalogs are this app's clearest **inline-edit** candidate (`ui-guidelines.md` §9.3): every field except the create-locked Code is a single value with no cross-field validation — exactly the "single-field, low-risk correction" case inline edit is for. Concretely: Branch Name, Phone, Email, Timezone, Treatment's Duration/Default Price/Doctor Fee, Payment Method's "Is Cash" toggle — all currently require opening the full Edit modal (§2) for a one-field change; add a hover/focus edit-pencil per eligible cell that commits on blur/Enter. The existing Deactivate/Activate text link (§2) is already effectively inline-edit for the boolean Active field — extend that same interaction model to the other simple fields rather than inventing a new pattern. Multi-field or create-only-field changes (Code, Category assignment) stay in the modal — this doesn't replace §2's Create/Edit pattern, it narrows when the modal is necessary. Micro-interaction: the Deactivate/Activate toggle should get a brief success-tone border flash (`design-system.md` §11.7) on completion, replacing the current silent table refresh with no confirmation cue beyond the Badge changing.
+
+---
+
+## 10. Multi Branch Platform Addendum (Phase 4, task-213/221/222/223 — `docs/06-tasks/phase-4-documentation/`)
+
+### 10.1 Branches List — Configuration Row Action
+
+```text
+Branches (existing AdminEntityListPage)
+└── Actions cell, new "Configuration" link (alongside Edit/Deactivate)
+    → /master-data/branches/{id}/configuration
+```
+
+A **failed Deactivate** (task-225's `MD_BRANCH_HAS_OPEN_TRANSACTIONS` — branch has an open Reservation/Queue/Billing/Warehouse/Finance transaction) must render inline via `getApiErrorMessage`, the same convention every other mutation error in this app already uses. This closes a real, pre-existing gap: `AdminEntityListPage`'s deactivate mutation error was never surfaced at all before this pass — a failed deactivate silently did nothing visible, which defeats the point of a server error naming exactly which module blocked it.
+
+### 10.2 Branch Configuration (`/master-data/branches/[id]/configuration`, new page)
+
+```text
+Branch Configuration
+├── Header: H1 "Configuration — {branchName}"
+├── LoadingState | ErrorState | Table
+│   Columns: Key, Value, Type, Source (Badge: BRANCH→info, GLOBAL→neutral)
+└── (read-only — no edit affordance here; changing a value happens through
+    the existing System Parameters screen, this page is a per-branch
+    consolidated view only, per task-213's own Backend Scope)
+```
+
+Gated `system.parameter.read`. Source badge tones intentionally reuse the existing six-role mapping (`design-system.md` §8) rather than inventing a 7th color for "inherited vs. override."
+
+### 10.3 Master Data Templates (`/master-data/templates`, `/master-data/templates/[id]`, new pages)
+
+Not built on the shared `AdminEntityListPage` shell (§9's inline-edit/Create/Edit/Deactivate shape doesn't fit Push or Drift) — a bespoke pair reusing `Table`/`Modal`/`PermissionGuard`/`LoadingState`/`ErrorState` directly:
+
+```text
+Master Data Templates (list)
+├── Header: H1 + PermissionGuard(masterdata.template.manage) → "New Template"
+├── LoadingState | ErrorState | EmptyState | Table
+│   Columns: Entity Type, Version, Owner Clinic, Actions ("View" link)
+└── New Template modal: Entity Type (text), Template Payload (JSON
+    textarea), Owner Clinic (select)
+
+Master Data Template Detail
+├── Header: H1 "{entityType} Template" + version Badge
+├── Payload panel (JSON view, PermissionGuard(masterdata.template.manage)
+│   → inline edit — saving bumps `version` server-side automatically,
+│   task-221's own AC)
+├── "Push to Branches" button (PermissionGuard(masterdata.template.manage))
+│   → modal: branch multi-select → submit → per-branch result Table
+│       (Branch, Status Badge: CREATED→success, UPDATED→info,
+│        CONFLICT→warning — never silently overwrites a diverged branch,
+│        task-222's own AC)
+└── "Drift Report" section (PermissionGuard(masterdata.template.read))
+    → Table: Branch, Pushed Version, Stale (Badge), Field Drifts
+      (nested Table: Field / Pushed Value / Current Value, per row)
+```
+
+`entityType` is intentionally never rendered near, or grouped with, the existing clinical `Referral` concept anywhere in either page — task-221's own disambiguation note (`docs/03-sad/12-module-patient.md` §14.5) applies to the frontend too, not just the backend naming.
+
+### 10.4 Interactivity
+
+Branch Configuration (§10.2) is read-only — inline edit doesn't apply, it deliberately routes corrections through the existing System Parameters flow instead of duplicating that write path. Templates' Push modal (§10.3) result table gets a `motion-standard` (180ms) status-Badge cross-fade as each row's outcome resolves, consistent with every other status-Badge transition in this app (`design-system.md` §11.7) — not a bespoke animation. Not applicable: drag-and-drop, live update, interactive charts, odontogram.

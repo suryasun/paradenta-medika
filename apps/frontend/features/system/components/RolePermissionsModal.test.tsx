@@ -17,7 +17,7 @@ function renderModal(role: Role) {
   );
 }
 
-const ROLE: Role = { id: "r1", roleCode: "CASHIER", roleName: "Cashier", description: null, isSystem: true };
+const ROLE: Role = { id: "r1", roleCode: "CASHIER", roleName: "Cashier", description: null, isSystem: true, isCrossBranch: false };
 
 describe("RolePermissionsModal", () => {
   beforeEach(() => {

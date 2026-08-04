@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import { ApiSuccessBody, PaginationMeta } from "@/types/api";
-import { CreateRoleInput, Permission, Role } from "../types/system.types";
+import { CreateRoleInput, Permission, Role, RoleBranchMatrixEntry } from "../types/system.types";
 
 // docs/06-tasks/task-017.md, task-018.md
 export const roleService = {
@@ -28,6 +28,18 @@ export const roleService = {
   // Role-Permissions modal opening with every checkbox unchecked.
   async getPermissionsForRole(roleId: string): Promise<Permission[]> {
     const response = await apiClient.get<ApiSuccessBody<Permission[]>>(`/system/roles/${roleId}/permissions`);
+    return response.data.data;
+  },
+
+  // Phase 4, task-215 (docs/06-tasks/phase-4-documentation/epic-bb-centralized-user-management.md).
+  async getBranchMatrix(): Promise<RoleBranchMatrixEntry[]> {
+    const response = await apiClient.get<ApiSuccessBody<RoleBranchMatrixEntry[]>>("/system/roles/branch-matrix");
+    return response.data.data;
+  },
+
+  // Phase 4, task-217. SYS_ROLE_SYSTEM_PROTECTED (403) for isSystem roles.
+  async updateBranchPolicy(roleId: string, isCrossBranch: boolean): Promise<Role> {
+    const response = await apiClient.patch<ApiSuccessBody<Role>>(`/system/roles/${roleId}/branch-policy`, { isCrossBranch });
     return response.data.data;
   },
 };

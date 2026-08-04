@@ -78,6 +78,60 @@ export interface ReportSnapshot {
   createdAt: string;
 }
 
+// Phase 4, task-218/219/220 (apps/backend's BranchDashboardResponseDto /
+// BranchComparisonEntry / BranchPerformancePeriodEntry -- verified against
+// the actual use-case source, not docs prose).
+export interface QueueSummary {
+  waiting: number;
+  called: number;
+  inService: number;
+  completed: number;
+  cancelled: number;
+  noShow: number;
+}
+
+export interface DoctorQueueCount {
+  doctorId: string;
+  queueCount: number;
+}
+
+export interface QueueBranchSummary {
+  totalPatientToday: number;
+  averageWaitingTimeMinutes: number | null;
+  averageServiceTimeMinutes: number | null;
+  completionRate: number;
+}
+
+export interface BranchDashboardResponse {
+  scope: { branchIds: string[]; timezone: string };
+  dataAsOf: string;
+  freshness: DashboardFreshness;
+  definitionVersion: string;
+  queue: {
+    queueSummary: QueueSummary;
+    doctorSummary: DoctorQueueCount[];
+    branchSummary: QueueBranchSummary;
+  };
+  billing: MetricRow[];
+}
+
+export interface BranchComparisonEntry {
+  branchId: string;
+  branchName: string;
+  dataAsOf: string;
+  freshness: DashboardFreshness;
+  metrics: MetricRow[];
+}
+
+export interface BranchPerformancePeriodEntry {
+  date: string;
+  totalPatients: number;
+  averageWaitingTimeMinutes: number | null;
+  completionRate: number;
+  doctorProductivity: DoctorQueueCount[];
+  billingCollected: number;
+}
+
 export interface ReportJobFilters {
   branchIds?: string[];
   dateFrom?: string;

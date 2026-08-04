@@ -33,6 +33,8 @@ interface AdminEntityListPageProps<T extends { id: string; isActive?: boolean }>
     create: (payload: Record<string, unknown>) => Promise<T>;
     update: (id: string, payload: Record<string, unknown>) => Promise<T>;
   };
+  /** Phase 4 (docs/02-design/pages/master-data.md §10.1): extra per-row links/buttons rendered alongside Edit/Deactivate, e.g. Branch's "Configuration" link. Optional -- every pre-existing consumer is unaffected. */
+  extraRowActions?: (item: T) => ReactNode;
 }
 
 // Shared list/create/edit shell for all Master Data admin entities.
@@ -50,6 +52,7 @@ export function AdminEntityListPage<T extends { id: string; isActive?: boolean }
   columns,
   fields,
   service,
+  extraRowActions,
 }: AdminEntityListPageProps<T>) {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -170,19 +173,27 @@ export function AdminEntityListPage<T extends { id: string; isActive?: boolean }
                   <Badge tone={item.isActive ? "success" : "neutral"}>{item.isActive ? "Active" : "Inactive"}</Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex gap-3">
-                    <PermissionGuard permission={`${permissionPrefix}.manage`}>
-                      <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setEditingItem(item)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="text-sm font-medium text-muted hover:underline"
-                        onClick={() => toggleActiveMutation.mutate({ id: item.id, isActive: !item.isActive })}
-                      >
-                        {item.isActive ? "Deactivate" : "Activate"}
-                      </button>
-                    </PermissionGuard>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex gap-3">
+                      <PermissionGuard permission={`${permissionPrefix}.manage`}>
+                        <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setEditingItem(item)}>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-muted hover:underline"
+                          onClick={() => toggleActiveMutation.mutate({ id: item.id, isActive: !item.isActive })}
+                        >
+                          {item.isActive ? "Deactivate" : "Activate"}
+                        </button>
+                      </PermissionGuard>
+                      {extraRowActions?.(item)}
+                    </div>
+                    {toggleActiveMutation.isError && toggleActiveMutation.variables?.id === item.id && (
+                      <p role="alert" className="text-xs text-error">
+                        {getApiErrorMessage(toggleActiveMutation.error)}
+                      </p>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

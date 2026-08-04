@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } fro
 import { PermissionGuard } from "@/components/guards/PermissionGuard";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { useRoles } from "../hooks/useRoles";
+import { useUpdateRoleBranchPolicy } from "../hooks/useRoleMutations";
 import { Role } from "../types/system.types";
 import { CreateRoleModal } from "./CreateRoleModal";
 import { RolePermissionsModal } from "./RolePermissionsModal";
@@ -18,6 +19,7 @@ export function RoleListView() {
   const { data, isLoading, isError, error, refetch } = useRoles();
   const [showCreate, setShowCreate] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const updateBranchPolicy = useUpdateRoleBranchPolicy();
 
   return (
     <div className="flex flex-col gap-4">
@@ -39,6 +41,7 @@ export function RoleListView() {
               <TableHeaderCell>Name</TableHeaderCell>
               <TableHeaderCell>Description</TableHeaderCell>
               <TableHeaderCell>Type</TableHeaderCell>
+              <TableHeaderCell>Cross-Branch</TableHeaderCell>
               <TableHeaderCell>Actions</TableHeaderCell>
             </TableRow>
           </TableHead>
@@ -52,6 +55,21 @@ export function RoleListView() {
                   <Badge tone={role.isSystem ? "info" : "neutral"}>{role.isSystem ? "System" : "Custom"}</Badge>
                 </TableCell>
                 <TableCell>
+                  <PermissionGuard permission="system.role.branch-policy.manage">
+                    <label
+                      className="flex items-center gap-2 text-sm text-foreground"
+                      title={role.isSystem ? "Built-in roles cannot change branch scope" : undefined}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={role.isCrossBranch}
+                        disabled={role.isSystem || updateBranchPolicy.isPending}
+                        onChange={() => updateBranchPolicy.mutate({ roleId: role.id, isCrossBranch: !role.isCrossBranch })}
+                      />
+                    </label>
+                  </PermissionGuard>
+                </TableCell>
+                <TableCell>
                   <PermissionGuard permission="system.role.permission.manage">
                     <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={() => setEditingRole(role)}>
                       Permissions
@@ -62,6 +80,11 @@ export function RoleListView() {
             ))}
           </TableBody>
         </Table>
+      )}
+      {updateBranchPolicy.isError && (
+        <p role="alert" className="text-sm text-error">
+          {getApiErrorMessage(updateBranchPolicy.error)}
+        </p>
       )}
 
       {showCreate && <CreateRoleModal onClose={() => setShowCreate(false)} />}

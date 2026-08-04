@@ -22,3 +22,11 @@ export function useRolePermissions(roleId: string) {
     enabled: Boolean(roleId),
   });
 }
+
+// Phase 4, task-215.
+export function useRoleBranchMatrix() {
+  return useQuery({
+    queryKey: ["system", "roles", "branch-matrix"],
+    queryFn: () => roleService.getBranchMatrix(),
+  });
+}

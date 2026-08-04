@@ -20,6 +20,40 @@ export interface Role {
   roleName: string;
   description: string | null;
   isSystem: boolean;
+  // Phase 4 (task-217): bypasses BranchScopeGuard's intersection when true.
+  isCrossBranch: boolean;
+}
+
+// Phase 4, Epic BA (task-210/211). Mirrors
+// apps/backend/src/modules/system/application/dtos/UserBranchResponseDto.ts.
+export interface UserBranch {
+  id: string;
+  branchId: string;
+  isDefault: boolean;
+  effectiveFrom: string | null;
+}
+
+export interface BranchAssignmentEntry {
+  branchId: string;
+  isDefault: boolean;
+  effectiveFrom?: string;
+}
+
+// Phase 4 (task-215). GET /system/roles/branch-matrix.
+export interface RoleBranchMatrixEntry {
+  roleId: string;
+  roleName: string;
+  branchId: string;
+  branchName: string;
+  userCount: number;
+}
+
+// Phase 4 (task-213). GET /system/branches/{branchId}/configuration.
+export interface BranchConfigurationEntry {
+  key: string;
+  value: string;
+  valueType: string;
+  source: "BRANCH" | "GLOBAL";
 }
 
 export interface Permission {
@@ -47,6 +81,10 @@ export interface ListUsersParams {
   page?: number;
   limit?: number;
   search?: string;
+  // Phase 4 (task-214): cross-branch requester's unfiltered request sees
+  // every branch; a scoped requester's unfiltered request is auto-
+  // intersected with their own assignment(s) server-side.
+  branchId?: string;
 }
 
 // Mirrors apps/backend/src/modules/system's Epic AI/AJ/AK/AL DTOs/entities

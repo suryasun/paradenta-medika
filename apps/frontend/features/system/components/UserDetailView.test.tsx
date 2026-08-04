@@ -29,7 +29,7 @@ describe("UserDetailView", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedRoleService.list.mockResolvedValue({
-      items: [{ id: "r1", roleCode: "DOCTOR", roleName: "Doctor", description: null, isSystem: true }],
+      items: [{ id: "r1", roleCode: "DOCTOR", roleName: "Doctor", description: null, isSystem: true, isCrossBranch: false }],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
     useAuthStore.getState().setSession({

@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import { ApiSuccessBody, PaginationMeta } from "@/types/api";
-import { CreateUserInput, ListUsersParams, SystemUser } from "../types/system.types";
+import { BranchAssignmentEntry, CreateUserInput, ListUsersParams, SystemUser, UserBranch } from "../types/system.types";
 
 // docs/06-tasks/task-015.md, task-016.md, task-019.md, task-020.md
 export const userService = {
@@ -40,5 +40,17 @@ export const userService = {
 
   async revokeSessions(userId: string, sessionId?: string): Promise<void> {
     await apiClient.post(`/system/users/${userId}/revoke-sessions`, { sessionId });
+  },
+
+  // Phase 4, task-210/211 (docs/06-tasks/phase-4-documentation/epic-ba-branch-assignment.md).
+  async listBranches(userId: string): Promise<UserBranch[]> {
+    const response = await apiClient.get<ApiSuccessBody<UserBranch[]>>(`/system/users/${userId}/branches`);
+    return response.data.data;
+  },
+
+  // Replaces the user's full branch-assignment set (not additive).
+  async assignBranches(userId: string, branchAssignments: BranchAssignmentEntry[]): Promise<UserBranch[]> {
+    const response = await apiClient.post<ApiSuccessBody<UserBranch[]>>(`/system/users/${userId}/branches`, { branchAssignments });
+    return response.data.data;
   },
 };

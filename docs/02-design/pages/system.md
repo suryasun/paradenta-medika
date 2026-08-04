@@ -93,3 +93,52 @@ Sidebar (confirmed, `apps/frontend/config/navigation.ts`): "System" section, 2 c
 ## 8. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
 
 **This is the one module where an interactivity pass and a bug fix are the same piece of work.** §4/§5's flagged pre-population bug (Role-Permissions and User-Role checkboxes both open blank regardless of actual current grants) should be fixed *as* an inline-edit-shaped rebuild, not patched separately: initialize `selected`/`roleIds` from the loaded entity, then treat each checkbox toggle as an optimistic inline edit with a `motion-micro` confirm flash on save rather than the current plain "Save Roles"/"Save Permissions" button with no per-item feedback. This turns two currently-broken, currently-static forms into the module's actual interactivity showcase for free. Micro-interactions: Activate/Deactivate on User Detail (§4) gets the same success/neutral border-flash pattern as Master Data's Deactivate (`master-data.md` §9). Not applicable: drag-and-drop, live update, interactive charts, odontogram — none of this module's two shipped screens have a natural fit for them.
+
+---
+
+## 9. Multi Branch Platform Addendum (Phase 4, task-210/211/215/217 — `docs/06-tasks/phase-4-documentation/`)
+
+### 9.1 User Detail — Branch Assignments
+
+```text
+User Detail
+└── Branch Assignments (new section, below the existing Roles block)
+    ├── LoadingState | ErrorState | Table (Branch, Default, Effective From)
+    ├── Multi-select branch list (checkbox per branch) + one radio/star per
+    │   selected row for "Default" (exactly one required before Save)
+    └── PermissionGuard(system.user.branch.manage) → "Save Assignments"
+        → replaces the user's full branch-assignment set (POST
+        /system/users/{userId}/branches is a replace, not additive —
+        docs/03-sad/21-module-system.md §21 task-210's own AC)
+```
+
+Pre-populates from `GET /system/users/{userId}/branches` using the exact "adjust state during render" sync idiom already fixed for §4/§5's roleIds bug (`UserDetailView.tsx`'s own established pattern) — this section must not reintroduce a blank-checkbox flash on first paint. Inline error (`SYS_BRANCH_SCOPE_INVALID` / `SYS_SELF_ESCALATION_FORBIDDEN`) rendered the same way as the existing role-assignment error, directly under the Save control.
+
+### 9.2 Role List — Cross-Branch Toggle
+
+```text
+Roles
+└── Table, new "Cross-Branch" column (after Type)
+    └── Toggle, PermissionGuard(system.role.branch-policy.manage)
+        disabled (not hidden, ui-guidelines.md §5) + tooltip "Built-in
+        roles cannot change branch scope" when role.isSystem
+```
+
+Calls `PATCH /system/roles/{roleId}/branch-policy`. A built-in role (Administrator etc.) rejects this with `SYS_ROLE_SYSTEM_PROTECTED` server-side — the disabled state on `isSystem` rows exists precisely so the UI doesn't invite a request the server will always reject, per `ui-guidelines.md` §5's "visible-but-disabled when the user needs to understand a workflow exists but isn't theirs."
+
+### 9.3 Role-Branch Matrix (`/system/roles/branch-matrix`, new page)
+
+```text
+Role-Branch Matrix
+├── Header: H1 "Role-Branch Matrix"
+├── LoadingState | ErrorState | EmptyState | Table
+│   Columns: Role, Branch, User Count
+└── (read-only — no actions; a user contributes one row per concurrent
+    role+branch combination they hold, task-215's own AC)
+```
+
+Gated `system.role.read`. No existing checkbox-grid/matrix component fits a count-per-cell table, so this is a plain `Table` — not a new primitive.
+
+### 9.4 Interactivity
+
+Branch Assignments (§9.1) follows the same inline-edit/state-sync discipline as §8's fix. The Cross-Branch toggle (§9.2) is a single-field boolean flip — a natural `motion-micro` toggle-switch component, not a modal. Role-Branch Matrix (§9.3) is read-heavy with no natural chart fit (counts in a grid, not a trend) — not applicable.
