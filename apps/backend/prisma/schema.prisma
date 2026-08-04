@@ -2745,14 +2745,14 @@ model AuditLog {
 /// bounds). Plain, non-FK `branchId`/`actorUserId` columns, matching the
 /// same convention already used for Reporting's dashboard_summaries.
 model ActivityLog {
-  id           String   @id @default(uuid()) @db.Char(36)
-  actorUserId  String?  @map("actor_user_id") @db.Char(36)
-  module       String   @db.VarChar(50)
-  action       String   @db.VarChar(50)
-  target       String?  @db.VarChar(200)
-  branchId     String?  @map("branch_id") @db.Char(36)
-  message      String   @db.VarChar(500)
-  createdAt    DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid()) @db.Char(36)
+  actorUserId String?  @map("actor_user_id") @db.Char(36)
+  module      String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  target      String?  @db.VarChar(200)
+  branchId    String?  @map("branch_id") @db.Char(36)
+  message     String   @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([module])
   @@index([actorUserId])
@@ -3047,24 +3047,24 @@ enum ConfigChangeRequestStatus {
 /// SystemParameter version (Section 8.2's maker-checker requirement for
 /// high-risk config).
 model ConfigurationChangeRequest {
-  id                        String                     @id @default(uuid()) @db.Char(36)
-  parameterKey              String                     @map("parameter_key") @db.VarChar(150)
-  scopeType                 String                     @default("GLOBAL") @map("scope_type") @db.VarChar(20)
-  scopeId                   String?                    @map("scope_id") @db.Char(36)
-  proposedValueType         SystemParameterValueType   @map("proposed_value_type")
-  proposedValue             String                     @map("proposed_value") @db.Text
-  reason                    String?                    @map("reason") @db.Text
-  isRollback                Boolean                    @default(false) @map("is_rollback")
-  rollbackFromVersion       Int?                       @map("rollback_from_version")
-  status                    ConfigChangeRequestStatus  @default(PENDING)
+  id                  String                    @id @default(uuid()) @db.Char(36)
+  parameterKey        String                    @map("parameter_key") @db.VarChar(150)
+  scopeType           String                    @default("GLOBAL") @map("scope_type") @db.VarChar(20)
+  scopeId             String?                   @map("scope_id") @db.Char(36)
+  proposedValueType   SystemParameterValueType  @map("proposed_value_type")
+  proposedValue       String                    @map("proposed_value") @db.Text
+  reason              String?                   @map("reason") @db.Text
+  isRollback          Boolean                   @default(false) @map("is_rollback")
+  rollbackFromVersion Int?                      @map("rollback_from_version")
+  status              ConfigChangeRequestStatus @default(PENDING)
 
-  requestedBy    String    @map("requested_by") @db.Char(36)
-  approvedBy     String?   @map("approved_by") @db.Char(36)
-  approvedAt     DateTime? @map("approved_at")
-  rejectedBy     String?   @map("rejected_by") @db.Char(36)
-  rejectedAt     DateTime? @map("rejected_at")
-  rejectionReason String?  @map("rejection_reason") @db.Text
-  resultingVersion Int?    @map("resulting_version")
+  requestedBy      String    @map("requested_by") @db.Char(36)
+  approvedBy       String?   @map("approved_by") @db.Char(36)
+  approvedAt       DateTime? @map("approved_at")
+  rejectedBy       String?   @map("rejected_by") @db.Char(36)
+  rejectedAt       DateTime? @map("rejected_at")
+  rejectionReason  String?   @map("rejection_reason") @db.Text
+  resultingVersion Int?      @map("resulting_version")
 
   createdAt DateTime @default(now()) @map("created_at")
 
