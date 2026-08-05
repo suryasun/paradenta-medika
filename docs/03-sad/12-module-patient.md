@@ -1774,6 +1774,8 @@ PATIENTS ||--o{ PATIENT_AUDIT_LOGS : has
 | whatsapp_number | VARCHAR(30) | Nomor WhatsApp, opsional |
 | referral_source_id | UUID | FK ke katalog Master Data (nullable) |
 | referred_by_user_id | UUID | FK ke `users` (nullable, hanya untuk sumber "Staf Klinik") |
+| patient_type | ENUM(`NEW`,`OLD`) | Reservation Module Enhancement addendum (task-290–294, `docs/03-sad/13-module-reservation.md` §39.2). Owned by Patient, but recomputed only in response to `RESERVATION_CREATED_EVENT` published by the Reservation module — never written directly by Reservation (MOD-003). Default `NEW`. |
+| first_reservation_at | DATETIME, nullable | Same addendum. Set once, on the patient's first non-cancelled/non-no-show reservation; never overwritten afterward. |
 | created_at | DATETIME | Dibuat pada |
 | updated_at | DATETIME | Diubah pada |
 

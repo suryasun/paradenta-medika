@@ -189,6 +189,16 @@ Apabila ditemukan data dengan tingkat kemiripan tinggi, sistem menampilkan perin
 
 ---
 
+## 7.5 Reservation Module Enhancement Rules
+
+- Pasien diberi status `NEW` jika belum pernah memiliki reservasi dengan status selain `CANCELLED`/`NO_SHOW`; setelah reservasi pertama tersebut, semua reservasi berikutnya diberi status `OLD`. Penentuan ini wajib dilakukan di server (bukan diturunkan di klien) agar deterministik dan aman terhadap race condition pada pemesanan bersamaan.
+- Setiap reservasi menyimpan `patient_type_at_booking` sebagai snapshot pada saat reservasi dibuat — nilai ini tidak diubah lagi setelahnya, meskipun status pasien berubah menjadi `OLD` di kemudian hari, agar laporan historis tetap akurat.
+- Quick New Patient Call (form gabungan pendaftaran pasien baru + reservasi) wajib dibungkus dalam satu transaksi database — kegagalan sebagian tidak boleh meninggalkan data pasien tanpa reservasi, atau sebaliknya.
+- Laporan Pasien Baru (New Patient Report) memfilter reservasi berdasarkan `patient_type_at_booking = NEW` dan rentang tanggal `reservation_date`, mengikuti zona waktu klinik yang dikonfigurasi.
+- Fitur ini tidak mengubah alur Reservasi yang sudah ada (Create/Update/Cancel/Reschedule/Check-in) — seluruhnya adalah kapabilitas tambahan di atas alur tersebut.
+
+---
+
 
 ---
 

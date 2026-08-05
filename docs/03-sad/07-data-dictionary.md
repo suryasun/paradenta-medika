@@ -1242,6 +1242,9 @@ Data reservasi pasien.
 | branch_id | CHAR(36) | No | FK | Cabang |
 | status | VARCHAR(30) | No | | Scheduled/Checked-In/Completed/Cancelled |
 | notes | TEXT | Yes | | Catatan |
+| patient_type_at_booking | ENUM(`NEW`,`OLD`) | No | | Reservation Module Enhancement addendum (task-290–294) — see `docs/03-sad/13-module-reservation.md` §39.2. Snapshot at booking time, not recomputed later. |
+
+**Pre-existing gap, not resolved by this addendum (GLOBAL-011):** this table's column list is materially thinner than both `docs/03-sad/13-module-reservation.md` §19.3's entity model and the already-implemented Prisma schema (which additionally has `schedule_id`, `reservation_type`, `source`, `complaint`, `checked_in_at`, `cancelled_reason`, `cancelled_at`, full audit columns, `treatment_plan_item_id`). Flagged as an outstanding documentation-reconciliation item (see `docs/03-sad/13-module-reservation.md` §39.7, item 2), not silently fixed here.
 
 ---
 

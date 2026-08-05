@@ -2399,6 +2399,85 @@ Implementasi Reservation Module memberikan manfaat:
 
 ---
 
+# 39. Reservation Module Enhancement (Post-Roadmap Addendum, task-290–294)
+
+> Sourced from `docs/reservation-feature-addendum.md` (a user-supplied feature brief with 4 UI reference screenshots) and reconciled against this SAD's own existing entity model (§19.3), enums (§6.1, §8, §9), API surface (§20), and workflow (§10, §17), plus the already-implemented schema in `apps/backend/prisma/schema.prisma`'s `Reservation`/`Patient` models — not invented independently of them. Documented the same way Patient's own addendum was (`docs/03-sad/12-module-patient.md`, task-284–289): docs first, no code in this pass. Epic code **RE** ("Reservation" + "Enhancement"), mirroring **PE**'s mnemonic pattern — outside the Phase 1–6 alphabetic roadmap sequence, since Phase 1 is already shipped.
+
+## 39.1 Scope
+
+Five new capabilities on top of the existing Reservation module:
+
+1. **Patient Type Categorization** (New vs. Old) — a badge/filter on reservations and the Patients list.
+2. **New Patient Date-Range Report** — a report screen scoped to New-Patient reservations.
+3. **Quick New Patient Call** — a single combined form (patient + reservation, one transaction) for phone/walk-in intake of a not-yet-registered caller.
+4. **Reservation Calendar (Agenda) View** — a Day/Week/Month/Agenda calendar screen.
+5. **Reservation History** — a dedicated history/list screen with status-summary bar, filters, and search.
+
+**Explicitly out of scope for this pass:** any change to the existing `/reservations` list/detail/create/cancel/reschedule/check-in endpoints beyond what's needed to support the above; CSV/PDF export implementation (flagged, see §39.4); calendar sync/Google Calendar/Outlook integration (already Future Scope per §3.3/§37.3, unaffected by this addendum).
+
+## 39.2 Data Model Changes
+
+**`patient` table** (see `docs/03-sad/12-module-patient.md` for the authoritative Patient entity) gains two columns, owned and written **only** by the Patient module:
+
+| Field | Type | Notes |
+|---|---|---|
+| `patient_type` | `ENUM('NEW','OLD')` | Not a performance cache — a **derived, snapshot-recomputed** value needed so the Patients list and reservation cards can render the badge without a join/subquery against `reservation` on every render (justifies DB-010's "measurable performance requirement" bar). Defaults `NEW` at patient creation. |
+| `first_reservation_at` | `DATETIME`, nullable | Set once, on the patient's first non-cancelled/non-no-show reservation. Never overwritten afterward. |
+
+**`reservation` table** gains one column:
+
+| Field | Type | Notes |
+|---|---|---|
+| `patient_type_at_booking` | `ENUM('NEW','OLD')`, not null | **Not** a duplicate of the existing `source` column (`ReservationSource`: `WALK_IN/PHONE/WHATSAPP/WEBSITE/MOBILE_APP`, already implemented) — a genuinely distinct concept (patient lifecycle stage, not intake channel). Named `patient_type_at_booking`, not `patient_type` or `source`, specifically to avoid the naming collision the brief's own `source` proposal would have caused against the already-shipped `ReservationSource` enum. This is a **snapshot at booking time**, not a live-recomputed value — required so historical reports stay accurate after the same patient's later bookings retag them `OLD` (§39.5, Rule 2). |
+
+**Cross-module write direction (MOD-003, module-contract.md):** Reservation must never write directly to `patient.patient_type`/`patient.first_reservation_at` — those are Patient's own columns. On reservation creation, the Reservation module publishes the existing `RESERVATION_CREATED_EVENT` (already implemented, `docs/03-sad/13-module-reservation.md` §22 / `apps/backend/src/modules/reservation/domain/events/ReservationEvents.ts`) with `patientId` in its payload; the Patient module subscribes and updates its own two columns in response — the same event-subscription pattern already established between Reservation and Queue (`PATIENT_CHECKED_IN_EVENT` → `CreateQueueUseCase`). `patient_type_at_booking` on the Reservation side is computed synchronously, inside `CreateReservationUseCase`/the new Quick Call use case, by querying `IPatientRepository`/`IReservationRepository` — no event needed for that half, since it's Reservation's own column.
+
+**Pre-existing data-dictionary conflict, not resolved here:** `docs/03-sad/07-data-dictionary.md` §13.1's `reservation` table (8 columns: id/reservation_number/reservation_date/reservation_time/patient_id/doctor_id/branch_id/status/notes) is materially thinner than both this SAD's own §19.3 entity model and the already-implemented Prisma schema (which additionally has `schedule_id`, `reservation_type`, `source`, `complaint`, `checked_in_at`, `cancelled_reason`, `cancelled_at`, full audit columns, and `treatment_plan_item_id`). Per GLOBAL-011, this pre-existing contradiction is **not silently resolved** by this addendum — `patient_type_at_booking` is specified against the actually-implemented schema (ground truth, since it's live and tested), and the data-dictionary's own reconciliation is flagged as a separate outstanding documentation debt in §39.7.
+
+## 39.3 New Use Cases
+
+| Code | Name | Notes |
+|---|---|---|
+| RSV-014 | Determine Patient Type At Booking | Server-side only (per addendum's own §2.2 requirement) — checks for any prior reservation with `status NOT IN (CANCELLED, NO_SHOW)`. Runs inside RSV-001 (Create Reservation), RSV-013 (Quick Add Patient's caller flow), and RSV-016 (Quick New Patient Call) — not a standalone endpoint. |
+| RSV-015 | List Reservations By Patient Type (filter) | Extends RSV-004 (Reservation List & Search) with a `patientType` filter param — not a new endpoint. |
+| RSV-016 | Quick New Patient Call | New — see §39.4. Distinct from RSV-013 Quick Add Patient (`docs/03-sad/12-module-patient.md` §17.1/§21.1a, task-289): RSV-013 creates only the patient record and hands control back to the existing booking form for a second, separate `POST /reservations` call; RSV-016 creates the patient **and** the reservation in one atomic transaction from one form, per the brief's explicit "single form, one submit" and "one DB transaction" requirements (§2.2). Both remain available; RSV-016 is the faster path for a caller who's ready to book immediately, RSV-013 is for a caller who isn't (e.g. booking details still pending). |
+| RSV-017 | New Patient Date-Range Report | New — see §39.4. |
+| RSV-018 | Reservation History (list view) | Distinct from the existing per-patient "Reservation History" Patient Detail tab (`docs/02-design/pages/patient.md` §12.2) — this is a clinic-wide, filterable history screen, not scoped to one patient. Backed by the existing `GET /reservations` endpoint with additional filters (§39.4), not a new read model. |
+
+## 39.4 New/Extended API Endpoints
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET /api/v1/reservations` | *(extended)* | Adds `patientType` (`NEW`\|`OLD`) as a documented filter param, alongside the existing `keyword/doctorId/status/reservationType/reservationSource/dateFrom/dateTo` set (§20.3) — closes the API-066 "undocumented filter field" gap in advance rather than shipping an undocumented one. |
+| `POST /api/v1/reservations/quick-call` | New | Body: `{ fullName, address, phoneNumber, identityNumber, doctorId, reservationDate, startTime, complaint? }` — the patient fields mirror `QuickAddPatientRequest` (`docs/03-sad/12-module-patient.md` §21.1a) exactly, plus the reservation-booking fields from `CreateReservationRequest` (§21.1 equivalent in this SAD). Single transaction: create-or-reuse-patient (duplicate check against `identityNumber`, same as RSV-013) → create reservation → tag `patient_type_at_booking=NEW` → publish `RESERVATION_CREATED_EVENT`. Response: `ReservationResponse` (existing shape) with the created/matched `patientId` included. |
+| `GET /api/v1/reports/reservations/new-patients` | New | Query: `dateFrom`, `dateTo` (required), plus the existing pagination/sort params (API-055–071). Returns reservations where `patient_type_at_booking = NEW` within the range, plus a `summary` object (`totalNewPatients`, `topProcedure`, `conversionRate` — completed vs. cancelled/no-show ratio, per the brief's §22–29 wording). **CSV/PDF export is flagged `NOT DEFINED IN SAD` for this pass** — per API-105/106, any export must be an async job (`202` + `jobId`), matching the existing Reporting module's export pattern (`docs/03-sad/22-module-reporting.md`), not a new synchronous-download endpoint; wiring it to that existing job infrastructure is left to the implementing task rather than specified here, since it depends on Reporting-module internals outside this addendum's read-only research pass. |
+
+No changes to `POST /reservations`, `PUT /reservations/{id}`, `PATCH .../check-in`, `PATCH .../cancel`, `PATCH .../reschedule`, or `DELETE /reservations/{id}` — all five features layer on top of those, none require modifying them.
+
+## 39.5 Business Rules
+
+See `docs/01-prd/business-rules.md` §7.5 "Reservation Module Enhancement Rules" for the authoritative rule list (mirrors this section; PRD is priority 3, this SAD is priority 5 — content kept identical, PRD copy added in the same documentation pass per this project's own established convention of keeping both in sync).
+
+## 39.6 New/Proposed Screens (Design — flagged, not built)
+
+`docs/02-design/pages/reservation.md` gets a new §8 covering these three screens at spec depth; summarized here for SAD completeness:
+
+1. **Reservation Calendar (Agenda)** — `/reservations/calendar`. Day/Week/Month/Agenda toggle, mini-month date picker, list grouped by day when in Agenda mode. **This does not exist anywhere in the current design docs or shipped code** — the only prior calendar-adjacent UI is the inline `TimeSlotPicker` used by Create/Reschedule (§3, §33.6), which is a slot-picker, not a calendar/agenda view. Built fresh, informed by (not copied verbatim from) the brief's reference screenshot `docs/images/reservation calender view.PNG`.
+2. **New Patient Report** — `/reports/new-patients` (or `/reservations/reports/new-patients` — placement TBD by whichever task specs Reporting-module navigation; both are consistent with existing `report.*`/`reservation.*` permission-namespace conventions). Date-range picker with presets (Today/This Week/This Month/Last 30 Days/Custom), summary stat cards, results table, export action (disabled/hidden until the async-export wiring from §39.4 exists).
+3. **Reservation History** — `/reservations/history`. Status-summary bar, filters (Status/Patient Type/Date Range/Procedure), search box, card list. **Important correction to the source brief:** the brief's own text says this screen "mirrors the existing Care Plan History screen layout" — **no such screen exists anywhere in this codebase's design docs, SAD, or shipped frontend** (confirmed: zero matches for "Care Plan" across `docs/02-design` and `docs/03-sad`). The brief's 2nd reference screenshot (`Reservation History plan'.PNG`) appears to be from an unrelated demo application ("DentalCare Pro"), not this project. This screen is therefore designed **fresh** in this pass, using that screenshot only as a loose visual reference for card density/layout, not as evidence of a pre-existing Parakita pattern to mirror.
+
+The Quick New Patient Call form (RSV-016) reuses `docs/02-design/pages/patient.md`'s existing form-field patterns (task-289's Quick Add modal) plus the existing Create Reservation form's Doctor/Date/Time-Slot fields (§3) — no new component pattern, a straight merge of the two existing ones into one modal, triggered from the same "Search Patient returns no results" moment as task-289's Quick Add Patient, offered as an alternative/adjacent action rather than a replacement (§39.7 flags the remaining product decision here).
+
+## 39.7 Ambiguities and Gaps Reported
+
+1. **Two similar-but-distinct "no results found" actions on the same screen.** Once RSV-016 (Quick New Patient Call) ships alongside the already-implemented task-289 Quick Add Patient modal, the Reservation booking screen's "no patients found" state will offer two entry points (quick-add-then-continue vs. one-shot quick-call). Which one is primary/default, and how they're visually distinguished, is a product/UX decision **not resolved by this documentation pass** — flagged for the implementing task rather than guessed.
+2. **`reservation` data-dictionary vs. implemented-schema conflict** (§39.2) — pre-existing, not introduced by this addendum, but now directly relevant since `patient_type_at_booking` needs a canonical column list to attach to. Recommend a follow-up docs-only task to reconcile `docs/03-sad/07-data-dictionary.md` §13.1 against the real Prisma schema, independent of this addendum.
+3. **New Patient Report placement** (`/reports/...` vs. `/reservations/...`) — left open in §39.6, pending whichever task actually specs Reporting-module navigation depth for this addition.
+4. **CSV/PDF export for the New Patient Report** — deferred to the async-export job pattern per API-105/106; not specified end-to-end in this pass (§39.4).
+5. **"Pending Requests" terminology.** The brief's reference screenshots show a "Pending Requests" tab/state. This SAD's actual `ReservationStatus` enum (§6.1, and as implemented) has no `PENDING`/`DRAFT` value — the closest existing state is `BOOKED` (a reservation that exists but hasn't been checked in yet). This addendum does **not** introduce a new status value; "Pending Requests" in any new UI should be read as "reservations with `status = BOOKED`," not a new lifecycle state, unless a future task makes an explicit, justified case for adding one.
+
+---
+
 # Final Summary
 
 Dokumen **13 - Module Reservation** mendefinisikan desain lengkap Reservation Module sebagai pusat pengelolaan appointment pada Parakita. Dokumen ini mencakup proses bisnis, kebutuhan fungsional, model data, API, validasi, workflow, integrasi lintas modul, keamanan, audit trail, pelaporan, KPI, skenario pengujian, hingga roadmap pengembangan di masa depan. Seluruh rancangan disusun mengikuti prinsip **Clean Architecture**, **Domain Driven Design (DDD)**, **Modular Monolith**, serta standar dokumentasi yang digunakan pada seluruh blueprint Parakita sehingga siap menjadi acuan implementasi backend maupun frontend.

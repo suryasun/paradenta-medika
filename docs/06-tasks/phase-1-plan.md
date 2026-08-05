@@ -88,6 +88,8 @@ This document is the Phase 1 index: Task List, Dependencies, Implementation Orde
 | task-035 | Check-In Patient (PATCH .../{id}/check-in) | P0 - Blocking | [task-035.md](./task-035.md) |
 | task-036 | Doctor Availability & Time Slots | P0 - Blocking | [task-036.md](./task-036.md) |
 
+> **Addendum (post-launch, Reservation Module Enhancement):** task-290–294 extend this epic with 5 new capabilities — Patient Type categorization (New/Old, server-derived), a New Patient date-range report, Quick New Patient Call (combined patient+reservation creation in one transaction, distinct from the Patient module's own Quick Add Patient at task-289), a Reservation Calendar/Agenda view, and a clinic-wide Reservation History screen. These are documented as a separate ad-hoc epic ("RE. Reservation Module Enhancement") outside this phase's own numbering, not inserted here, since Phase 1 is already complete — see `docs/06-tasks/task-290.md`–`task-294.md` and `docs/03-sad/13-module-reservation.md` §39.
+
 ### Epic F. Queue Management
 
 | Task ID | Task Name | Priority | File |

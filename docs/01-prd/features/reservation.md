@@ -87,6 +87,11 @@ Reservation Module menyediakan seluruh fungsi yang dibutuhkan untuk mengelola ja
 | RSV-011 | Reservation Timeline | Riwayat perubahan status |
 | RSV-012 | Reservation History | Riwayat reservasi pasien |
 | RSV-013 | Quick Add Patient | Registrasi cepat pasien baru (nama, alamat bebas, telepon, nomor identitas) langsung dari layar booking, tanpa berpindah ke Modul Patient — lihat `docs/03-sad/12-module-patient.md` §17.1/§21.1a dan `docs/06-tasks/task-289.md` |
+| RSV-014 | Determine Patient Type At Booking | Menandai reservasi sebagai `NEW` atau `OLD` berdasarkan riwayat reservasi pasien — server-side, bukan diturunkan di klien. Lihat `docs/03-sad/13-module-reservation.md` §39 |
+| RSV-015 | Filter by Patient Type | Filter `patientType` pada daftar reservasi dan daftar pasien |
+| RSV-016 | Quick New Patient Call | Form gabungan satu langkah: buat pasien baru + reservasi dalam satu transaksi, berbeda dari RSV-013 yang hanya membuat pasien lalu kembali ke form booking terpisah |
+| RSV-017 | New Patient Date-Range Report | Laporan reservasi Pasien Baru pada rentang tanggal, dengan ringkasan statistik |
+| RSV-018 | Reservation History (clinic-wide) | Layar riwayat reservasi seluruh klinik dengan filter/pencarian — berbeda dari RSV-012 yang khusus per pasien (tab di Patient Detail) |
 
 ---
 

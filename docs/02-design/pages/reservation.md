@@ -1,6 +1,6 @@
 # Pages: Reservation Module
 
-> Status: **Verified against shipped code** (Phase 1, task-002/031-036). `docs/03-sad/13-module-reservation.md` has its own §33 "User Interface Guidelines" (screens, list columns, quick actions, a literal color standard) — unlike Master Data, this is a real source spec, not purely PRD-derived, though it predates and partly conflicts with what shipped (see §5). Sourced from SAD §6 (status lifecycle), §7 (business rules), §12–18 (create/update/search/schedule-validation/walk-in/reschedule-cancel), §26 (permission matrix), §33 (UI guidelines), cross-checked against `apps/frontend/features/reservation/`.
+> Status: **Verified against shipped code** (Phase 1, task-002/031-036). `docs/03-sad/13-module-reservation.md` has its own §33 "User Interface Guidelines" (screens, list columns, quick actions, a literal color standard) — unlike Master Data, this is a real source spec, not purely PRD-derived, though it predates and partly conflicts with what shipped (see §5). Sourced from SAD §6 (status lifecycle), §7 (business rules), §12–18 (create/update/search/schedule-validation/walk-in/reschedule-cancel), §26 (permission matrix), §33 (UI guidelines), cross-checked against `apps/frontend/features/reservation/`. **+Reservation Module Enhancement addendum** (§8, task-290–294, post-roadmap, docs-only pass — no code shipped yet): Patient Type badge/filter, Quick New Patient Call, and 3 net-new screens (Calendar/Agenda, New Patient Report, Reservation History).
 
 ---
 
@@ -12,6 +12,9 @@
 | Create Reservation | `/reservations/new` | Book an appointment **or** register a walk-in (single form, toggle) | §12, §17 |
 | Reservation Detail | `/reservations/{id}` | Full record + Check-in/Reschedule/Cancel actions | §33.2 |
 | Reservation Analytics | `/reservations/analytics` | KPI + trend dashboard (task-060) | Not in SAD §33 — see §6 below |
+| Reservation Calendar | `/reservations/calendar` | Day/Week/Month/Agenda calendar view | Not in SAD — net-new, see §8.3 (task-293) |
+| New Patient Report | placement TBD (§39.7) | Date-range report scoped to New Patients | Not in SAD — net-new, see §8.4 (task-291) |
+| Reservation History | `/reservations/history` | Clinic-wide filterable reservation history | Not in SAD — net-new, see §8.5 (task-294) |
 
 **Gap flagged:** SAD §33.2 also lists "Edit Reservation", "Doctor Schedule" (standalone), "Time Slot Selection" (standalone), and "Reservation History" (per-patient) as distinct screens. What shipped folds Edit into the Detail page's Reschedule modal (no separate edit-arbitrary-field screen — only date/time can change post-creation, matching §13.3's restriction that a reservation can't be touched once Checked-in/Queued/In-Treatment/Completed/Cancelled anyway), and folds Doctor Schedule + Time Slot Selection into one inline `TimeSlotPicker` used by both Create and Reschedule rather than a standalone screen. Reservation History (per-patient) is not built as a Reservation-module screen — it appears instead inside Patient Detail's own tabs (`docs/02-design/pages/patient.md` §12.2 lists "Reservation History" as a Patient Detail tab). These are reasonable consolidations, not missing functionality, but the mapping from "8 SAD screens" to "4 shipped routes" should be explicit rather than silently assumed 1:1.
 
@@ -208,6 +211,95 @@ Enforcement pattern matches Master Data: hidden-not-disabled via `PermissionGuar
 
 **`navigation.md` §4 correction (this pass):** replacing the proposed 5-item Reservation tree (`Reservation List / Create Reservation / Doctor Schedule / Availability / Reservation Timeline / Reservation History`) with the verified 2-item shipped structure — see the corresponding edit to `navigation.md` §4.
 
-## 8. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
+## 8. Reservation Module Enhancement (task-290–294, Post-Roadmap Addendum)
+
+> Sourced from `docs/reservation-feature-addendum.md` and `docs/03-sad/13-module-reservation.md` §39. Two of the three screens below (Calendar/Agenda, Reservation History) are genuinely new — no prior spec, mockup, or shipped code exists for either. Styling reuses this project's existing card/badge/filter-bar/table primitives throughout (`Table`, `Badge`, `EmptyState`/`LoadingState`/`ErrorState`, `PermissionGuard`) — no new visual system introduced, per the source brief's own instruction to keep styling consistent.
+
+### 8.1 Patient Type badge + filter (extends §1 List, §3 Create — no new route)
+
+- Reservation List (§2) and the Patients list (`docs/02-design/pages/patient.md`) both gain a `patientType` Badge column (`NEW` → info tone, `OLD` → neutral tone, per `design-system.md`'s six-role status mapping) and a filter chip (`All` / `New` / `Old`) alongside the existing Status/Date filters (§2, `patient.md`'s own filter bar).
+- Reservation Detail (§4) shows `patientType` as a read-only field in the existing definition list — not editable, since it's a server-computed snapshot (SAD §39.2/§39.5).
+
+### 8.2 Quick New Patient Call (extends §3 Create Reservation — no new route)
+
+- Triggered from the same "Search Patient returns no results" moment in `PatientPicker` (§3) that already offers task-289's "Quick Add Patient" modal (`docs/02-design/pages/overview.md`'s Patient addendum note). This addendum adds a second, adjacent action — **"Quick Call: Create & Book Now"** — offered alongside (not replacing) Quick Add Patient. Which one is visually primary is an open product decision (SAD §39.7, item 1), not resolved by this pass.
+- Modal fields: the same 4 Quick Add Patient fields (Full Name, Address, Phone Number, Identity Number) **plus** Doctor, Date, Time Slot (reusing §3's own `TimeSlotPicker`), and optional Complaint — a straight merge of the two existing forms into one, no new field-level component.
+- Single submit → `POST /reservations/quick-call` (SAD §39.4) → on success, navigates directly to the new Reservation's Detail page (§4), skipping the separate booking-form step Quick Add Patient still requires.
+
+### 8.3 Reservation Calendar (Agenda) — new route `/reservations/calendar`
+
+**Net-new screen — no prior spec or shipped code.** The only existing calendar-adjacent UI is §3's inline `TimeSlotPicker`, which is a slot-picker for one doctor/date pair, not a calendar.
+
+```text
+Reservation Calendar
+├── Header: H1 "Reservation Calendar" + view toggle (Day | Week | Month | Agenda)
+├── Left rail: mini-month date picker (jumps the main view to a selected day)
+├── Staff/Doctor filter (reuses the existing Doctor Select from §3)
+├── Patient Type filter chip (§8.1)
+└── Main panel, per view:
+    ├── Day/Week: time-slot grid (hours down the side, days across) — entries
+    │   are Reservation cards positioned by start time/duration, colored by
+    │   Patient Type (New/Old) and bordered by Status Badge tone
+    ├── Month: compact per-day entry counts, click a day to jump to Day view
+    └── Agenda (List): reservations grouped chronologically by day —
+        time, patient name, patientType Badge, procedure, doctor — the
+        existing `Table`/list-row pattern from §2, grouped under date
+        sub-headers instead of a flat list
+```
+
+Click any entry → opens Reservation Detail (§4) in a side panel/modal rather than full navigation, so the calendar position isn't lost — a `Modal`-based Detail view, not a new panel component.
+
+States: `LoadingState`/`ErrorState` per `ui-guidelines.md` §1; `EmptyState title="No reservations this day/week/month"` when a range has zero entries.
+
+Permission: gated by `reservation.read` (same permission as List/Detail — this is another view onto the same data, not a new capability).
+
+### 8.4 New Patient Report — new route (placement TBD, SAD §39.7 item 3)
+
+**Net-new screen.**
+
+```text
+New Patient Report
+├── Header: H1 "New Patient Report"
+├── Date range picker: Start Date, End Date, + preset buttons
+│   (Today / This Week / This Month / Last 30 Days / Custom)
+├── Summary card row (3 Cards): Total New Patients, Most Requested
+│   Procedure, Conversion Rate (Completed vs. Cancelled/No-show)
+├── Table: Name, Date, Time, Procedure, Staff, Status, Contact —
+│   same `Table` component as Reservation List (§2)
+└── Export button — disabled/hidden until the async-export job
+    pattern (SAD §39.4/§39.7) is wired; not a synchronous download
+```
+
+States: `LoadingState`/`ErrorState`/`EmptyState title="No new patients in this range"`, matching §2.2's pattern.
+
+Permission: new `report.reservation.new-patient.read` (no existing permission covers a Reservation-scoped report; follows the same `report.<dashboard>.read` namespace convention already used elsewhere, e.g. `report.dashboard.branch.read`).
+
+### 8.5 Reservation History — new route `/reservations/history`
+
+**Net-new screen — corrected from the source brief.** The brief describes this as mirroring an "existing Care Plan History screen"; no such screen exists anywhere in this project's design docs, SAD, or shipped frontend (confirmed: zero matches for "Care Plan" project-wide). Designed fresh here; the brief's reference screenshot (`docs/images/Reservation History plan'.PNG`, from an unrelated demo app) is used only as a loose density/layout cue.
+
+```text
+Reservation History
+├── Header: H1 "Reservation History"
+├── Summary bar: "{X} completed | {Y} cancelled/no-show | {Z}% new patients"
+├── Filters: Status, Patient Type (§8.1), Date Range, Procedure
+├── Search — patient name or procedure text
+└── Card list: each card shows patient name, patientType Badge,
+    date, procedure, status Badge, and two actions —
+    "View Appointment Details" (opens Detail §4) and
+    "View Full Reservation" (same target — kept as two labeled
+    actions per the brief, even though both route to §4, since the
+    brief's own reference distinguishes "details" from "full record"
+    without a documented functional difference between them; flagged
+    as a likely single-action simplification for whoever implements this)
+```
+
+Distinct from the existing per-patient Reservation History tab on Patient Detail (`patient.md` §12.2) — this is clinic-wide, not scoped to one patient; both remain, serving different audiences (front desk browsing everything vs. reviewing one patient's record).
+
+Permission: `reservation.read` (same data as §2's List, different presentation — not a new capability).
+
+---
+
+## 9. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
 
 **Live update** is this module's headline fit: `TimeSlotPicker` (§3) currently fetches slots once per doctor/date selection — a slot going from Available to Full because another staff member just booked it should be reflected without the user re-selecting the date, per `ui-guidelines.md` §9.2 (poll/subscribe, animate the diff, don't silently re-render). This directly prevents the double-booking race condition SAD §15.4 already treats as a rejectable error — catching it live, before submit, is strictly better than the current reject-after-submit behavior. **Interactive charts** (§5, `design-system.md` §11.4): Reservation Analytics's proportional `BarList`s (Reservation Trend, Peak Hour Analysis, Doctor Utilization, Cancellation/No-Show Trends) upgrade to Recharts, now that it's approved — each retains its "View as table" toggle (`ui-guidelines.md` §9.5) and animates on date-range filter change rather than hard-cutting. **Micro-interactions**: status pill transitions on the List/Detail Badge (§2.1, §4) cross-fade over `motion-standard` when a reservation's status changes (e.g. after Check-in) rather than an instant swap — same pattern `design-system.md` §11.7 establishes generally, concretely useful here since Check-in is this module's most common state transition.
