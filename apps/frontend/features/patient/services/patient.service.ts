@@ -1,6 +1,13 @@
 import { apiClient } from "@/lib/api-client";
 import { ApiSuccessBody, PaginationMeta } from "@/types/api";
-import { CreatePatientInput, ListPatientsParams, Patient, PatientDetail, UpdatePatientInput } from "../types/patient.types";
+import {
+  CreatePatientInput,
+  ListPatientsParams,
+  Patient,
+  PatientDetail,
+  QuickAddPatientInput,
+  UpdatePatientInput,
+} from "../types/patient.types";
 
 // docs/06-tasks/task-001.md, task-027.md..task-030.md
 export const patientService = {
@@ -16,6 +23,11 @@ export const patientService = {
 
   async create(payload: CreatePatientInput): Promise<Patient> {
     const response = await apiClient.post<ApiSuccessBody<Patient>>("/patients", payload);
+    return response.data.data;
+  },
+
+  async quickAdd(payload: QuickAddPatientInput): Promise<Patient> {
+    const response = await apiClient.post<ApiSuccessBody<Patient>>("/patients/quick-add", payload);
     return response.data.data;
   },
 

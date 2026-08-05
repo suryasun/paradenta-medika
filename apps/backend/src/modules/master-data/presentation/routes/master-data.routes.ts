@@ -48,6 +48,20 @@ import { PushMasterDataTemplateUseCase } from '../../application/use-cases/PushM
 import { GetMasterDataDriftReportUseCase } from '../../application/use-cases/GetMasterDataDriftReportUseCase';
 import { MasterDataTemplateController } from '../controllers/MasterDataTemplateController';
 
+import { ProvinceRepository } from '../../infrastructure/repositories/ProvinceRepository';
+import { RegencyRepository } from '../../infrastructure/repositories/RegencyRepository';
+import { DistrictRepository } from '../../infrastructure/repositories/DistrictRepository';
+import { VillageRepository } from '../../infrastructure/repositories/VillageRepository';
+import { ReferralSourceRepository } from '../../infrastructure/repositories/ReferralSourceRepository';
+import { ListReferralSourcesUseCase } from '../../application/use-cases/ListReferralSourcesUseCase';
+import { ReferralSourceController } from '../controllers/ReferralSourceController';
+import { ListProvincesUseCase } from '../../application/use-cases/ListProvincesUseCase';
+import { ListRegenciesUseCase } from '../../application/use-cases/ListRegenciesUseCase';
+import { ListDistrictsUseCase } from '../../application/use-cases/ListDistrictsUseCase';
+import { ListVillagesUseCase } from '../../application/use-cases/ListVillagesUseCase';
+import { ListRegenciesQueryDto, ListDistrictsQueryDto, ListVillagesQueryDto } from '../../application/dtos/RegionQueryDto';
+import { RegionController } from '../controllers/RegionController';
+
 /**
  * docs/06-tasks/task-021.md..task-026.md composition root. Endpoint paths
  * follow docs/04-ai-contract/04-api-contract.md's documented URL convention
@@ -338,6 +352,44 @@ export function buildMasterDataModule(
     requirePermission('masterdata.template.manage'),
     masterDataTemplateController.drift,
   );
+
+  // --- Regional Address Master Data (task-285, Epic PE2, Patient Module
+  // Enhancement addendum): read-only lookup catalogs consumed via cascading
+  // dropdowns, no Create/Update/Delete endpoint at launch (see the task's
+  // own Backend Scope). Path prefix `/master-data/` per the task's literal
+  // API Impact section, distinct from the flat-path convention every other
+  // entity in this router uses. ---
+  const regionController = new RegionController(
+    new ListProvincesUseCase(new ProvinceRepository()),
+    new ListRegenciesUseCase(new RegencyRepository()),
+    new ListDistrictsUseCase(new DistrictRepository()),
+    new ListVillagesUseCase(new VillageRepository()),
+  );
+  router.get('/master-data/provinces', requirePermission('masterdata.region.read'), regionController.provinces);
+  router.get(
+    '/master-data/regencies',
+    requirePermission('masterdata.region.read'),
+    validateQuery(ListRegenciesQueryDto),
+    regionController.regencies,
+  );
+  router.get(
+    '/master-data/districts',
+    requirePermission('masterdata.region.read'),
+    validateQuery(ListDistrictsQueryDto),
+    regionController.districts,
+  );
+  router.get(
+    '/master-data/villages',
+    requirePermission('masterdata.region.read'),
+    validateQuery(ListVillagesQueryDto),
+    regionController.villages,
+  );
+
+  // --- Referral Source (task-287, Epic PE4, Patient Module Enhancement
+  // addendum): read-only lookup catalog, no Create/Update/Delete endpoint
+  // at launch, per the task's own Deliverables. ---
+  const referralSourceController = new ReferralSourceController(new ListReferralSourcesUseCase(new ReferralSourceRepository()));
+  router.get('/master-data/referral-sources', requirePermission('masterdata.referral-source.read'), referralSourceController.list);
 
   return router;
 }

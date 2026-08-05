@@ -1,6 +1,8 @@
 import { IEventBus } from '../../../../shared/events/EventBus';
 import { AuditContext, IAuditService } from '../../../system/domain/services/IAuditService';
-import { PatientNotFoundException } from '../../domain/exceptions/PatientExceptions';
+import { IReferralSourceRepository } from '../../../master-data/domain/repositories/IReferralSourceRepository';
+import { PatientGenderValue } from '../../domain/entities/PatientEntity';
+import { PatientNotFoundException, PatientReferralSourceInvalidException } from '../../domain/exceptions/PatientExceptions';
 import { PATIENT_UPDATED_EVENT, PatientLifecyclePayload } from '../../domain/events/PatientEvents';
 import { IPatientRepository } from '../../domain/repositories/IPatientRepository';
 import { PatientResponseDto } from '../dtos/PatientResponseDto';
@@ -12,6 +14,19 @@ export interface UpdatePatientInput {
   phoneNumber?: string;
   email?: string;
   address?: string;
+  // task-284 (Epic PE1)
+  insuranceNumber?: string;
+  instagramHandle?: string;
+  facebookHandle?: string;
+  tiktokHandle?: string;
+  whatsappNumber?: string;
+  // task-287 (Epic PE4)
+  referralSourceId?: string;
+  referredByUserId?: string;
+  // task-289 (Epic PE6): lets staff correct the placeholder gender/
+  // birthDate a Quick Add patient was created with.
+  gender?: PatientGenderValue;
+  dateOfBirth?: string;
   actorUserId: string;
   ipAddress?: string;
   correlationId?: string;
@@ -27,6 +42,7 @@ export class UpdatePatientUseCase {
     private readonly patientRepository: IPatientRepository,
     private readonly auditService: IAuditService,
     private readonly eventBus: IEventBus,
+    private readonly referralSourceRepository: IReferralSourceRepository,
   ) {}
 
   async execute(input: UpdatePatientInput): Promise<PatientResponseDto> {
@@ -35,11 +51,27 @@ export class UpdatePatientUseCase {
       throw new PatientNotFoundException();
     }
 
+    if (input.referralSourceId) {
+      const referralSource = await this.referralSourceRepository.findById(input.referralSourceId);
+      if (!referralSource || !referralSource.isActive) {
+        throw new PatientReferralSourceInvalidException();
+      }
+    }
+
     const updated = await this.patientRepository.update(input.patientId, {
       patientName: input.fullName,
       phone: input.phoneNumber,
       email: input.email,
       address: input.address,
+      insuranceNumber: input.insuranceNumber,
+      instagramHandle: input.instagramHandle,
+      facebookHandle: input.facebookHandle,
+      tiktokHandle: input.tiktokHandle,
+      whatsappNumber: input.whatsappNumber,
+      referralSourceId: input.referralSourceId,
+      referredByUserId: input.referredByUserId,
+      gender: input.gender,
+      birthDate: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
     });
 
     const auditContext: AuditContext = { userId: input.actorUserId, ipAddress: input.ipAddress, correlationId: input.correlationId };

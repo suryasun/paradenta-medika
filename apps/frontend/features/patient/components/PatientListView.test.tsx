@@ -25,7 +25,22 @@ function renderView() {
 }
 
 const PATIENTS: Patient[] = [
-  { id: "p1", medicalRecordNumber: "MRN000001", fullName: "John Doe", gender: "MALE", dateOfBirth: "1998-08-10", phoneNumber: "0812", status: "ACTIVE" },
+  {
+    id: "p1",
+    medicalRecordNumber: "MRN000001",
+    fullName: "John Doe",
+    gender: "MALE",
+    dateOfBirth: "1998-08-10",
+    phoneNumber: "0812",
+    status: "ACTIVE",
+    insuranceNumber: null,
+    instagramHandle: null,
+    facebookHandle: null,
+    tiktokHandle: null,
+    whatsappNumber: null,
+    referralSourceId: null,
+    referredByUserId: null,
+  },
 ];
 
 describe("PatientListView", () => {

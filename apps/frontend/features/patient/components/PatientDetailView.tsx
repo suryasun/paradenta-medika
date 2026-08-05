@@ -13,10 +13,13 @@ import { PermissionGuard } from "@/components/guards/PermissionGuard";
 import { useAuthStore } from "@/stores/auth.store";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { ClinicalTimelineSection } from "@/features/emr/components/ClinicalTimelineSection";
+import { useReferralSources } from "@/features/master-data/hooks/useReferralSources";
 import { usePatient } from "../hooks/usePatient";
 import { useArchivePatient, useRestorePatient } from "../hooks/usePatientMutations";
 import { patientService } from "../services/patient.service";
 import { UpdatePatientInput } from "../types/patient.types";
+import { PatientAddressList } from "./PatientAddressList";
+import { PatientEmergencyContactList } from "./PatientEmergencyContactList";
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -71,13 +74,14 @@ function EditableField({
 // replaced by the Clinical Timeline tab (docs/06-tasks/task-091.md:
 // "replacing/extending the generic history tabs ... with a unified
 // chronological feed"), which aggregates Visit plus every other Phase 2
-// EMR event type via GET /emr/timeline/{patientId}. Emergency Contact,
-// Attachments, Audit Trail, and Merge Patient have no Phase 1 API and are
-// not included.
+// EMR event type via GET /emr/timeline/{patientId}. Emergency Contact is
+// now real (task-288, Epic PE5). Attachments, Audit Trail, and Merge
+// Patient still have no Phase 1 API and are not included.
 export function PatientDetailView({ patientId }: { patientId: string }) {
   const { data: patient, isLoading, isError, error, refetch } = usePatient(patientId);
   const archivePatient = useArchivePatient();
   const restorePatient = useRestorePatient();
+  const { data: referralSources } = useReferralSources();
 
   if (isLoading) return <LoadingState label="Loading patient..." />;
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
@@ -125,6 +129,50 @@ export function PatientDetailView({ patientId }: { patientId: string }) {
                 <Field label="Place of Birth" value={patient.profile.placeOfBirth} />
                 <EditableField label="Phone" value={patient.profile.phoneNumber} patientId={patientId} field="phoneNumber" />
                 <EditableField label="Email" value={patient.profile.email} patientId={patientId} field="email" />
+
+                {/* task-284 (Epic PE1): "Kontak Tambahan" sub-heading per
+                    docs/02-design/pages/patient.md §14. */}
+                <div className="col-span-full mt-2 border-t border-border pt-4 text-sm font-medium text-foreground">
+                  Kontak Tambahan
+                </div>
+                <EditableField
+                  label="Insurance Number"
+                  value={patient.profile.insuranceNumber}
+                  patientId={patientId}
+                  field="insuranceNumber"
+                />
+                <EditableField
+                  label="WhatsApp Number"
+                  value={patient.profile.whatsappNumber}
+                  patientId={patientId}
+                  field="whatsappNumber"
+                />
+                <EditableField
+                  label="Instagram Handle"
+                  value={patient.profile.instagramHandle}
+                  patientId={patientId}
+                  field="instagramHandle"
+                />
+                <EditableField
+                  label="Facebook Handle"
+                  value={patient.profile.facebookHandle}
+                  patientId={patientId}
+                  field="facebookHandle"
+                />
+                <EditableField
+                  label="TikTok Handle"
+                  value={patient.profile.tiktokHandle}
+                  patientId={patientId}
+                  field="tiktokHandle"
+                />
+
+                {/* task-287 (Epic PE4): read-only here -- edited via the
+                    Edit Patient form's dropdown, not inline (a Select
+                    isn't one of InlineEditableCell's supported inputs). */}
+                <Field
+                  label="Referral Source"
+                  value={referralSources?.find((source) => source.id === patient.profile.referralSourceId)?.referralSourceName}
+                />
               </dl>
             ),
           },
@@ -141,11 +189,12 @@ export function PatientDetailView({ patientId }: { patientId: string }) {
           {
             key: "address",
             label: "Address",
-            content: (
-              <dl>
-                <EditableField label="Address" value={patient.addresses[0]} patientId={patientId} field="address" />
-              </dl>
-            ),
+            content: <PatientAddressList patientId={patientId} />,
+          },
+          {
+            key: "emergency-contacts",
+            label: "Emergency Contact",
+            content: <PatientEmergencyContactList patientId={patientId} />,
           },
           {
             key: "reservations",

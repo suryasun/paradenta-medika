@@ -1,5 +1,15 @@
-import { Patient } from '@prisma/client';
+import { Patient, PatientAddress, PatientEmergencyContact } from '@prisma/client';
 import { IPatientRepository, PatientListFilters, UpdatePatientProps } from '../../src/modules/patient/domain/repositories/IPatientRepository';
+import {
+  CreatePatientAddressProps,
+  IPatientAddressRepository,
+  UpdatePatientAddressProps,
+} from '../../src/modules/patient/domain/repositories/IPatientAddressRepository';
+import {
+  CreatePatientEmergencyContactProps,
+  IPatientEmergencyContactRepository,
+  UpdatePatientEmergencyContactProps,
+} from '../../src/modules/patient/domain/repositories/IPatientEmergencyContactRepository';
 import { PatientProps } from '../../src/modules/patient/domain/entities/PatientEntity';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { IEventBus } from '../../src/shared/events/EventBus';
@@ -18,6 +28,13 @@ function toPatientRow(medicalRecordNo: string, props: PatientProps): Patient {
     phone: props.phone,
     email: props.email ?? null,
     address: props.address,
+    insuranceNumber: props.insuranceNumber ?? null,
+    instagramHandle: props.instagramHandle ?? null,
+    facebookHandle: props.facebookHandle ?? null,
+    tiktokHandle: props.tiktokHandle ?? null,
+    whatsappNumber: props.whatsappNumber ?? null,
+    referralSourceId: props.referralSourceId ?? null,
+    referredByUserId: props.referredByUserId ?? null,
     registrationDate: new Date(),
     active: true,
     createdAt: new Date(),
@@ -72,6 +89,15 @@ export class FakePatientRepository implements IPatientRepository {
     if (props.phone) patient.phone = props.phone;
     if (props.email !== undefined) patient.email = props.email ?? null;
     if (props.address) patient.address = props.address;
+    if (props.insuranceNumber !== undefined) patient.insuranceNumber = props.insuranceNumber ?? null;
+    if (props.instagramHandle !== undefined) patient.instagramHandle = props.instagramHandle ?? null;
+    if (props.facebookHandle !== undefined) patient.facebookHandle = props.facebookHandle ?? null;
+    if (props.tiktokHandle !== undefined) patient.tiktokHandle = props.tiktokHandle ?? null;
+    if (props.whatsappNumber !== undefined) patient.whatsappNumber = props.whatsappNumber ?? null;
+    if (props.referralSourceId !== undefined) patient.referralSourceId = props.referralSourceId ?? null;
+    if (props.referredByUserId !== undefined) patient.referredByUserId = props.referredByUserId ?? null;
+    if (props.gender) patient.gender = props.gender;
+    if (props.birthDate) patient.birthDate = props.birthDate;
     patient.updatedAt = new Date();
     return patient;
   }
@@ -96,6 +122,108 @@ export class FakePatientRepository implements IPatientRepository {
 
   async count(): Promise<number> {
     return this.patients.size;
+  }
+}
+
+// task-286 (Epic PE3, Patient Module Enhancement addendum)
+export class FakePatientAddressRepository implements IPatientAddressRepository {
+  addresses = new Map<string, PatientAddress>();
+
+  async listForPatient(patientId: string): Promise<PatientAddress[]> {
+    return [...this.addresses.values()].filter((a) => a.patientId === patientId);
+  }
+
+  async findById(id: string): Promise<PatientAddress | null> {
+    return this.addresses.get(id) ?? null;
+  }
+
+  async countForPatient(patientId: string): Promise<number> {
+    return [...this.addresses.values()].filter((a) => a.patientId === patientId).length;
+  }
+
+  async create(props: CreatePatientAddressProps): Promise<PatientAddress> {
+    const address: PatientAddress = {
+      id: nextFakeUuid(),
+      patientId: props.patientId,
+      provinceId: props.provinceId,
+      regencyId: props.regencyId,
+      districtId: props.districtId,
+      villageId: props.villageId,
+      addressLine: props.addressLine,
+      postalCode: props.postalCode ?? null,
+      isPrimary: props.isPrimary,
+    };
+    this.addresses.set(address.id, address);
+    return address;
+  }
+
+  async update(id: string, props: UpdatePatientAddressProps): Promise<PatientAddress> {
+    const address = this.addresses.get(id);
+    if (!address) throw new Error('not found');
+    if (props.provinceId !== undefined) address.provinceId = props.provinceId;
+    if (props.regencyId !== undefined) address.regencyId = props.regencyId;
+    if (props.districtId !== undefined) address.districtId = props.districtId;
+    if (props.villageId !== undefined) address.villageId = props.villageId;
+    if (props.addressLine !== undefined) address.addressLine = props.addressLine;
+    if (props.postalCode !== undefined) address.postalCode = props.postalCode ?? null;
+    if (props.isPrimary !== undefined) address.isPrimary = props.isPrimary;
+    return address;
+  }
+
+  async delete(id: string): Promise<void> {
+    this.addresses.delete(id);
+  }
+
+  async setPrimary(patientId: string, addressId: string): Promise<PatientAddress> {
+    for (const address of this.addresses.values()) {
+      if (address.patientId === patientId && address.id !== addressId) {
+        address.isPrimary = false;
+      }
+    }
+    const target = this.addresses.get(addressId);
+    if (!target) throw new Error('not found');
+    target.isPrimary = true;
+    return target;
+  }
+}
+
+// task-288 (Epic PE5, Patient Module Enhancement addendum)
+export class FakePatientEmergencyContactRepository implements IPatientEmergencyContactRepository {
+  contacts = new Map<string, PatientEmergencyContact>();
+
+  async listForPatient(patientId: string): Promise<PatientEmergencyContact[]> {
+    return [...this.contacts.values()].filter((c) => c.patientId === patientId);
+  }
+
+  async findById(id: string): Promise<PatientEmergencyContact | null> {
+    return this.contacts.get(id) ?? null;
+  }
+
+  async create(props: CreatePatientEmergencyContactProps): Promise<PatientEmergencyContact> {
+    const contact: PatientEmergencyContact = {
+      id: nextFakeUuid(),
+      patientId: props.patientId,
+      contactName: props.contactName,
+      relationship: props.relationship,
+      phone: props.phone,
+      address: props.address ?? null,
+    };
+    this.contacts.set(contact.id, contact);
+    return contact;
+  }
+
+  async update(id: string, props: UpdatePatientEmergencyContactProps): Promise<PatientEmergencyContact> {
+    const contact = this.contacts.get(id);
+    if (!contact) throw new Error('not found');
+    if (props.contactName !== undefined) contact.contactName = props.contactName;
+    if (props.relationship !== undefined) contact.relationship = props.relationship;
+    if (props.phone !== undefined) contact.phone = props.phone;
+    if (props.address !== undefined) contact.address = props.address ?? null;
+    return contact;
+  }
+
+  async delete(id: string): Promise<void> {
+    this.contacts.delete(id);
   }
 }
 

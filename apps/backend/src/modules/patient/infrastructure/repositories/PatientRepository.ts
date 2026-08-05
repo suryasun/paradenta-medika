@@ -6,7 +6,13 @@ import { IPatientRepository, PatientListFilters, UpdatePatientProps } from '../.
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'patientName', 'birthDate', 'medicalRecordNo'] as const;
 
-function toCreateData(medicalRecordNo: string, props: PatientProps): Prisma.PatientCreateInput {
+// task-287: switched from Prisma.PatientCreateInput (which, once
+// referralSourceId/referredByUserId became relation-backed FKs, only
+// accepts the nested `{ connect: { id } }` shape) to the Unchecked variant
+// so this function can keep passing raw scalar FKs directly, matching
+// PatientAddressRepository's own precedent -- prisma.patient.create()'s
+// `data` param accepts either shape.
+function toCreateData(medicalRecordNo: string, props: PatientProps): Prisma.PatientUncheckedCreateInput {
   return {
     medicalRecordNo,
     patientName: props.patientName,
@@ -18,6 +24,13 @@ function toCreateData(medicalRecordNo: string, props: PatientProps): Prisma.Pati
     phone: props.phone,
     email: props.email,
     address: props.address,
+    insuranceNumber: props.insuranceNumber,
+    instagramHandle: props.instagramHandle,
+    facebookHandle: props.facebookHandle,
+    tiktokHandle: props.tiktokHandle,
+    whatsappNumber: props.whatsappNumber,
+    referralSourceId: props.referralSourceId,
+    referredByUserId: props.referredByUserId,
   };
 }
 
@@ -77,9 +90,18 @@ export class PatientRepository implements IPatientRepository {
       where: { id },
       data: {
         patientName: props.patientName,
+        gender: props.gender,
+        birthDate: props.birthDate,
         phone: props.phone,
         email: props.email,
         address: props.address,
+        insuranceNumber: props.insuranceNumber,
+        instagramHandle: props.instagramHandle,
+        facebookHandle: props.facebookHandle,
+        tiktokHandle: props.tiktokHandle,
+        whatsappNumber: props.whatsappNumber,
+        referralSourceId: props.referralSourceId,
+        referredByUserId: props.referredByUserId,
       },
     });
   }

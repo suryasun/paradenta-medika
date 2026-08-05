@@ -95,3 +95,50 @@ export interface TemplateDriftEntry {
   isStale: boolean;
   fieldDrifts: TemplateFieldDrift[];
 }
+
+// task-285 (Epic PE2, Patient Module Enhancement addendum). Read-only
+// lookup catalogs -- mirrors apps/backend's Province/Regency/District/
+// Village Prisma models straight through, same "no dedicated response
+// DTO" convention as every other Master Data entity in this file.
+export interface Province {
+  id: string;
+  provinceCode: string;
+  provinceName: string;
+  isActive: boolean;
+}
+
+export interface Regency {
+  id: string;
+  provinceId: string;
+  regencyCode: string;
+  regencyName: string;
+  isActive: boolean;
+}
+
+export interface District {
+  id: string;
+  regencyId: string;
+  districtCode: string;
+  districtName: string;
+  isActive: boolean;
+}
+
+export interface Village {
+  id: string;
+  districtId: string;
+  villageCode: string;
+  villageName: string;
+  postalCode: string | null;
+  isActive: boolean;
+}
+
+// task-287 (Epic PE4, Patient Module Enhancement addendum). Read-only
+// lookup catalog -- marketing/lead-source tracking, deliberately distinct
+// from the clinical Referral entity (EMR module).
+export interface ReferralSource {
+  id: string;
+  referralSourceCode: string;
+  referralSourceName: string;
+  requiresReferrer: boolean;
+  isActive: boolean;
+}

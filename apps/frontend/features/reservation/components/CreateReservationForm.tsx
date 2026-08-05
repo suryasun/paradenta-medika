@@ -59,7 +59,7 @@ export function CreateReservationForm() {
         Walk-in (no appointment slot needed)
       </label>
 
-      <PatientPicker selectedPatient={patient} onSelect={setPatient} />
+      <PatientPicker selectedPatient={patient} onSelect={setPatient} allowQuickAdd />
 
       <Select id="doctorId" label="Doctor" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} required>
         <option value="">Select a doctor</option>

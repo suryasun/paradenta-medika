@@ -18,6 +18,13 @@ export function toPatientResponse(patient: Patient): PatientResponseDto {
     dateOfBirth: toIsoDate(patient.birthDate),
     phoneNumber: patient.phone,
     status: toStatus(patient),
+    insuranceNumber: patient.insuranceNumber,
+    instagramHandle: patient.instagramHandle,
+    facebookHandle: patient.facebookHandle,
+    tiktokHandle: patient.tiktokHandle,
+    whatsappNumber: patient.whatsappNumber,
+    referralSourceId: patient.referralSourceId,
+    referredByUserId: patient.referredByUserId,
   };
 }
 
@@ -41,6 +48,13 @@ export function toPatientDetailResponse(patient: Patient): PatientDetailResponse
       phoneNumber: patient.phone,
       email: patient.email,
       status: toStatus(patient),
+      insuranceNumber: patient.insuranceNumber,
+      instagramHandle: patient.instagramHandle,
+      facebookHandle: patient.facebookHandle,
+      tiktokHandle: patient.tiktokHandle,
+      whatsappNumber: patient.whatsappNumber,
+      referralSourceId: patient.referralSourceId,
+      referredByUserId: patient.referredByUserId,
     },
     addresses: [patient.address],
     emergencyContacts: [],

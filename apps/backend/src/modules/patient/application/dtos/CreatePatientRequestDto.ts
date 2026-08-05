@@ -1,4 +1,4 @@
-import { IsDateString, IsEmail, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export enum PatientGenderDto {
   MALE = 'MALE',
@@ -34,4 +34,18 @@ export class CreatePatientRequestDto {
   @IsOptional() @IsString() @MaxLength(50) identityNumber?: string;
 
   @IsString() @MinLength(1) address!: string;
+
+  // task-284 (Epic PE1): supplementary contact/identity fields, all
+  // optional, no uniqueness/format constraint beyond length.
+  @IsOptional() @IsString() @MaxLength(50) insuranceNumber?: string;
+  @IsOptional() @IsString() @MaxLength(100) instagramHandle?: string;
+  @IsOptional() @IsString() @MaxLength(100) facebookHandle?: string;
+  @IsOptional() @IsString() @MaxLength(100) tiktokHandle?: string;
+  @IsOptional() @IsString() @MaxLength(30) whatsappNumber?: string;
+
+  // task-287 (Epic PE4): referredByUserId is accepted but never required,
+  // even when the selected source has requiresReferrer:true (client-side
+  // prompting only, per the task's own Acceptance Criteria).
+  @IsOptional() @IsUUID('4') referralSourceId?: string;
+  @IsOptional() @IsUUID('4') referredByUserId?: string;
 }

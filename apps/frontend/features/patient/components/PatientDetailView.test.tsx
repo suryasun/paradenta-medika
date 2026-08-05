@@ -39,6 +39,13 @@ const DETAIL: PatientDetail = {
     phoneNumber: "0812",
     email: "john@example.com",
     status: "ACTIVE",
+    insuranceNumber: null,
+    instagramHandle: null,
+    facebookHandle: null,
+    tiktokHandle: null,
+    whatsappNumber: null,
+    referralSourceId: null,
+    referredByUserId: null,
   },
   addresses: ["Jl. Contoh No. 1"],
   emergencyContacts: [],
@@ -71,6 +78,44 @@ describe("PatientDetailView", () => {
 
     expect(await screen.findByRole("heading", { name: "John Doe" })).toBeInTheDocument();
     expect(screen.getByText("Jakarta")).toBeInTheDocument();
+  });
+
+  it("shows the task-284 Kontak Tambahan fields on the Profile tab and edits one inline", async () => {
+    const user = userEvent.setup();
+    mockedPatientService.detail.mockResolvedValue({
+      ...DETAIL,
+      profile: { ...DETAIL.profile, insuranceNumber: "INS-001", whatsappNumber: "0812" },
+    });
+    mockedPatientService.update.mockResolvedValue({
+      id: "p1",
+      medicalRecordNumber: "MRN000001",
+      fullName: "John Doe",
+      gender: "MALE",
+      dateOfBirth: "1998-08-10",
+      phoneNumber: "0812",
+      status: "ACTIVE",
+      insuranceNumber: "INS-002",
+      instagramHandle: null,
+      facebookHandle: null,
+      tiktokHandle: null,
+      whatsappNumber: "0812",
+      referralSourceId: null,
+      referredByUserId: null,
+    });
+
+    renderView();
+    await screen.findByRole("heading", { name: "John Doe" });
+
+    expect(screen.getByText("Kontak Tambahan")).toBeInTheDocument();
+    expect(screen.getByText("INS-001")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit Insurance Number" }));
+    const input = screen.getByLabelText("Insurance Number");
+    await user.clear(input);
+    await user.type(input, "INS-002");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(mockedPatientService.update).toHaveBeenCalledWith("p1", { insuranceNumber: "INS-002" }));
   });
 
   it("switches to the Identity tab and shows history tabs as empty", async () => {
@@ -118,6 +163,13 @@ describe("PatientDetailView", () => {
       dateOfBirth: "1998-08-10",
       phoneNumber: "0899",
       status: "ACTIVE",
+      insuranceNumber: null,
+      instagramHandle: null,
+      facebookHandle: null,
+      tiktokHandle: null,
+      whatsappNumber: null,
+      referralSourceId: null,
+      referredByUserId: null,
     });
 
     renderView();
@@ -143,6 +195,13 @@ describe("PatientDetailView", () => {
       dateOfBirth: "1998-08-10",
       phoneNumber: "0812",
       status: "ARCHIVED",
+      insuranceNumber: null,
+      instagramHandle: null,
+      facebookHandle: null,
+      tiktokHandle: null,
+      whatsappNumber: null,
+      referralSourceId: null,
+      referredByUserId: null,
     });
 
     renderView();

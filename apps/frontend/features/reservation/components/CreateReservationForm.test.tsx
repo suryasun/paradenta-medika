@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CreateReservationForm } from "./CreateReservationForm";
@@ -35,7 +35,24 @@ describe("CreateReservationForm", () => {
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
     mockedPatientService.list.mockResolvedValue({
-      items: [{ id: "p1", medicalRecordNumber: "MRN000001", fullName: "John Doe", gender: "MALE", dateOfBirth: "1998-08-10", phoneNumber: "0812", status: "ACTIVE" }],
+      items: [
+        {
+          id: "p1",
+          medicalRecordNumber: "MRN000001",
+          fullName: "John Doe",
+          gender: "MALE",
+          dateOfBirth: "1998-08-10",
+          phoneNumber: "0812",
+          status: "ACTIVE",
+          insuranceNumber: null,
+          instagramHandle: null,
+          facebookHandle: null,
+          tiktokHandle: null,
+          whatsappNumber: null,
+          referralSourceId: null,
+          referredByUserId: null,
+        },
+      ],
       meta: { page: 1, limit: 8, total: 1, totalPages: 1 },
     });
   });
@@ -86,5 +103,51 @@ describe("CreateReservationForm", () => {
     await user.click(screen.getByRole("checkbox", { name: /walk-in/i }));
 
     expect(screen.getByRole("button", { name: "Register Walk-in" })).toBeDisabled();
+  });
+
+  // task-289 (Epic PE6, Patient Module Enhancement addendum)
+  it("lets staff Quick Add a patient when Search Patient returns no results, then selects that patient", async () => {
+    const user = userEvent.setup();
+    mockedPatientService.list.mockResolvedValue({ items: [], meta: { page: 1, limit: 8, total: 0, totalPages: 0 } });
+    mockedPatientService.quickAdd.mockResolvedValue({
+      id: "p2",
+      medicalRecordNumber: "MRN000002",
+      fullName: "Walk-in Patient",
+      gender: "MALE",
+      dateOfBirth: "1900-01-01",
+      phoneNumber: "08129998877",
+      status: "ACTIVE",
+      insuranceNumber: null,
+      instagramHandle: null,
+      facebookHandle: null,
+      tiktokHandle: null,
+      whatsappNumber: null,
+      referralSourceId: null,
+      referredByUserId: null,
+    });
+
+    renderForm();
+
+    await user.type(screen.getByLabelText("Patient"), "Nobody");
+    await screen.findByText("No patients found.");
+    await user.click(screen.getByRole("button", { name: "Quick Add Patient" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Full Name"), "Walk-in Patient");
+    await user.type(within(dialog).getByLabelText("Address"), "Jl. Contoh No. 99");
+    await user.type(within(dialog).getByLabelText("Phone Number"), "08129998877");
+    await user.type(within(dialog).getByLabelText("Identity Number"), "3171000000000001");
+    await user.click(within(dialog).getByRole("button", { name: "Create & Continue Booking" }));
+
+    await waitFor(() =>
+      expect(mockedPatientService.quickAdd).toHaveBeenCalledWith({
+        fullName: "Walk-in Patient",
+        address: "Jl. Contoh No. 99",
+        phoneNumber: "08129998877",
+        identityNumber: "3171000000000001",
+      }),
+    );
+    expect(await screen.findByText(/Walk-in Patient/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

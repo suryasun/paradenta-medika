@@ -1,4 +1,9 @@
-import { Branch, Clinic, Doctor, MasterDataTemplate, MasterDataTemplateBranchLink, ToothCondition } from '@prisma/client';
+import { Branch, Clinic, District, Doctor, MasterDataTemplate, MasterDataTemplateBranchLink, Province, Regency, ReferralSource, ToothCondition, Village } from '@prisma/client';
+import { IProvinceRepository } from '../../src/modules/master-data/domain/repositories/IProvinceRepository';
+import { IRegencyRepository } from '../../src/modules/master-data/domain/repositories/IRegencyRepository';
+import { IDistrictRepository } from '../../src/modules/master-data/domain/repositories/IDistrictRepository';
+import { IVillageRepository } from '../../src/modules/master-data/domain/repositories/IVillageRepository';
+import { IReferralSourceRepository } from '../../src/modules/master-data/domain/repositories/IReferralSourceRepository';
 import { CreateClinicInput, IClinicRepository, UpdateClinicInput } from '../../src/modules/master-data/domain/repositories/IClinicRepository';
 import { CreateBranchInput, IBranchRepository, UpdateBranchInput } from '../../src/modules/master-data/domain/repositories/IBranchRepository';
 import {
@@ -276,5 +281,69 @@ export class FakeToothConditionRepository implements IToothConditionRepository {
     if (!condition) throw new Error('not found');
     Object.assign(condition, input);
     return condition;
+  }
+}
+
+// task-285/task-286 (Epic PE2/PE3, Patient Module Enhancement addendum):
+// read-only lookup catalogs, no Create endpoint -- tests populate `items`
+// directly.
+export class FakeProvinceRepository implements IProvinceRepository {
+  items: Province[] = [];
+
+  async list(): Promise<Province[]> {
+    return this.items.filter((p) => p.isActive);
+  }
+
+  async findById(id: string): Promise<Province | null> {
+    return this.items.find((p) => p.id === id) ?? null;
+  }
+}
+
+export class FakeRegencyRepository implements IRegencyRepository {
+  items: Regency[] = [];
+
+  async list(provinceId?: string): Promise<Regency[]> {
+    return this.items.filter((r) => r.isActive && (!provinceId || r.provinceId === provinceId));
+  }
+
+  async findById(id: string): Promise<Regency | null> {
+    return this.items.find((r) => r.id === id) ?? null;
+  }
+}
+
+export class FakeDistrictRepository implements IDistrictRepository {
+  items: District[] = [];
+
+  async list(regencyId?: string): Promise<District[]> {
+    return this.items.filter((d) => d.isActive && (!regencyId || d.regencyId === regencyId));
+  }
+
+  async findById(id: string): Promise<District | null> {
+    return this.items.find((d) => d.id === id) ?? null;
+  }
+}
+
+export class FakeVillageRepository implements IVillageRepository {
+  items: Village[] = [];
+
+  async list(districtId?: string): Promise<Village[]> {
+    return this.items.filter((v) => v.isActive && (!districtId || v.districtId === districtId));
+  }
+
+  async findById(id: string): Promise<Village | null> {
+    return this.items.find((v) => v.id === id) ?? null;
+  }
+}
+
+// task-287 (Epic PE4, Patient Module Enhancement addendum)
+export class FakeReferralSourceRepository implements IReferralSourceRepository {
+  items: ReferralSource[] = [];
+
+  async list(): Promise<ReferralSource[]> {
+    return this.items.filter((s) => s.isActive);
+  }
+
+  async findById(id: string): Promise<ReferralSource | null> {
+    return this.items.find((s) => s.id === id) ?? null;
   }
 }

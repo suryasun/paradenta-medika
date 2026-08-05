@@ -106,6 +106,8 @@ const PERMISSION_KEYS = [
   'masterdata.doctor.read',
   'masterdata.payment-method.manage',
   'masterdata.payment-method.read',
+  'masterdata.referral-source.read',
+  'masterdata.region.read',
   'masterdata.treatment.manage',
   'masterdata.treatment.read',
   'masterdata.treatment-category.manage',
@@ -288,6 +290,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'queue.read',
     'queue.dashboard.read',
     'masterdata.doctor.read',
+    'masterdata.referral-source.read',
+    'masterdata.region.read',
     'report.dashboard.operations.read',
     'report.catalog.read',
     'system.notification.read',
@@ -865,6 +869,28 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     }
   }
 
+  // task-287 (Epic PE4, Patient Module Enhancement addendum):
+  // docs/03-sad/11-module-master-data.md §11.25's literal 9-entry example
+  // list. "Staf Klinik" is the only entry with requiresReferrer: true.
+  const referralSources: Array<{ code: string; name: string; requiresReferrer: boolean }> = [
+    { code: 'GOOGLE', name: 'Google', requiresReferrer: false },
+    { code: 'INSTAGRAM', name: 'Instagram', requiresReferrer: false },
+    { code: 'FACEBOOK', name: 'Facebook', requiresReferrer: false },
+    { code: 'TIKTOK', name: 'TikTok', requiresReferrer: false },
+    { code: 'FRIEND', name: 'Teman (Friend)', requiresReferrer: false },
+    { code: 'WALK_IN', name: 'Datang Sendiri (Walk-in)', requiresReferrer: false },
+    { code: 'ALODOKTER', name: 'Alodokter', requiresReferrer: false },
+    { code: 'STAFF', name: 'Staf Klinik', requiresReferrer: true },
+    { code: 'OTHER', name: 'Lain-lain (Other)', requiresReferrer: false },
+  ];
+  for (const source of referralSources) {
+    await prisma.referralSource.upsert({
+      where: { referralSourceCode: source.code },
+      update: {},
+      create: { referralSourceCode: source.code, referralSourceName: source.name, requiresReferrer: source.requiresReferrer },
+    });
+  }
+
   // Warehouse Module (docs/03-sad/18-module-warehouse.md, Epic V Foundation):
   // ItemCategory/Unit are the minimal FK targets the Item entity's own
   // documented fields require (see prisma/schema.prisma comment above
@@ -977,6 +1003,7 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     paymentMethods: paymentMethods.length,
     toothConditions: toothConditions.length,
     consentTemplates: consentTemplates.length,
+    referralSources: referralSources.length,
     itemCategories: itemCategories.length,
     units: units.length,
     warehouseItems: items.length,
@@ -2029,11 +2056,126 @@ async function seedMenus(userIdByUsername: Map<string, string>) {
   return { menus: menuCount };
 }
 
+// ---------------------------------------------------------------------------
+// Regional Address Master Data (task-285, Epic PE2, Patient Module
+// Enhancement addendum).
+//
+// NOT the full Indonesian administrative catalog. task-285's own Backend
+// Scope explicitly flags that a real seed source (Kemendagri/BPS, ~34
+// provinces / ~514 regencies / ~7,200 districts / ~83,900 villages) was
+// never specified in that documentation pass and must be sourced before
+// writing the seed script -- rather than fabricate that volume of
+// administrative codes/postal codes I cannot verify, this seeds a small,
+// well-known real subset (Jakarta Selatan and Tangerang Selatan -- the two
+// cities apps/frontend's seeded Branches actually sit in) so
+// task-286/Patient Address's cascading selects have real data to
+// demonstrate end-to-end. Village level is seeded for only one district
+// (Kebayoran Baru) for the same reason -- confidently sourcing every
+// kelurahan under all 17 districts here without a verified dataset would
+// risk asserting inaccurate reference data into a healthcare system.
+// Replace with a real Kemendagri/BPS import before this is relied on
+// beyond local/dev testing.
+// ---------------------------------------------------------------------------
+async function seedRegions() {
+  const provinceDkiJakarta = await prisma.province.upsert({
+    where: { provinceCode: '31' },
+    update: {},
+    create: { provinceCode: '31', provinceName: 'DKI Jakarta' },
+  });
+  const provinceBanten = await prisma.province.upsert({
+    where: { provinceCode: '36' },
+    update: {},
+    create: { provinceCode: '36', provinceName: 'Banten' },
+  });
+
+  const regencyJakartaSelatan = await prisma.regency.upsert({
+    where: { regencyCode: '3171' },
+    update: {},
+    create: { regencyCode: '3171', regencyName: 'Kota Jakarta Selatan', provinceId: provinceDkiJakarta.id },
+  });
+  const regencyTangerangSelatan = await prisma.regency.upsert({
+    where: { regencyCode: '3674' },
+    update: {},
+    create: { regencyCode: '3674', regencyName: 'Kota Tangerang Selatan', provinceId: provinceBanten.id },
+  });
+
+  const jakartaSelatanDistricts: Array<{ code: string; name: string }> = [
+    { code: '317101', name: 'Jagakarsa' },
+    { code: '317102', name: 'Pasar Minggu' },
+    { code: '317103', name: 'Cilandak' },
+    { code: '317104', name: 'Pesanggrahan' },
+    { code: '317105', name: 'Kebayoran Lama' },
+    { code: '317106', name: 'Kebayoran Baru' },
+    { code: '317107', name: 'Mampang Prapatan' },
+    { code: '317108', name: 'Pancoran' },
+    { code: '317109', name: 'Tebet' },
+    { code: '317110', name: 'Setiabudi' },
+  ];
+  const districtIdByCode = new Map<string, string>();
+  for (const district of jakartaSelatanDistricts) {
+    const row = await prisma.district.upsert({
+      where: { districtCode: district.code },
+      update: {},
+      create: { districtCode: district.code, districtName: district.name, regencyId: regencyJakartaSelatan.id },
+    });
+    districtIdByCode.set(district.code, row.id);
+  }
+
+  const tangerangSelatanDistricts: Array<{ code: string; name: string }> = [
+    { code: '367401', name: 'Serpong' },
+    { code: '367402', name: 'Serpong Utara' },
+    { code: '367403', name: 'Ciputat' },
+    { code: '367404', name: 'Ciputat Timur' },
+    { code: '367405', name: 'Pondok Aren' },
+    { code: '367406', name: 'Pamulang' },
+    { code: '367407', name: 'Setu' },
+  ];
+  for (const district of tangerangSelatanDistricts) {
+    await prisma.district.upsert({
+      where: { districtCode: district.code },
+      update: {},
+      create: { districtCode: district.code, districtName: district.name, regencyId: regencyTangerangSelatan.id },
+    });
+  }
+
+  // Village (Kelurahan) level, seeded only for Kebayoran Baru -- see this
+  // function's header comment for why the other 16 districts stop at the
+  // district level in this dev seed.
+  const kebayoranBaruVillages: Array<{ code: string; name: string }> = [
+    { code: '3171061001', name: 'Selong' },
+    { code: '3171061002', name: 'Gunung' },
+    { code: '3171061003', name: 'Kramat Pela' },
+    { code: '3171061004', name: 'Gandaria Utara' },
+    { code: '3171061005', name: 'Cipete Utara' },
+    { code: '3171061006', name: 'Pulo' },
+    { code: '3171061007', name: 'Petogogan' },
+    { code: '3171061008', name: 'Melawai' },
+    { code: '3171061009', name: 'Rawa Barat' },
+    { code: '3171061010', name: 'Senayan' },
+  ];
+  const kebayoranBaruId = districtIdByCode.get('317106')!;
+  for (const village of kebayoranBaruVillages) {
+    await prisma.village.upsert({
+      where: { villageCode: village.code },
+      update: {},
+      create: { villageCode: village.code, villageName: village.name, districtId: kebayoranBaruId },
+    });
+  }
+
+  return {
+    provinces: 2,
+    regencies: 2,
+    districts: jakartaSelatanDistricts.length + tangerangSelatanDistricts.length,
+    villages: kebayoranBaruVillages.length,
+  };
+}
+
 async function main() {
   const permissionCount = await seedPermissionsAndRoles();
   const userIdByUsername = await seedUsers();
   const masterDataCounts = await seedMasterData(userIdByUsername);
   const patientCount = await seedPatients();
+  const regionCounts = await seedRegions();
   const transactionalCounts = await seedTransactionalData(userIdByUsername);
   const menuCounts = await seedMenus(userIdByUsername);
 
@@ -2041,7 +2183,7 @@ async function main() {
   console.log(`Seeded ${permissionCount} permissions and roles: ${['ADMINISTRATOR', ...Object.keys(ROLE_PERMISSIONS)].join(', ')}`);
   // eslint-disable-next-line no-console
   console.log(
-    `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.doctorSchedules} doctor schedules, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods, ${masterDataCounts.toothConditions} tooth conditions, ${masterDataCounts.consentTemplates} consent templates.`,
+    `Seeded Master Data: ${masterDataCounts.clinics} clinic, ${masterDataCounts.branches} branches, ${masterDataCounts.doctors} doctors, ${masterDataCounts.doctorSchedules} doctor schedules, ${masterDataCounts.treatmentCategories} treatment categories, ${masterDataCounts.treatments} treatments, ${masterDataCounts.paymentMethods} payment methods, ${masterDataCounts.toothConditions} tooth conditions, ${masterDataCounts.consentTemplates} consent templates, ${masterDataCounts.referralSources} referral sources.`,
   );
   // eslint-disable-next-line no-console
   console.log(
@@ -2049,6 +2191,10 @@ async function main() {
   );
   // eslint-disable-next-line no-console
   console.log(`Seeded ${patientCount} patients (5 active, 1 archived).`);
+  // eslint-disable-next-line no-console
+  console.log(
+    `Seeded Regional Address Master Data (placeholder subset, NOT the full catalog -- see seedRegions() comment): ${regionCounts.provinces} provinces, ${regionCounts.regencies} regencies, ${regionCounts.districts} districts, ${regionCounts.villages} villages (Kebayoran Baru only).`,
+  );
   // eslint-disable-next-line no-console
   console.log(
     `Seeded workflow chains: ${transactionalCounts.reservations} reservations, ${transactionalCounts.queueEntries} queue entries, ${transactionalCounts.visits} EMR visit (SOAP+odontogram+treatment+prescription+consent), ${transactionalCounts.invoices} invoice+payment, ${transactionalCounts.financeAccounts} finance accounts + 1 period + 1 cash account + ${transactionalCounts.journals} posted journal, ${transactionalCounts.purchaseOrders} purchase order + ${transactionalCounts.goodsReceipts} posted goods receipt (2 items, 1 batch), ${transactionalCounts.notifications} notification (+template), ${transactionalCounts.featureFlags} feature flag, ${transactionalCounts.systemParameters} system parameters, ${transactionalCounts.branchAssignments} branch assignments, ${transactionalCounts.masterDataTemplates} master data template (1 in-sync + 1 drifted branch link).`,

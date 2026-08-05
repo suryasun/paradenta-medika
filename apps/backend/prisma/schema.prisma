@@ -47,6 +47,7 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   doctor              Doctor?
+  referredPatients    Patient[]            @relation("PatientReferredByUser")
 
   @@index([status])
   @@map("users")
@@ -218,7 +219,7 @@ model Clinic {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  branches Branch[]
+  branches            Branch[]
   masterDataTemplates MasterDataTemplate[]
 
   @@map("clinics")
@@ -242,23 +243,23 @@ model Branch {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  clinic                 Clinic                  @relation(fields: [clinicId], references: [id])
-  doctors                Doctor[]
-  reservations           Reservation[]
-  invoices               Invoice[]
-  queues                 Queue[]
-  visits                 Visit[]
-  warehouseLocations     WarehouseLocation[]
-  purchaseOrders         PurchaseOrder[]
-  financeAccounts        Account[]
-  journals               Journal[]
-  financialPeriods       FinancialPeriod[]
-  cashAccounts           CashAccount[]
-  expenses               Expense[]
-  dailyClosings          DailyClosing[]
-  doctorFeeSettlements   DoctorFeeSettlement[]
-  financeAccountMappings FinanceAccountMapping[]
-  userBranches           UserBranch[]
+  clinic                  Clinic                         @relation(fields: [clinicId], references: [id])
+  doctors                 Doctor[]
+  reservations            Reservation[]
+  invoices                Invoice[]
+  queues                  Queue[]
+  visits                  Visit[]
+  warehouseLocations      WarehouseLocation[]
+  purchaseOrders          PurchaseOrder[]
+  financeAccounts         Account[]
+  journals                Journal[]
+  financialPeriods        FinancialPeriod[]
+  cashAccounts            CashAccount[]
+  expenses                Expense[]
+  dailyClosings           DailyClosing[]
+  doctorFeeSettlements    DoctorFeeSettlement[]
+  financeAccountMappings  FinanceAccountMapping[]
+  userBranches            UserBranch[]
   masterDataTemplateLinks MasterDataTemplateBranchLink[]
 
   @@map("branches")
@@ -391,6 +392,141 @@ model ToothCondition {
   @@map("tooth_conditions")
 }
 
+// ---------------------------------------------------------------------------
+// Regional Address Master Data (task-285, Epic PE2, Patient Module
+// Enhancement addendum). Pure reference/lookup catalogs, seeded not
+// admin-editable at launch (no Create/Update/Delete use case exists) --
+// docs/03-sad/07-data-dictionary.md §10.21-10.24's literal column list is
+// authoritative and (per DB-043) deliberately has no audit columns beyond
+// is_active, matching every other unaudited lookup table in that same doc
+// section (gender/religion/occupation/etc.).
+// ---------------------------------------------------------------------------
+
+model Province {
+  id           String  @id @default(uuid()) @db.Char(36)
+  provinceCode String  @unique @map("province_code") @db.VarChar(10)
+  provinceName String  @map("province_name") @db.VarChar(100)
+  isActive     Boolean @default(true) @map("is_active")
+
+  regencies        Regency[]
+  patientAddresses PatientAddress[]
+
+  @@map("provinces")
+}
+
+model Regency {
+  id          String  @id @default(uuid()) @db.Char(36)
+  provinceId  String  @map("province_id") @db.Char(36)
+  regencyCode String  @unique @map("regency_code") @db.VarChar(10)
+  regencyName String  @map("regency_name") @db.VarChar(100)
+  isActive    Boolean @default(true) @map("is_active")
+
+  province         Province         @relation(fields: [provinceId], references: [id])
+  districts        District[]
+  patientAddresses PatientAddress[]
+
+  @@index([provinceId])
+  @@map("regencies")
+}
+
+model District {
+  id           String  @id @default(uuid()) @db.Char(36)
+  regencyId    String  @map("regency_id") @db.Char(36)
+  districtCode String  @unique @map("district_code") @db.VarChar(10)
+  districtName String  @map("district_name") @db.VarChar(100)
+  isActive     Boolean @default(true) @map("is_active")
+
+  regency          Regency          @relation(fields: [regencyId], references: [id])
+  villages         Village[]
+  patientAddresses PatientAddress[]
+
+  @@index([regencyId])
+  @@map("districts")
+}
+
+model Village {
+  id          String  @id @default(uuid()) @db.Char(36)
+  districtId  String  @map("district_id") @db.Char(36)
+  villageCode String  @unique @map("village_code") @db.VarChar(10)
+  villageName String  @map("village_name") @db.VarChar(100)
+  postalCode  String? @map("postal_code") @db.VarChar(10)
+  isActive    Boolean @default(true) @map("is_active")
+
+  district         District         @relation(fields: [districtId], references: [id])
+  patientAddresses PatientAddress[]
+
+  @@index([districtId])
+  @@map("villages")
+}
+
+// task-286 (Epic PE3, Patient Module Enhancement addendum): structured,
+// region-backed, multi-address complement to Patient.address (the
+// existing free-text column, retained -- not replaced, see task's own
+// Backend Scope). No audit columns, matching docs/03-sad/07-data-
+// dictionary.md §12.4's literal (reconciled) column list exactly, the
+// same unaudited-Patient-sub-table pattern already used by
+// patient_emergency_contact (§12.5).
+model PatientAddress {
+  id          String  @id @default(uuid()) @db.Char(36)
+  patientId   String  @map("patient_id") @db.Char(36)
+  provinceId  String  @map("province_id") @db.Char(36)
+  regencyId   String  @map("regency_id") @db.Char(36)
+  districtId  String  @map("district_id") @db.Char(36)
+  villageId   String  @map("village_id") @db.Char(36)
+  addressLine String  @map("address_line") @db.Text
+  postalCode  String? @map("postal_code") @db.VarChar(10)
+  isPrimary   Boolean @default(false) @map("is_primary")
+
+  patient  Patient  @relation(fields: [patientId], references: [id])
+  province Province @relation(fields: [provinceId], references: [id])
+  regency  Regency  @relation(fields: [regencyId], references: [id])
+  district District @relation(fields: [districtId], references: [id])
+  village  Village  @relation(fields: [villageId], references: [id])
+
+  @@index([patientId])
+  @@map("patient_addresses")
+}
+
+// task-288 (Epic PE5, Patient Module Enhancement addendum): UC-PAT-007
+// "Manage Emergency Contact" -- named in docs/03-sad/12-module-patient.md
+// §9.2 and shaped in §26.6, but never assigned its own implementation
+// task until now. Field names/no-audit-columns match docs/03-sad/07-data-
+// dictionary.md §12.5 exactly (literally `contact_name`/`phone`, not
+// `full_name`/`phone_number` -- the task's own prose description used the
+// looser names, but its "(no field renaming)" instruction makes the data
+// dictionary authoritative). No isPrimary concept, unlike PatientAddress
+// -- not part of the literal §12.5 source.
+model PatientEmergencyContact {
+  id           String  @id @default(uuid()) @db.Char(36)
+  patientId    String  @map("patient_id") @db.Char(36)
+  contactName  String  @map("contact_name") @db.VarChar(150)
+  relationship String  @db.VarChar(100)
+  phone        String  @db.VarChar(30)
+  address      String? @db.Text
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId])
+  @@map("patient_emergency_contacts")
+}
+
+// task-287 (Epic PE4, Patient Module Enhancement addendum): marketing/
+// lead-source catalog -- read-only at launch (no Create/Update/Delete use
+// case; task's own Deliverables list only a List endpoint), same shape as
+// task-285's region tables. No audit columns, matching
+// docs/03-sad/07-data-dictionary.md §10.25's literal column list.
+model ReferralSource {
+  id                 String  @id @default(uuid()) @db.Char(36)
+  referralSourceCode String  @unique @map("referral_source_code") @db.VarChar(30)
+  referralSourceName String  @map("referral_source_name") @db.VarChar(100)
+  requiresReferrer   Boolean @default(false) @map("requires_referrer")
+  isActive           Boolean @default(true) @map("is_active")
+
+  patients Patient[]
+
+  @@map("referral_sources")
+}
+
 model PaymentMethod {
   id         String  @id @default(uuid()) @db.Char(36)
   methodCode String  @unique @map("method_code") @db.VarChar(30)
@@ -496,6 +632,23 @@ model Patient {
   registrationDate DateTime             @default(now()) @map("registration_date")
   active           Boolean              @default(true)
 
+  // task-284 (Epic PE1, Patient Module Enhancement addendum): free-text
+  // supplementary contact/identity fields, none unique/required/format-
+  // validated per the task's own Backend Scope.
+  insuranceNumber String? @map("insurance_number") @db.VarChar(50)
+  instagramHandle String? @map("instagram_handle") @db.VarChar(100)
+  facebookHandle  String? @map("facebook_handle") @db.VarChar(100)
+  tiktokHandle    String? @map("tiktok_handle") @db.VarChar(100)
+  whatsappNumber  String? @map("whatsapp_number") @db.VarChar(30)
+
+  // task-287 (Epic PE4, Patient Module Enhancement addendum): marketing/
+  // lead-source tracking, deliberately distinct from the clinical
+  // `Referral` entity (EMR module, the `referrals` relation below) --
+  // never joined/conflated, per docs/03-sad/12-module-patient.md §14.5's
+  // disambiguation and this task's own Acceptance Criteria.
+  referralSourceId String? @map("referral_source_id") @db.Char(36)
+  referredByUserId String? @map("referred_by_user_id") @db.Char(36)
+
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -518,6 +671,10 @@ model Patient {
   prescriptions          Prescription[]
   consents               Consent[]
   medicalCertificates    MedicalCertificate[]
+  addresses              PatientAddress[]
+  referralSource         ReferralSource?           @relation(fields: [referralSourceId], references: [id])
+  referredByUser         User?                     @relation("PatientReferredByUser", fields: [referredByUserId], references: [id])
+  emergencyContacts      PatientEmergencyContact[]
 
   @@unique([identityType, identityNumber])
   @@index([patientName])
