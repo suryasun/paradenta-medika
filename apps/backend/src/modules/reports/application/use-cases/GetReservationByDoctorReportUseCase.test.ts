@@ -71,6 +71,52 @@ describe('GetReservationByDoctorReportUseCase', () => {
     );
   });
 
+  it('narrows both the table and the breakdown chart by an explicit status filter', async () => {
+    const reservationRepository = new FakeReservationRepository();
+    const useCase = new GetReservationByDoctorReportUseCase(reservationRepository);
+
+    const r1 = await seedReservation(reservationRepository, { reservationNo: 'RSV-1', patientId: 'p1', doctorId: 'd1', reservationDate: IN_RANGE });
+    reservationRepository.reservations.get(r1.id)!.status = 'CANCELLED';
+    await seedReservation(reservationRepository, { reservationNo: 'RSV-2', patientId: 'p2', doctorId: 'd2', reservationDate: IN_RANGE });
+
+    const result = await useCase.execute({
+      dateFrom: '2026-03-01',
+      dateTo: '2026-03-31',
+      status: 'CANCELLED',
+      page: 1,
+      limit: 20,
+      sort: 'createdAt',
+      order: 'desc',
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.summary.breakdown).toEqual([{ doctorId: 'd1', count: 1 }]);
+  });
+
+  it('builds a month-by-month trend when groupBy=month, unaffected by the doctorId filter', async () => {
+    const reservationRepository = new FakeReservationRepository();
+    const useCase = new GetReservationByDoctorReportUseCase(reservationRepository);
+
+    await seedReservation(reservationRepository, { reservationNo: 'RSV-1', patientId: 'p1', doctorId: 'd1', reservationDate: IN_RANGE });
+    await seedReservation(reservationRepository, { reservationNo: 'RSV-2', patientId: 'p2', doctorId: 'd2', reservationDate: OUT_OF_RANGE });
+
+    const result = await useCase.execute({
+      dateFrom: '2026-03-01',
+      dateTo: '2026-04-30',
+      doctorId: 'd1',
+      groupBy: 'month',
+      page: 1,
+      limit: 20,
+      sort: 'createdAt',
+      order: 'desc',
+    });
+
+    expect(result.summary.trend).toEqual([
+      { date: '2026-03', count: 1 },
+      { date: '2026-04', count: 1 },
+    ]);
+  });
+
   it('rejects dateFrom after dateTo', async () => {
     const reservationRepository = new FakeReservationRepository();
     const useCase = new GetReservationByDoctorReportUseCase(reservationRepository);

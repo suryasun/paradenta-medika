@@ -60,9 +60,9 @@ import { BranchReportsController } from '../controllers/BranchReportsController'
 import { NewPatientReportQueryDto } from '../../application/dtos/NewPatientReportQueryDto';
 import { GetNewPatientReportUseCase } from '../../application/use-cases/GetNewPatientReportUseCase';
 import { NewPatientReportController } from '../controllers/NewPatientReportController';
-import { CompletedReservationReportQueryDto } from '../../application/dtos/CompletedReservationReportQueryDto';
-import { GetCompletedReservationReportUseCase } from '../../application/use-cases/GetCompletedReservationReportUseCase';
-import { CompletedReservationReportController } from '../controllers/CompletedReservationReportController';
+import { ReservationByStatusReportQueryDto } from '../../application/dtos/ReservationByStatusReportQueryDto';
+import { GetReservationByStatusReportUseCase } from '../../application/use-cases/GetReservationByStatusReportUseCase';
+import { ReservationByStatusReportController } from '../controllers/ReservationByStatusReportController';
 import { ReservationByPatientTypeReportQueryDto } from '../../application/dtos/ReservationByPatientTypeReportQueryDto';
 import { GetReservationByPatientTypeReportUseCase } from '../../application/use-cases/GetReservationByPatientTypeReportUseCase';
 import { ReservationByPatientTypeReportController } from '../controllers/ReservationByPatientTypeReportController';
@@ -140,9 +140,10 @@ export function buildReportsModule(
   // docs/06-tasks/task-291.md (Epic RE2, Reservation Module Enhancement addendum).
   const newPatientReportController = new NewPatientReportController(new GetNewPatientReportUseCase(new ReservationRepository()));
 
-  // docs/06-tasks/task-299.md (Reservation Module Addendum #2, R7).
-  const completedReservationReportController = new CompletedReservationReportController(
-    new GetCompletedReservationReportUseCase(new ReservationRepository()),
+  // docs/06-tasks/task-305.md (Reservation Module Addendum #4), renamed from
+  // CompletedReservationReportController (task-299, Addendum #2, R7).
+  const reservationByStatusReportController = new ReservationByStatusReportController(
+    new GetReservationByStatusReportUseCase(new ReservationRepository()),
   );
 
   // docs/06-tasks/task-300.md/task-301.md (Reservation Module Addendum #3).
@@ -180,13 +181,15 @@ export function buildReportsModule(
     newPatientReportController.report,
   );
 
-  // docs/06-tasks/task-299.md: same convention -- new permission, no
-  // existing report.* code covers a Completed-Reservations-scoped report.
+  // docs/06-tasks/task-305.md: renamed from /reports/reservations/completed
+  // (task-299) -- new permission key report.reservation.by-status.read
+  // replaces report.reservation.completed.read, same "new permission, no
+  // existing report.* code covers it" convention.
   router.get(
-    '/reports/reservations/completed',
-    requirePermission('report.reservation.completed.read'),
-    validateQuery(CompletedReservationReportQueryDto),
-    completedReservationReportController.report,
+    '/reports/reservations/by-status',
+    requirePermission('report.reservation.by-status.read'),
+    validateQuery(ReservationByStatusReportQueryDto),
+    reservationByStatusReportController.report,
   );
 
   // docs/06-tasks/task-300.md: same convention -- new permission, no

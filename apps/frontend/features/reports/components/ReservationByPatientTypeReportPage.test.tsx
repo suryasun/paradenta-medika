@@ -54,7 +54,14 @@ describe("ReservationByPatientTypeReportPage", () => {
         },
       ],
       meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
-      summary: { newCount: 4, oldCount: 6, newPercentage: 40, oldPercentage: 60, breakdown: [{ type: "NEW", count: 4 }, { type: "OLD", count: 6 }] },
+      summary: {
+        newCount: 4,
+        oldCount: 6,
+        newPercentage: 40,
+        oldPercentage: 60,
+        breakdown: [{ type: "NEW", count: 4 }, { type: "OLD", count: 6 }],
+        trend: [{ date: "2026-08-10", count: 10 }],
+      },
     });
 
     renderPage();
@@ -72,7 +79,14 @@ describe("ReservationByPatientTypeReportPage", () => {
     mockedService.get.mockResolvedValue({
       items: [],
       meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
-      summary: { newCount: 0, oldCount: 0, newPercentage: 0, oldPercentage: 0, breakdown: [{ type: "NEW", count: 0 }, { type: "OLD", count: 0 }] },
+      summary: {
+        newCount: 0,
+        oldCount: 0,
+        newPercentage: 0,
+        oldPercentage: 0,
+        breakdown: [{ type: "NEW", count: 0 }, { type: "OLD", count: 0 }],
+        trend: [],
+      },
     });
 
     renderPage();
@@ -80,5 +94,24 @@ describe("ReservationByPatientTypeReportPage", () => {
     await screen.findByText("New vs. Old Comparison");
     // breakdown always has 2 entries (NEW/OLD placeholders), so the chart itself renders bars, not the empty state -- assert the table's empty instead.
     expect(screen.queryByRole("row", { name: /RSV-/ })).not.toBeInTheDocument();
+    // The new Trend Over Time section's chart IS empty (day-bucketed, no placeholders).
+    expect(screen.getByText("No data for this range")).toBeInTheDocument();
+  });
+
+  it("re-queries with the selected status and groupBy", async () => {
+    mockedService.get.mockResolvedValue({
+      items: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
+      summary: { newCount: 0, oldCount: 0, newPercentage: 0, oldPercentage: 0, breakdown: [{ type: "NEW", count: 0 }, { type: "OLD", count: 0 }], trend: [] },
+    });
+
+    renderPage();
+    await screen.findByText("New vs. Old Comparison");
+
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "COMPLETED" } });
+    fireEvent.change(screen.getByLabelText("Group By"), { target: { value: "month" } });
+
+    expect(mockedService.get).toHaveBeenLastCalledWith(expect.objectContaining({ status: "COMPLETED", groupBy: "month" }));
   });
 });

@@ -11,7 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } fro
 import { TrendChart } from "@/components/ui/TrendChart";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { useDoctors } from "@/features/master-data/hooks/useDoctors";
-import { useCompletedReservationReport } from "../hooks/useCompletedReservationReport";
+import { RESERVATION_STATUS_TONE } from "@/features/reservation/components/ReservationListView";
+import { useReservationByStatusReport } from "../hooks/useReservationByStatusReport";
+import { ReservationTrendGroupBy } from "../types/reports.types";
+import { formatTrendLabel } from "../lib/trendFormat";
 
 function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -35,20 +38,26 @@ const PRESETS: Record<string, () => { dateFrom: string; dateTo: string }> = {
   last30Days: () => ({ dateFrom: toDateOnly(defaultFrom), dateTo: toDateOnly(today) }),
 };
 
-// docs/06-tasks/task-299.md (Reservation Module Addendum #2, R7). Mirrors
-// NewPatientReportPage.tsx's date-preset + summary-card + table shell
-// (task-291 precedent), plus a TrendChart driven by summary.trend -- the
-// first report in this codebase to combine that page pattern with a chart.
-export function CompletedReservationReportPage() {
+// docs/06-tasks/task-305.md (Reservation Module Addendum #4): renamed from
+// CompletedReservationReportPage (task-299) -- same date-preset + summary-
+// card + table + TrendChart shell, now with a Status filter (defaults to
+// COMPLETED, matching the report's prior hardcoded behavior; "All Statuses"
+// clears it) and a Day/Month toggle for the trend chart (task-308).
+export function ReservationByStatusReportPage() {
   const [dateFrom, setDateFrom] = useState(toDateOnly(defaultFrom));
   const [dateTo, setDateTo] = useState(toDateOnly(today));
+  const [status, setStatus] = useState("COMPLETED");
+  const [groupBy, setGroupBy] = useState<ReservationTrendGroupBy>("day");
   const [page, setPage] = useState(1);
 
   const { data: doctorsData } = useDoctors();
   const doctorName = (id: string) => doctorsData?.items.find((d) => d.id === id)?.fullName ?? "—";
 
   const enabled = Boolean(dateFrom && dateTo);
-  const { data, isLoading, isError, error, refetch } = useCompletedReservationReport({ dateFrom, dateTo, page, limit: 20 }, enabled);
+  const { data, isLoading, isError, error, refetch } = useReservationByStatusReport(
+    { dateFrom, dateTo, status, groupBy, page, limit: 20 },
+    enabled,
+  );
 
   function applyPreset(preset: keyof typeof PRESETS) {
     const range = PRESETS[preset]();
@@ -57,13 +66,15 @@ export function CompletedReservationReportPage() {
     setPage(1);
   }
 
+  const summaryLabel = status === "ALL" ? "Total (All Statuses)" : `Total ${status}`;
+
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-foreground">Completed Reservations Report</h1>
+      <h1 className="text-foreground">Reservation By Status Report</h1>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-4">
         <Select
-          id="completed-reservation-report-preset"
+          id="reservation-by-status-report-preset"
           label="Preset"
           value=""
           onChange={(e) => e.target.value && applyPreset(e.target.value as keyof typeof PRESETS)}
@@ -75,7 +86,7 @@ export function CompletedReservationReportPage() {
           <option value="last30Days">Last 30 Days</option>
         </Select>
         <Input
-          id="completed-reservation-report-from"
+          id="reservation-by-status-report-from"
           label="From"
           type="date"
           value={dateFrom}
@@ -85,7 +96,7 @@ export function CompletedReservationReportPage() {
           }}
         />
         <Input
-          id="completed-reservation-report-to"
+          id="reservation-by-status-report-to"
           label="To"
           type="date"
           value={dateTo}
@@ -94,6 +105,31 @@ export function CompletedReservationReportPage() {
             setPage(1);
           }}
         />
+        <Select
+          id="reservation-by-status-report-status"
+          label="Status"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="ALL">All Statuses</option>
+          {Object.keys(RESERVATION_STATUS_TONE).map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+        <Select
+          id="reservation-by-status-report-groupby"
+          label="Group By"
+          value={groupBy}
+          onChange={(e) => setGroupBy(e.target.value as ReservationTrendGroupBy)}
+        >
+          <option value="day">Day</option>
+          <option value="month">Month</option>
+        </Select>
       </div>
 
       {isLoading && <LoadingState label="Loading report..." rows={5} columns={5} />}
@@ -102,13 +138,13 @@ export function CompletedReservationReportPage() {
       {!isLoading && !isError && data && (
         <>
           <Card className="flex flex-col gap-1">
-            <span className="text-sm text-muted">Total Completed</span>
-            <span className="font-tabular text-2xl font-semibold text-foreground">{data.summary.totalCompleted.toLocaleString()}</span>
+            <span className="text-sm text-muted">{summaryLabel}</span>
+            <span className="font-tabular text-2xl font-semibold text-foreground">{data.summary.total.toLocaleString()}</span>
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-semibold text-foreground">Completed Reservations Trend</h2>
-            <TrendChart data={data.summary.trend} xKey="date" yKey="count" />
+            <h2 className="mb-3 text-sm font-semibold text-foreground">Reservation Trend</h2>
+            <TrendChart data={data.summary.trend} xKey="date" yKey="count" xLabel={(item) => formatTrendLabel(groupBy, item.date)} />
           </Card>
 
           <Table>

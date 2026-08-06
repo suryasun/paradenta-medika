@@ -92,10 +92,12 @@ Reservation Module menyediakan seluruh fungsi yang dibutuhkan untuk mengelola ja
 | RSV-016 | Quick New Patient Call | Form gabungan satu langkah: buat pasien baru + reservasi dalam satu transaksi, termasuk sumber rujukan (referral source) opsional sejak task-296 — satu-satunya jalur "pasien belum terdaftar" yang tersedia sejak RSV-013 diretired |
 | RSV-017 | New Patient Date-Range Report | Laporan reservasi Pasien Baru pada rentang tanggal, dengan ringkasan statistik |
 | RSV-018 | Reservation History (clinic-wide) | Layar riwayat reservasi seluruh klinik dengan filter/pencarian, dibatasi pada reservasi dengan tanggal sebelum hari ini (task-298) — berbeda dari RSV-012 yang khusus per pasien (tab di Patient Detail), dan dari RSV-005 (Reservation List) yang kini dibatasi pada hari ini dan seterusnya |
-| RSV-019 | Completed Reservations Report | Laporan reservasi berstatus `COMPLETED` pada rentang tanggal, dengan tabel dan grafik tren harian — lihat `docs/03-sad/13-module-reservation.md` §40 |
+| RSV-019 | Reservation By Status Report **(renamed dari "Completed Reservations Report", task-305)** | Laporan reservasi pada rentang tanggal dengan filter status opsional (default `COMPLETED`, bisa dipilih "All Statuses" atau status lain), tabel dan grafik tren — lihat `docs/03-sad/13-module-reservation.md` §40/§42 |
 | RSV-020 | Reservation by Patient Type Report | Laporan perbandingan New vs Old pada rentang tanggal (semua reservasi, bukan hanya New) — lihat `docs/03-sad/13-module-reservation.md` §41 |
 | RSV-021 | Reservation by Doctor Report | Laporan perbandingan jumlah reservasi antar dokter pada rentang tanggal, dengan filter dokter opsional yang hanya mempersempit tabel |
 | RSV-022 | Edit Reservation (UI) | Aksi "Edit" pada Daftar Reservasi menuju form ubah reservasi (Dokter/Tanggal/Jam/Jenis/Keluhan/Catatan), memakai `PUT /reservations/:id` yang sudah ada sejak task-032 |
+| RSV-023 | Status Filter pada Laporan Reservasi | Filter `status` opsional pada Reservation By Status, By Patient Type, dan By Doctor Report — lihat `docs/03-sad/13-module-reservation.md` §42 |
+| RSV-024 | Tren Harian/Bulanan pada Laporan Reservasi | Toggle Day/Month pada grafik tren di ketiga laporan reservasi di atas — lihat `docs/03-sad/13-module-reservation.md` §42 |
 
 ---
 

@@ -14,6 +14,8 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { useDoctors } from "@/features/master-data/hooks/useDoctors";
 import { RESERVATION_STATUS_TONE } from "@/features/reservation/components/ReservationListView";
 import { useReservationByDoctorReport } from "../hooks/useReservationByDoctorReport";
+import { ReservationTrendGroupBy } from "../types/reports.types";
+import { formatTrendLabel } from "../lib/trendFormat";
 
 function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -42,10 +44,16 @@ const PRESETS: Record<string, () => { dateFrom: string; dateTo: string }> = {
 // optional Doctor filter that narrows only the results table -- the
 // comparison chart (summary.breakdown) always reflects all doctors,
 // per the backend's own doc comment on why that filter is scoped that way.
+// docs/06-tasks/task-307.md/task-310.md (Addendum #4) add a Status filter
+// (unfiltered by default, unlike doctorId narrows both table and summary)
+// and a separate "Trend Over Time" section (Day/Month) alongside the
+// existing per-doctor comparison.
 export function ReservationByDoctorReportPage() {
   const [dateFrom, setDateFrom] = useState(toDateOnly(defaultFrom));
   const [dateTo, setDateTo] = useState(toDateOnly(today));
   const [doctorId, setDoctorId] = useState("");
+  const [status, setStatus] = useState("ALL");
+  const [groupBy, setGroupBy] = useState<ReservationTrendGroupBy>("day");
   const [page, setPage] = useState(1);
 
   const { data: doctorsData } = useDoctors();
@@ -53,7 +61,7 @@ export function ReservationByDoctorReportPage() {
 
   const enabled = Boolean(dateFrom && dateTo);
   const { data, isLoading, isError, error, refetch } = useReservationByDoctorReport(
-    { dateFrom, dateTo, doctorId: doctorId || undefined, page, limit: 20 },
+    { dateFrom, dateTo, doctorId: doctorId || undefined, status, groupBy, page, limit: 20 },
     enabled,
   );
 
@@ -119,6 +127,31 @@ export function ReservationByDoctorReportPage() {
             </option>
           ))}
         </Select>
+        <Select
+          id="by-doctor-report-status"
+          label="Status"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="ALL">All Statuses</option>
+          {Object.keys(RESERVATION_STATUS_TONE).map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+        <Select
+          id="by-doctor-report-groupby"
+          label="Group By"
+          value={groupBy}
+          onChange={(e) => setGroupBy(e.target.value as ReservationTrendGroupBy)}
+        >
+          <option value="day">Day</option>
+          <option value="month">Month</option>
+        </Select>
       </div>
 
       {isLoading && <LoadingState label="Loading report..." rows={5} columns={5} />}
@@ -134,6 +167,11 @@ export function ReservationByDoctorReportPage() {
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-foreground">Reservations per Doctor</h2>
             <TrendChart data={chartData} xKey="doctorName" yKey="count" />
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold text-foreground">Trend Over Time</h2>
+            <TrendChart data={data.summary.trend} xKey="date" yKey="count" xLabel={(item) => formatTrendLabel(groupBy, item.date)} />
           </Card>
 
           <Table>

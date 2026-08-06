@@ -93,6 +93,8 @@ This document is the Phase 1 index: Task List, Dependencies, Implementation Orde
 > **Addendum #2 (post-launch, Reservation Module Addendum #2):** task-295–299 extend "RE" further — Patient MRN/Name on the Reservation List, a Referral Source field on Quick New Patient Call, retirement of the Patient module's Quick Add Patient (task-289, superseded by Quick New Patient Call), a date-based split between the Reservation List ("now and next") and Reservation History ("past only"), and a new Completed Reservations Report (table + trend chart). See `docs/06-tasks/task-295.md`–`task-299.md` and `docs/03-sad/13-module-reservation.md` §40.
 >
 > **Addendum #3 (post-launch, Reservation Module Addendum #3):** task-300–304 extend "RE" once more — a Reservations by Patient Type report and a Reservations by Doctor report (both new comparison reports, table + chart), an Edit Reservation UI (surfacing the already-shipped `PUT /reservations/:id` endpoint, which had no consumer until now), a configurable page-size selector on the shared `Pagination` component (List + History), and Patient MRN/Name added to Reservation Calendar entry cards. See `docs/06-tasks/task-300.md`–`task-304.md` and `docs/03-sad/13-module-reservation.md` §41.
+>
+> **Addendum #4 (post-launch, Reservation Module Addendum #4):** task-305–310 extend "RE" once more — the Completed Reservations Report (task-299) is renamed "Reservation By Status Report" with its hardcoded `status` filter now user-selectable, the same optional Status filter is added to the by-Patient-Type/by-Doctor reports, and all three reservation reports gain a Day/Month-groupable trend chart+table. See `docs/06-tasks/task-305.md`–`task-310.md` and `docs/03-sad/13-module-reservation.md` §42.
 
 ### Epic F. Queue Management
 

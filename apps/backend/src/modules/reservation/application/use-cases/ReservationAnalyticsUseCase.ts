@@ -36,11 +36,28 @@ function endOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 }
 
-/** docs/06-tasks/task-299.md (Reservation Module Addendum #2, R7): exported for reuse by GetCompletedReservationReportUseCase's trend aggregation, rather than re-implementing the same date-bucketing. */
+/** docs/06-tasks/task-299.md (Reservation Module Addendum #2, R7): exported for reuse by GetReservationByStatusReportUseCase's trend aggregation, rather than re-implementing the same date-bucketing. */
 export function groupByDate(reservations: Reservation[]): DateCountPoint[] {
   const counts = new Map<string, number>();
   for (const reservation of reservations) {
     const key = reservation.reservationDate.toISOString().slice(0, 10);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count }));
+}
+
+/**
+ * docs/06-tasks/task-305.md (Reservation Module Addendum #4): month-granularity
+ * sibling of groupByDate, bucketing by `YYYY-MM` instead of `YYYY-MM-DD` --
+ * shared by the three reservation report use cases' Day/Month trend toggle
+ * (Reservation By Status, By Patient Type, By Doctor). Returns the same
+ * DateCountPoint shape so callers/TrendChart consumers don't need to branch
+ * on granularity.
+ */
+export function groupByMonth(reservations: Reservation[]): DateCountPoint[] {
+  const counts = new Map<string, number>();
+  for (const reservation of reservations) {
+    const key = reservation.reservationDate.toISOString().slice(0, 7);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count }));

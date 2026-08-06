@@ -58,7 +58,11 @@ describe("ReservationByDoctorReportPage", () => {
         },
       ],
       meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
-      summary: { totalDoctors: 2, breakdown: [{ doctorId: "d1", count: 3 }, { doctorId: "d2", count: 1 }] },
+      summary: {
+        totalDoctors: 2,
+        breakdown: [{ doctorId: "d1", count: 3 }, { doctorId: "d2", count: 1 }],
+        trend: [{ date: "2026-08-10", count: 4 }],
+      },
     });
 
     renderPage();
@@ -74,7 +78,7 @@ describe("ReservationByDoctorReportPage", () => {
     mockedService.get.mockResolvedValue({
       items: [],
       meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
-      summary: { totalDoctors: 0, breakdown: [] },
+      summary: { totalDoctors: 0, breakdown: [], trend: [] },
     });
 
     renderPage();
@@ -82,5 +86,21 @@ describe("ReservationByDoctorReportPage", () => {
     await user.selectOptions(screen.getByLabelText("Doctor"), "d1");
 
     expect(mockedService.get).toHaveBeenLastCalledWith(expect.objectContaining({ doctorId: "d1" }));
+  });
+
+  it("re-queries with the selected status and groupBy", async () => {
+    const user = userEvent.setup();
+    mockedService.get.mockResolvedValue({
+      items: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
+      summary: { totalDoctors: 0, breakdown: [], trend: [] },
+    });
+
+    renderPage();
+    await screen.findByRole("option", { name: "Dr. Alice" });
+    await user.selectOptions(screen.getByLabelText("Status"), "CANCELLED");
+    await user.selectOptions(screen.getByLabelText("Group By"), "month");
+
+    expect(mockedService.get).toHaveBeenLastCalledWith(expect.objectContaining({ status: "CANCELLED", groupBy: "month" }));
   });
 });

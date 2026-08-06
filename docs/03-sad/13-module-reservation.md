@@ -2584,6 +2584,49 @@ None new. The one open question from §39.7/§40.6 that touched this addendum (�
 
 ---
 
+# 42. Reservation Module Addendum #4 (task-305–310)
+
+> Fourth post-roadmap addendum on top of §39 (Epic RE, task-290–294), §40 (Addendum #2, task-295–299), and §41 (Addendum #3, task-300–304), all shipped. Three more requests from using the three reservation report pages in practice, documented and implemented in the same pass.
+
+## 42.1 Scope
+
+1. **Rename "Completed Reservations" → "Reservation By Status"** (task-305) — the report's hardcoded `status: 'COMPLETED'` filter (§40.3, RSV-019) becomes a caller-supplied one, defaulting to `COMPLETED` when omitted so the report's original default view is unchanged; an explicit "All Statuses" selection clears the filter entirely. Full rename: permission key, route, all class/file names, nav label.
+2. **Status filter on By Patient Type / By Doctor** (task-306/307) — the same optional `status` filter added to RSV-020/RSV-021 (§41.3), unfiltered by default (unlike RSV-019, which defaults to `COMPLETED`). Unlike `doctorId` on RSV-021 (which narrows only the table, per §41.3's own note), `status` narrows both the table and the summary/chart on all three reports — it's a cross-cutting filter, not the report's own grouping dimension.
+3. **Day/Month trend section on all three reports** (task-308/309/310) — RSV-019's existing day-only trend chart is generalized to respect a new `groupBy: 'day' | 'month'` param (default `day`); RSV-020/RSV-021 each gain a new, separate "Trend Over Time" chart+table section (their existing New-vs-Old / per-doctor comparison charts are untouched).
+
+**Explicitly out of scope:** a shared status-label/badge component (no such component exists anywhere in the frontend today — every screen, e.g. `ReservationListView.tsx`, declares its own local status→tone map and renders the raw enum string; this addendum follows that same decentralized convention rather than introducing one); week-level grouping (Day/Month only, per explicit request); any change to `GET /reservations` itself (all three reports are separate report endpoints).
+
+## 42.2 Data Model Changes
+
+None. Every requirement is a query-shape change on the three existing report use cases, reusing the already-existing `status` param on `IReservationRepository.search()`/`findAllInDateRange()` (added in §40.2 for RSV-019, generalized here into a caller-supplied filter on all three reports) plus a new month-granularity sibling of the existing `groupByDate` helper (`groupByMonth`, same `ReservationAnalyticsUseCase.ts` export, `.slice(0, 7)` bucket key instead of `.slice(0, 10)`).
+
+## 42.3 New/Extended Use Cases
+
+| Code | Name | Notes |
+|---|---|---|
+| RSV-019 | Reservation By Status Report *(renamed, extended)* | `status` is now an optional caller-supplied filter (default `COMPLETED`, `ALL` clears it) instead of hardcoded, applied identically to both the paginated table and the `summary`/trend read so they always agree. `summary.total` replaces `summary.totalCompleted`. `groupBy` switches the existing trend between day/month buckets. |
+| RSV-020 | Reservation by Patient Type Report *(extended)* | Gains optional `status` (narrows both the table and the New/Old breakdown) and `groupBy`, plus a new `summary.trend` computed from the same `findAllInDateRange` array already fetched for the breakdown — no extra query. |
+| RSV-021 | Reservation by Doctor Report *(extended)* | Gains optional `status` (narrows both the table and `summary.breakdown`, unlike `doctorId` which only narrows the table) and `groupBy`, plus a new `summary.trend` computed the same way — unfiltered by `doctorId`, consistent with `breakdown`'s existing convention. |
+
+## 42.4 New/Extended API Endpoints
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET /api/v1/reports/reservations/by-status` | *(renamed from `/reports/reservations/completed`)* | New query params `status` (optional, default `COMPLETED`, `ALL` clears it), `groupBy` (`day`\|`month`, default `day`). Response `summary.total` replaces `summary.totalCompleted`. New permission `report.reservation.by-status.read` replaces `report.reservation.completed.read`. |
+| `GET /api/v1/reports/reservations/by-patient-type` | *(extended)* | New optional query params `status`, `groupBy`. Response `summary` gains `trend: DateCountPoint[]`. |
+| `GET /api/v1/reports/reservations/by-doctor` | *(extended)* | New optional query params `status`, `groupBy` (independent of the existing `doctorId`). Response `summary` gains `trend: DateCountPoint[]`. |
+
+## 42.5 New/Proposed Screens
+
+- **Reservation By Status** — `/reports/by-status` (renamed from `/reports/completed-reservations`). Same shell as before, plus a Status `<Select>` (All Statuses + the 8 `ReservationStatus` values, default `COMPLETED`) and a Day/Month `<Select>` next to the date-range picker; the summary card label and existing trend chart both reflect the selected status/granularity.
+- **Reservations by Patient Type** / **Reservations by Doctor** — both existing screens (§41.5) gain the same Status + Day/Month selects, plus a new "Trend Over Time" `Card`+`TrendChart` section below their existing comparison chart.
+
+## 42.6 Ambiguities and Gaps Reported
+
+None new.
+
+---
+
 # Final Summary
 
 Dokumen **13 - Module Reservation** mendefinisikan desain lengkap Reservation Module sebagai pusat pengelolaan appointment pada Parakita. Dokumen ini mencakup proses bisnis, kebutuhan fungsional, model data, API, validasi, workflow, integrasi lintas modul, keamanan, audit trail, pelaporan, KPI, skenario pengujian, hingga roadmap pengembangan di masa depan. Seluruh rancangan disusun mengikuti prinsip **Clean Architecture**, **Domain Driven Design (DDD)**, **Modular Monolith**, serta standar dokumentasi yang digunakan pada seluruh blueprint Parakita sehingga siap menjadi acuan implementasi backend maupun frontend.

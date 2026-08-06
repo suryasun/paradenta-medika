@@ -147,48 +147,61 @@ export interface NewPatientReportParams {
   limit?: number;
 }
 
-// task-299 (Reservation Module Addendum #2, R7). Mirrors apps/backend's
-// GetCompletedReservationReportUseCase's CompletedReservationReportSummary.
-export interface CompletedReservationReportSummary {
-  totalCompleted: number;
+// task-305 (Reservation Module Addendum #4), renamed from
+// CompletedReservationReportSummary/Params (task-299). Mirrors apps/backend's
+// GetReservationByStatusReportUseCase's ReservationByStatusReportSummary.
+export type ReservationTrendGroupBy = "day" | "month";
+
+export interface ReservationByStatusReportSummary {
+  total: number;
   trend: { date: string; count: number }[];
 }
 
-export interface CompletedReservationReportParams {
+export interface ReservationByStatusReportParams {
   dateFrom: string;
   dateTo: string;
+  status?: string;
+  groupBy?: ReservationTrendGroupBy;
   page?: number;
   limit?: number;
 }
 
 // task-300 (Reservation Module Addendum #3). Mirrors apps/backend's
 // GetReservationByPatientTypeReportUseCase's ReservationByPatientTypeReportSummary.
+// task-306/task-309 (Addendum #4) add status/groupBy filters and `trend`.
 export interface ReservationByPatientTypeReportSummary {
   newCount: number;
   oldCount: number;
   newPercentage: number;
   oldPercentage: number;
   breakdown: { type: "NEW" | "OLD"; count: number }[];
+  trend: { date: string; count: number }[];
 }
 
 export interface ReservationByPatientTypeReportParams {
   dateFrom: string;
   dateTo: string;
+  status?: string;
+  groupBy?: ReservationTrendGroupBy;
   page?: number;
   limit?: number;
 }
 
 // task-301 (Reservation Module Addendum #3). Mirrors apps/backend's
 // GetReservationByDoctorReportUseCase's ReservationByDoctorReportSummary.
+// task-307/task-310 (Addendum #4) add status/groupBy filters and `trend`.
 export interface ReservationByDoctorReportSummary {
   totalDoctors: number;
   breakdown: { doctorId: string; count: number }[];
+  trend: { date: string; count: number }[];
 }
 
 export interface ReservationByDoctorReportParams {
   dateFrom: string;
   dateTo: string;
   doctorId?: string;
+  status?: string;
+  groupBy?: ReservationTrendGroupBy;
   page?: number;
   limit?: number;
 }

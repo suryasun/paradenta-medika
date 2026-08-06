@@ -213,6 +213,12 @@ Apabila ditemukan data dengan tingkat kemiripan tinggi, sistem menampilkan perin
 - Daftar Reservasi dan Riwayat Reservasi menyediakan pilihan jumlah baris per halaman (10/20/50/100).
 - Kartu reservasi pada Kalender Reservasi menampilkan nama dan No. RM pasien.
 
+### 7.5.3 Reservation Module Addendum #4 (task-305–310)
+
+- Laporan Reservasi Selesai (Completed Reservations Report) **diganti nama** menjadi Laporan Reservasi Berdasarkan Status (Reservation By Status Report) — filter `status` yang sebelumnya di-hardcode ke `COMPLETED` kini dapat dipilih pengguna (default tetap `COMPLETED` agar tampilan awal tidak berubah; opsi "All Statuses" menghapus filter sepenuhnya).
+- Filter status opsional ditambahkan pula pada Laporan Reservasi berdasarkan Tipe Pasien dan Laporan Reservasi berdasarkan Dokter — berbeda dengan filter `doctorId` pada Laporan per Dokter (yang hanya mempersempit tabel), filter `status` mempersempit tabel maupun grafik ringkasan pada ketiga laporan ini, karena `status` adalah filter lintas-dimensi, bukan dimensi laporan itu sendiri.
+- Ketiga laporan reservasi (By Status, By Patient Type, By Doctor) mendapat grafik tren tambahan yang dapat dikelompokkan per Hari atau per Bulan (toggle Day/Month, default Hari) — pada Laporan By Status, grafik tren yang sudah ada digeneralisasi mendukung toggle ini; pada dua laporan lainnya, ini adalah bagian baru yang terpisah dari grafik perbandingan yang sudah ada (New vs Old / per Dokter).
+
 ---
 
 

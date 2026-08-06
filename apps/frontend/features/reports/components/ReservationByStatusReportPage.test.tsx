@@ -1,25 +1,25 @@
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CompletedReservationReportPage } from "./CompletedReservationReportPage";
-import { completedReservationReportService } from "../services/completedReservationReport.service";
+import { ReservationByStatusReportPage } from "./ReservationByStatusReportPage";
+import { reservationByStatusReportService } from "../services/reservationByStatusReport.service";
 import { doctorService } from "@/features/master-data/services/doctor.service";
 
-jest.mock("../services/completedReservationReport.service");
+jest.mock("../services/reservationByStatusReport.service");
 jest.mock("@/features/master-data/services/doctor.service");
-const mockedCompletedReservationReportService = jest.mocked(completedReservationReportService);
+const mockedReservationByStatusReportService = jest.mocked(reservationByStatusReportService);
 const mockedDoctorService = jest.mocked(doctorService);
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <CompletedReservationReportPage />
+      <ReservationByStatusReportPage />
     </QueryClientProvider>,
   );
 }
 
-// docs/06-tasks/task-299.md
-describe("CompletedReservationReportPage", () => {
+// docs/06-tasks/task-305.md (renamed from task-299.md)
+describe("ReservationByStatusReportPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedDoctorService.list.mockResolvedValue({
@@ -29,7 +29,7 @@ describe("CompletedReservationReportPage", () => {
   });
 
   it("renders the summary card, trend chart, and results table from a real date range", async () => {
-    mockedCompletedReservationReportService.get.mockResolvedValue({
+    mockedReservationByStatusReportService.get.mockResolvedValue({
       items: [
         {
           id: "r1",
@@ -54,12 +54,13 @@ describe("CompletedReservationReportPage", () => {
         },
       ],
       meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
-      summary: { totalCompleted: 8, trend: [{ date: "2026-08-10", count: 8 }] },
+      summary: { total: 8, trend: [{ date: "2026-08-10", count: 8 }] },
     });
 
     renderPage();
 
     expect(await screen.findByText("8")).toBeInTheDocument();
+    expect(screen.getByText("Total COMPLETED")).toBeInTheDocument();
     expect(screen.getByText("RSV-20260810-0001")).toBeInTheDocument();
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     expect(screen.getByText("(MRN000001)")).toBeInTheDocument();
@@ -67,14 +68,33 @@ describe("CompletedReservationReportPage", () => {
   });
 
   it("shows an empty state on the trend chart when there is no data for the range", async () => {
-    mockedCompletedReservationReportService.get.mockResolvedValue({
+    mockedReservationByStatusReportService.get.mockResolvedValue({
       items: [],
       meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
-      summary: { totalCompleted: 0, trend: [] },
+      summary: { total: 0, trend: [] },
     });
 
     renderPage();
 
     expect(await screen.findByText("No data for this range")).toBeInTheDocument();
+  });
+
+  it("re-queries with status=ALL when the status filter is set to All Statuses", async () => {
+    mockedReservationByStatusReportService.get.mockResolvedValue({
+      items: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
+      summary: { total: 0, trend: [] },
+    });
+
+    renderPage();
+    await screen.findByText("No data for this range");
+
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "ALL" } });
+
+    await screen.findByText("Total (All Statuses)");
+    expect(mockedReservationByStatusReportService.get).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: "ALL" }),
+    );
   });
 });

@@ -14,6 +14,8 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { useDoctors } from "@/features/master-data/hooks/useDoctors";
 import { RESERVATION_STATUS_TONE } from "@/features/reservation/components/ReservationListView";
 import { useReservationByPatientTypeReport } from "../hooks/useReservationByPatientTypeReport";
+import { ReservationTrendGroupBy } from "../types/reports.types";
+import { formatTrendLabel } from "../lib/trendFormat";
 
 function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -40,18 +42,26 @@ const PRESETS: Record<string, () => { dateFrom: string; dateTo: string }> = {
 // docs/06-tasks/task-300.md (Reservation Module Addendum #3). Unlike the
 // New Patient Report (task-291, NEW-only), this shows ALL reservations in
 // range with a NEW-vs-OLD comparison -- same date-preset shell as
-// CompletedReservationReportPage.tsx/NewPatientReportPage.tsx, plus a
+// ReservationByStatusReportPage.tsx/NewPatientReportPage.tsx, plus a
 // TrendChart used categorically (type on the x-axis, not a date).
+// docs/06-tasks/task-306.md/task-309.md (Addendum #4) add a Status filter
+// (unfiltered by default, unlike By Status) and a separate "Trend Over
+// Time" section (Day/Month) alongside the existing New-vs-Old comparison.
 export function ReservationByPatientTypeReportPage() {
   const [dateFrom, setDateFrom] = useState(toDateOnly(defaultFrom));
   const [dateTo, setDateTo] = useState(toDateOnly(today));
+  const [status, setStatus] = useState("ALL");
+  const [groupBy, setGroupBy] = useState<ReservationTrendGroupBy>("day");
   const [page, setPage] = useState(1);
 
   const { data: doctorsData } = useDoctors();
   const doctorName = (id: string) => doctorsData?.items.find((d) => d.id === id)?.fullName ?? "—";
 
   const enabled = Boolean(dateFrom && dateTo);
-  const { data, isLoading, isError, error, refetch } = useReservationByPatientTypeReport({ dateFrom, dateTo, page, limit: 20 }, enabled);
+  const { data, isLoading, isError, error, refetch } = useReservationByPatientTypeReport(
+    { dateFrom, dateTo, status, groupBy, page, limit: 20 },
+    enabled,
+  );
 
   function applyPreset(preset: keyof typeof PRESETS) {
     const range = PRESETS[preset]();
@@ -97,6 +107,31 @@ export function ReservationByPatientTypeReportPage() {
             setPage(1);
           }}
         />
+        <Select
+          id="by-patient-type-report-status"
+          label="Status"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="ALL">All Statuses</option>
+          {Object.keys(RESERVATION_STATUS_TONE).map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+        <Select
+          id="by-patient-type-report-groupby"
+          label="Group By"
+          value={groupBy}
+          onChange={(e) => setGroupBy(e.target.value as ReservationTrendGroupBy)}
+        >
+          <option value="day">Day</option>
+          <option value="month">Month</option>
+        </Select>
       </div>
 
       {isLoading && <LoadingState label="Loading report..." rows={5} columns={5} />}
@@ -120,6 +155,11 @@ export function ReservationByPatientTypeReportPage() {
           <Card>
             <h2 className="mb-3 text-sm font-semibold text-foreground">New vs. Old Comparison</h2>
             <TrendChart data={data.summary.breakdown} xKey="type" yKey="count" />
+          </Card>
+
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold text-foreground">Trend Over Time</h2>
+            <TrendChart data={data.summary.trend} xKey="date" yKey="count" xLabel={(item) => formatTrendLabel(groupBy, item.date)} />
           </Card>
 
           <Table>

@@ -1,5 +1,11 @@
 # task-299: Completed Reservations Report
 
+> **Superseded by task-305** (Reservation Module Addendum #4): this report
+> was renamed "Reservation By Status", generalizing the hardcoded
+> `status: 'COMPLETED'` filter into a user-selectable one. This file is left
+> as the historical record of the original shipped scope; see task-305 for
+> the current spec.
+
 **Phase:** Reservation Module Addendum #2 (post-roadmap)
 **Epic:** RE. Reservation Module Enhancement
 **Feature:** RE10. Completed Reservations Report

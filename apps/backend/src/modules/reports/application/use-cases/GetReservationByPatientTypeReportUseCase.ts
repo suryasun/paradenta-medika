@@ -1,11 +1,15 @@
 import { IReservationRepository } from '../../../reservation/domain/repositories/IReservationRepository';
 import { ReservationResponseDto } from '../../../reservation/application/dtos/ReservationResponseDto';
 import { toReservationResponse } from '../../../reservation/application/mappers/ReservationMapper';
+import { groupByDate, groupByMonth } from '../../../reservation/application/use-cases/ReservationAnalyticsUseCase';
+import { DateCountPoint } from '../../../reservation/application/dtos/ReservationAnalyticsResponseDto';
 import { ReportFilterInvalidException } from '../../domain/exceptions/ReportExceptions';
 
 export interface ReservationByPatientTypeReportFilters {
   dateFrom: string;
   dateTo: string;
+  status?: string;
+  groupBy?: 'day' | 'month';
   page: number;
   limit: number;
   sort: string;
@@ -23,6 +27,7 @@ export interface ReservationByPatientTypeReportSummary {
   newPercentage: number;
   oldPercentage: number;
   breakdown: PatientTypeCountEntry[];
+  trend: DateCountPoint[];
 }
 
 export interface ReservationByPatientTypeReportResult {
@@ -40,6 +45,13 @@ export interface ReservationByPatientTypeReportResult {
  * shape: paginated `items` via `search()`, `summary` aggregated over the
  * *full* matching set via `findAllInDateRange` (unfiltered), never scoped
  * to just the current page.
+ *
+ * docs/06-tasks/task-306.md/task-309.md (Reservation Module Addendum #4):
+ * adds an optional `status` filter -- applied to both reads, so the New/Old
+ * comparison reflects the filtered status too, not just the table -- and a
+ * `summary.trend` (day/month, via `groupBy`) computed from the same
+ * `allInRange` array already fetched for the New/Old breakdown, no extra
+ * query needed.
  */
 export class GetReservationByPatientTypeReportUseCase {
   constructor(private readonly reservationRepository: IReservationRepository) {}
@@ -54,16 +66,19 @@ export class GetReservationByPatientTypeReportUseCase {
       throw new ReportFilterInvalidException('dateFrom must not be after dateTo');
     }
 
+    const status = filters.status === 'ALL' ? undefined : filters.status;
+
     const [{ items, total }, allInRange] = await Promise.all([
       this.reservationRepository.search({
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
+        status,
         page: filters.page,
         limit: filters.limit,
         sort: filters.sort,
         order: filters.order,
       }),
-      this.reservationRepository.findAllInDateRange(from, to),
+      this.reservationRepository.findAllInDateRange(from, to, undefined, undefined, status),
     ]);
 
     const newCount = allInRange.filter((r) => r.patientTypeAtBooking === 'NEW').length;
@@ -71,6 +86,7 @@ export class GetReservationByPatientTypeReportUseCase {
     const denominator = newCount + oldCount;
     const newPercentage = denominator === 0 ? 0 : Math.round((newCount / denominator) * 10000) / 100;
     const oldPercentage = denominator === 0 ? 0 : Math.round((oldCount / denominator) * 10000) / 100;
+    const trend = filters.groupBy === 'month' ? groupByMonth(allInRange) : groupByDate(allInRange);
 
     return {
       items: items.map(toReservationResponse),
@@ -84,6 +100,7 @@ export class GetReservationByPatientTypeReportUseCase {
           { type: 'NEW', count: newCount },
           { type: 'OLD', count: oldCount },
         ],
+        trend,
       },
     };
   }

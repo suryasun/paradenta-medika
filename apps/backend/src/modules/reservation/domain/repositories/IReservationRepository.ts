@@ -87,8 +87,10 @@ export interface IReservationRepository {
    * aggregation (totalNewPatients/topProcedure/conversionRate) over the
    * full matching set, not just one paginated page. docs/06-tasks/task-299.md
    * (Reservation Module Addendum #2, R7) adds an optional status filter,
-   * following that same precedent, for the Completed Reservation Report's
-   * trend aggregation.
+   * following that same precedent, for the Reservation By Status Report's
+   * (task-305, formerly Completed Reservation Report) trend aggregation --
+   * now also reused by task-306/task-307 (Addendum #4) for the By Patient
+   * Type/By Doctor reports' own status filters.
    */
   findAllInDateRange(
     dateFrom: Date,
