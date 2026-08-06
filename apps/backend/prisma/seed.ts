@@ -27,7 +27,7 @@ const prisma = new PrismaClient();
 
 // Grepped from every `requirePermission('...')` call in src/modules --
 // this IS the literal enforced catalog, not a guess at what might exist.
-const PERMISSION_KEYS = [
+export const PERMISSION_KEYS = [
   'billing.invoice.close',
   'billing.invoice.create',
   'billing.invoice.read',
@@ -224,7 +224,7 @@ const PERMISSION_KEYS = [
 // defined only where explicitly listed in the SAD", and the SAD does not
 // enumerate one either), so this is a reasonable dev-seed judgment call,
 // not an authoritative mapping.
-const ROLE_PERMISSIONS: Record<string, string[]> = {
+export const ROLE_PERMISSIONS: Record<string, string[]> = {
   DOCTOR: [
     'patient.read',
     'reservation.read',
@@ -507,7 +507,56 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'report.export.download',
     'report.finance.read',
   ],
+  // docs/01-prd/features/reporting.md and docs/03-sad/20-module-report.md
+  // Section 4.1 Actor Matrix: Owner is documented as the primary consumer
+  // of "Executive KPI, financial, growth, branch comparison" -- a
+  // cross-branch, reporting-focused role distinct from Administrator
+  // (full system access). Before this seed change, no OWNER role existed
+  // anywhere, so the Executive/Branch/Branch-Comparison/Branch-Performance
+  // dashboards (Phase 4 Epics BD/BE/BF) were reachable only via
+  // Administrator's blanket grant. isCrossBranch: true is set below in
+  // seedPermissionsAndRoles, mirroring how Administrator is created.
+  OWNER: [
+    'report.dashboard.executive.read',
+    'report.dashboard.branch.read',
+    'report.branch-comparison.read',
+    'report.branch-performance.read',
+    'report.dashboard.finance.read',
+    'report.dashboard.operations.read',
+    'report.catalog.read',
+    'system.notification.read',
+    'report.job.create',
+    'report.job.cancel',
+    'report.export.download',
+    'report.finance.read',
+  ],
+  // docs/01-prd/features/reporting.md and docs/03-sad/20-module-report.md
+  // Section 4.1 Actor Matrix: Clinic Manager is documented as the primary
+  // consumer of "Operational, queue, clinical throughput, attendance" --
+  // scoped to their own assigned branch (isCrossBranch left at the schema
+  // default/false, so branchScopeGuard/BranchAuthorizationService
+  // intersect this role to its UserBranch assignment like any other
+  // non-cross-branch role).
+  CLINIC_MANAGER: [
+    'report.dashboard.operations.read',
+    'report.dashboard.branch.read',
+    'report.dashboard.clinical.read',
+    'queue.dashboard.read',
+    'report.catalog.read',
+    'system.notification.read',
+    'report.job.create',
+    'report.job.cancel',
+    'report.export.download',
+    'report.operations.read',
+  ],
 };
+
+// docs/06-tasks/task-217.md (Phase 4 Epic BC): roles whose Role.isCrossBranch
+// must be true, mirroring the Actor Matrix's Owner/Administrator/Security
+// Admin pattern. Administrator is set via its own dedicated upsert below;
+// this set covers additional cross-branch roles created through the
+// generic ROLE_PERMISSIONS loop.
+export const CROSS_BRANCH_ROLE_CODES = new Set(['OWNER']);
 
 function toPermissionName(key: string): string {
   return key
@@ -526,7 +575,7 @@ interface SeededUser {
   roleCode: string;
 }
 
-const USERS: SeededUser[] = [
+export const USERS: SeededUser[] = [
   { username: 'admin', email: 'admin@parakita.local', password: 'Admin#12345', roleCode: 'ADMINISTRATOR' },
   { username: 'doctor1', email: 'amelia.putri@parakita.local', password: TEST_PASSWORD, roleCode: 'DOCTOR' },
   { username: 'doctor2', email: 'bayu.aji@parakita.local', password: TEST_PASSWORD, roleCode: 'DOCTOR' },
@@ -536,6 +585,8 @@ const USERS: SeededUser[] = [
   { username: 'warehouse_manager1', email: 'warehouse.manager1@parakita.local', password: TEST_PASSWORD, roleCode: 'WAREHOUSE_MANAGER' },
   { username: 'finance_staff1', email: 'finance.staff1@parakita.local', password: TEST_PASSWORD, roleCode: 'FINANCE_STAFF' },
   { username: 'finance_manager1', email: 'finance.manager1@parakita.local', password: TEST_PASSWORD, roleCode: 'FINANCE_MANAGER' },
+  { username: 'owner1', email: 'owner1@parakita.local', password: TEST_PASSWORD, roleCode: 'OWNER' },
+  { username: 'clinicmanager1', email: 'clinicmanager1@parakita.local', password: TEST_PASSWORD, roleCode: 'CLINIC_MANAGER' },
 ];
 
 async function seedPermissionsAndRoles() {
@@ -576,14 +627,18 @@ async function seedPermissionsAndRoles() {
   );
 
   for (const [roleCode, keys] of Object.entries(ROLE_PERMISSIONS)) {
+    const isCrossBranch = CROSS_BRANCH_ROLE_CODES.has(roleCode);
     const role = await prisma.role.upsert({
       where: { roleCode },
-      update: {},
+      // `update` also sets isCrossBranch so a pre-existing seeded database
+      // upgrades correctly, mirroring the Administrator upsert's own pattern.
+      update: { isCrossBranch },
       create: {
         roleCode,
         roleName: roleCode.charAt(0) + roleCode.slice(1).toLowerCase(),
         description: `Seeded ${roleCode.toLowerCase()} role for local development.`,
         isSystem: true,
+        isCrossBranch,
       },
     });
     await Promise.all(
@@ -771,10 +826,16 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     { treatmentCode: 'TRT008', treatmentName: 'Fluoride Treatment', categoryCode: 'PREV', durationMinute: 20, defaultPrice: 150000, doctorFee: 40000 },
   ];
   for (const treatment of treatments) {
-    await prisma.treatment.upsert({
-      where: { treatmentCode: treatment.treatmentCode },
-      update: {},
-      create: {
+    // Phase 4 hardening: treatmentCode is no longer globally @unique (it's
+    // now @@unique([branchId, treatmentCode]) to allow branch-specific
+    // template overrides) -- Prisma's compound-unique WhereUniqueInput
+    // can't take `null` for the nullable `branchId` member, so this is the
+    // same find-first-then-create pattern already used above for
+    // SystemParameter's nullable scopeId.
+    const existingGlobalTreatment = await prisma.treatment.findFirst({ where: { treatmentCode: treatment.treatmentCode, branchId: null } });
+    if (existingGlobalTreatment) continue;
+    await prisma.treatment.create({
+      data: {
         treatmentCode: treatment.treatmentCode,
         treatmentName: treatment.treatmentName,
         treatmentCategoryId: categoryIdByCode.get(treatment.categoryCode)!,
@@ -796,7 +857,10 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     { methodCode: 'EWALLET', methodName: 'E-Wallet', isCash: false },
   ];
   for (const method of paymentMethods) {
-    await prisma.paymentMethod.upsert({ where: { methodCode: method.methodCode }, update: {}, create: method });
+    // Phase 4 hardening: same find-first-then-create pattern as treatments above.
+    const existingGlobalMethod = await prisma.paymentMethod.findFirst({ where: { methodCode: method.methodCode, branchId: null } });
+    if (existingGlobalMethod) continue;
+    await prisma.paymentMethod.create({ data: method });
   }
 
   // docs/03-sad/15-module-emr.md Part 3.1C Section 21.3 "Standard Tooth
@@ -846,7 +910,10 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     { conditionCode: 'PERIAPICAL_LESION', conditionName: 'Periapical Lesion', category: 'DISEASE', colorCode: 'Red' },
   ];
   for (const condition of toothConditions) {
-    await prisma.toothCondition.upsert({ where: { conditionCode: condition.conditionCode }, update: {}, create: condition });
+    // Phase 4 hardening: same find-first-then-create pattern as treatments above.
+    const existingGlobalCondition = await prisma.toothCondition.findFirst({ where: { conditionCode: condition.conditionCode, branchId: null } });
+    if (existingGlobalCondition) continue;
+    await prisma.toothCondition.create({ data: condition });
   }
 
   // docs/03-sad/15-module-emr.md Part 3.3D Section 39 "Consent Categories"
@@ -1319,13 +1386,16 @@ async function seedTransactionalData(userIdByUsername: Map<string, string>) {
   });
 
   // --- EMR: Visit + SOAP + Odontogram + Treatment + Prescription + Consent ---
+  // Phase 4 hardening: treatmentCode/conditionCode are no longer single-field
+  // unique (see the create-loop comments above) -- findFirstOrThrow against
+  // the global (branchId: null) row replaces findUniqueOrThrow.
   const [treatmentComposite, treatmentExtraction] = await Promise.all([
-    prisma.treatment.findUniqueOrThrow({ where: { treatmentCode: 'TRT001' } }),
-    prisma.treatment.findUniqueOrThrow({ where: { treatmentCode: 'TRT003' } }),
+    prisma.treatment.findFirstOrThrow({ where: { treatmentCode: 'TRT001', branchId: null } }),
+    prisma.treatment.findFirstOrThrow({ where: { treatmentCode: 'TRT003', branchId: null } }),
   ]);
   const [conditionCaries, conditionFilling] = await Promise.all([
-    prisma.toothCondition.findUniqueOrThrow({ where: { conditionCode: 'INITIAL_CARIES' } }),
-    prisma.toothCondition.findUniqueOrThrow({ where: { conditionCode: 'COMPOSITE_FILLING' } }),
+    prisma.toothCondition.findFirstOrThrow({ where: { conditionCode: 'INITIAL_CARIES', branchId: null } }),
+    prisma.toothCondition.findFirstOrThrow({ where: { conditionCode: 'COMPOSITE_FILLING', branchId: null } }),
   ]);
   const consentTemplate = await prisma.consentTemplate.findFirstOrThrow({ where: { title: 'Dental Treatment Consent' } });
 
@@ -1508,7 +1578,8 @@ async function seedTransactionalData(userIdByUsername: Map<string, string>) {
     });
   }
 
-  const cashMethod = await prisma.paymentMethod.findUniqueOrThrow({ where: { methodCode: 'CASH' } });
+  // Phase 4 hardening: methodCode is no longer single-field unique (see the create-loop comment above).
+  const cashMethod = await prisma.paymentMethod.findFirstOrThrow({ where: { methodCode: 'CASH', branchId: null } });
   const existingPayment = await prisma.payment.findFirst({ where: { invoiceId: invoice.id } });
   if (!existingPayment) {
     await prisma.payment.create({
@@ -1852,6 +1923,19 @@ async function seedTransactionalData(userIdByUsername: Map<string, string>) {
     create: { userId: cashier1Id, branchId: branchBsd.id, isDefault: false, effectiveFrom: new Date(), createdBy: userIdByUsername.get('admin') },
   });
 
+  // clinicmanager1 is assigned exactly one branch (Kemang only, not
+  // cross-branch) so the Branch Dashboard's scoping and the
+  // BranchScopeGuard/BranchAuthorizationService rejection of the
+  // out-of-scope BSD branch are both exercisable in the seeded environment.
+  // owner1 needs no UserBranch row at all -- Role.isCrossBranch bypasses
+  // the assignment check entirely (see branchScopeGuard.ts).
+  const clinicManager1Id = userIdByUsername.get('clinicmanager1')!;
+  await prisma.userBranch.upsert({
+    where: { userId_branchId: { userId: clinicManager1Id, branchId: branchKemang.id } },
+    update: {},
+    create: { userId: clinicManager1Id, branchId: branchKemang.id, isDefault: true, effectiveFrom: new Date(), createdBy: userIdByUsername.get('admin') },
+  });
+
   const templatePayloadV2 = { treatmentCode: 'TRT-TEMPLATE-01', treatmentName: 'Scaling Standar', durationMinute: 30, defaultPrice: 200000, doctorFee: 60000 };
   const templatePayloadV1 = { treatmentCode: 'TRT-TEMPLATE-01', treatmentName: 'Scaling Standar', durationMinute: 30, defaultPrice: 180000, doctorFee: 60000 };
   const driftedPayload = { treatmentCode: 'TRT-TEMPLATE-01', treatmentName: 'Scaling Standar (BSD custom)', durationMinute: 30, defaultPrice: 190000, doctorFee: 60000 };
@@ -1885,7 +1969,7 @@ async function seedTransactionalData(userIdByUsername: Map<string, string>) {
     notifications: 1,
     featureFlags: 1,
     systemParameters: 2,
-    branchAssignments: 2,
+    branchAssignments: 3,
     masterDataTemplates: 1,
   };
 }
@@ -2222,12 +2306,20 @@ async function main() {
   }
 }
 
-main()
-  .catch((error) => {
-    // eslint-disable-next-line no-console
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// Guarded so importing this module for its exported constants (e.g.
+// tests/unit/seedRbacIntegrity.test.ts, which needs ROLE_PERMISSIONS/
+// PERMISSION_KEYS without touching a database) doesn't also run the seed
+// against whatever DATABASE_URL happens to be configured. `npm run` /
+// `prisma db seed` invoke this file directly (require.main === module),
+// so the documented `ts-node prisma/seed.ts` entry point is unaffected.
+if (require.main === module) {
+  main()
+    .catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error(error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
