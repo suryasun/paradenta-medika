@@ -60,4 +60,7 @@ export interface VisitDetailResponseDto extends VisitResponseDto {
   soapNote: SoapNoteResponseDto | null;
   diagnoses: DiagnosisResponseDto[];
   treatmentEntries: TreatmentEntryResponseDto[];
+  /** docs/06-tasks/task-318.md: true when the Visit's linked Invoice is PAID -- Treatment
+   * specifically locks on this, independent of the Visit's own status (task-317). */
+  isTreatmentLocked: boolean;
 }

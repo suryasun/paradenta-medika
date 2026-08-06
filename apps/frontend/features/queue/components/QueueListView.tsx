@@ -22,6 +22,16 @@ export { QUEUE_STATUS_TONE };
 
 const BOARD_COLUMNS: QueueEntry["status"][] = ["WAITING", "CALLED", "IN_SERVICE", "COMPLETED"];
 
+// docs/06-tasks/task-315.md: client-side "today" default, mirroring
+// Reservation List's identical todayIso() pattern. Unlike Reservation
+// (which also bounds the input with `min={todayIso()}` to split List from
+// History), Queue has no separate history view and staff may legitimately
+// need to look at past dates for reconciliation -- only the default value
+// changes here, the filter itself stays freely editable to any date.
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 // docs/02-design/Parakita - Key Screens.dc.html "isQueue": a 4-column
 // Kanban board (Waiting/Called/In Service/Completed), fetched without
 // pagination since a day's board is meant to be seen at a glance.
@@ -38,7 +48,7 @@ const BOARD_COLUMNS: QueueEntry["status"][] = ["WAITING", "CALLED", "IN_SERVICE"
 // rather than attempted and rejected server-side.
 export function QueueListView() {
   const [status, setStatus] = useState("");
-  const [visitDate, setVisitDate] = useState("");
+  const [visitDate, setVisitDate] = useState(todayIso());
   const [showAddModal, setShowAddModal] = useState(false);
   const [draggedEntry, setDraggedEntry] = useState<QueueEntry | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<QueueEntry["status"] | null>(null);

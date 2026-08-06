@@ -16,7 +16,25 @@ import { TreatmentEntry } from "../types/emr.types";
 // time from the Treatment catalog, so unitPrice/subtotal shown in the
 // table below reflect what was actually billed, not the current catalog
 // price if it has since changed.
-export function TreatmentSection({ visitId, treatmentEntries, readOnly }: { visitId: string; treatmentEntries: TreatmentEntry[]; readOnly: boolean }) {
+//
+// docs/06-tasks/task-318.md: `readOnly` here already folds in the
+// payment-driven lock (VisitWorkspace passes `treatmentReadOnly`, not the
+// plain visit-status `readOnly`, into this section) -- `isPaymentLocked`
+// is a narrower flag used only to decide whether to show the "invoice
+// paid" explanation (it's true only when the *visit itself* is still
+// open but Treatment specifically is locked; a LOCKED/ARCHIVED visit
+// already explains its own read-only state some other way).
+export function TreatmentSection({
+  visitId,
+  treatmentEntries,
+  readOnly,
+  isPaymentLocked,
+}: {
+  visitId: string;
+  treatmentEntries: TreatmentEntry[];
+  readOnly: boolean;
+  isPaymentLocked?: boolean;
+}) {
   const [treatmentId, setTreatmentId] = useState("");
   const [toothReference, setToothReference] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -61,6 +79,12 @@ export function TreatmentSection({ visitId, treatmentEntries, readOnly }: { visi
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {isPaymentLocked && (
+        <p className="rounded-md border border-border bg-[var(--color-warning-100)] px-3 py-2 text-sm text-foreground">
+          Locked — invoice paid. Treatment can no longer be added or edited for this visit.
+        </p>
       )}
 
       {!readOnly && (

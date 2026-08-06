@@ -96,7 +96,14 @@ export function createApp(config: ConfigService): Express {
   const reservationRouter = buildReservationModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission, branchScopeGuard);
   app.use(API_V1_PREFIX, reservationRouter);
 
-  const queueRouter = buildQueueModule(auditService, eventBus, authModule.authenticate, authModule.requirePermission);
+  const queueRouter = buildQueueModule(
+    auditService,
+    eventBus,
+    authModule.authenticate,
+    authModule.requirePermission,
+    branchScopeGuardUserRoleRepository,
+    branchScopeGuardUserBranchRepository,
+  );
   app.use(API_V1_PREFIX, queueRouter);
 
   const emrRouter = buildEmrModule(config, auditService, eventBus, authModule.authenticate, authModule.requirePermission);

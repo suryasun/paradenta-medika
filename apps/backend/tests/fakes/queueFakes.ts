@@ -1,5 +1,5 @@
 import { Queue, QueueCall } from '@prisma/client';
-import { CreateQueueInput, IQueueRepository, QueueListFilters } from '../../src/modules/queue/domain/repositories/IQueueRepository';
+import { CreateQueueInput, IQueueRepository, QueueDashboardScope, QueueListFilters } from '../../src/modules/queue/domain/repositories/IQueueRepository';
 import { AppendQueueHistoryInput, IQueueHistoryRepository } from '../../src/modules/queue/domain/repositories/IQueueHistoryRepository';
 import { IQueueCallRepository } from '../../src/modules/queue/domain/repositories/IQueueCallRepository';
 import { PagedResult } from '../../src/shared/http/pagination';
@@ -53,6 +53,8 @@ export class FakeQueueRepository implements IQueueRepository {
     if (filters.status) all = all.filter((q) => q.status === filters.status);
     if (filters.doctorId) all = all.filter((q) => q.doctorId === filters.doctorId);
     if (filters.branchId) all = all.filter((q) => q.branchId === filters.branchId);
+    if (filters.allowedBranchIds) all = all.filter((q) => filters.allowedBranchIds!.includes(q.branchId));
+    if (filters.restrictToDoctorId) all = all.filter((q) => q.doctorId === filters.restrictToDoctorId);
     const start = (filters.page - 1) * filters.limit;
     return { items: all.slice(start, start + filters.limit), total: all.length };
   }
@@ -95,9 +97,16 @@ export class FakeQueueRepository implements IQueueRepository {
     return queue;
   }
 
-  async countByStatus(branchId?: string, date?: Date): Promise<Record<string, number>> {
-    let all = [...this.queues.values()];
-    if (branchId) all = all.filter((q) => q.branchId === branchId);
+  private applyScope(all: Queue[], scope: QueueDashboardScope): Queue[] {
+    let result = all;
+    if (scope.branchId) result = result.filter((q) => q.branchId === scope.branchId);
+    if (scope.allowedBranchIds) result = result.filter((q) => scope.allowedBranchIds!.includes(q.branchId));
+    if (scope.restrictToDoctorId) result = result.filter((q) => q.doctorId === scope.restrictToDoctorId);
+    return result;
+  }
+
+  async countByStatus(scope: QueueDashboardScope, date?: Date): Promise<Record<string, number>> {
+    let all = this.applyScope([...this.queues.values()], scope);
     if (date) all = all.filter((q) => q.queueDate.getTime() === date.getTime());
     const result: Record<string, number> = {};
     for (const q of all) {
@@ -106,9 +115,8 @@ export class FakeQueueRepository implements IQueueRepository {
     return result;
   }
 
-  async countByDoctor(branchId?: string, date?: Date): Promise<Array<{ doctorId: string; count: number }>> {
-    let all = [...this.queues.values()];
-    if (branchId) all = all.filter((q) => q.branchId === branchId);
+  async countByDoctor(scope: QueueDashboardScope, date?: Date): Promise<Array<{ doctorId: string; count: number }>> {
+    let all = this.applyScope([...this.queues.values()], scope);
     if (date) all = all.filter((q) => q.queueDate.getTime() === date.getTime());
     const map = new Map<string, number>();
     for (const q of all) {
@@ -117,9 +125,8 @@ export class FakeQueueRepository implements IQueueRepository {
     return [...map.entries()].map(([doctorId, count]) => ({ doctorId, count }));
   }
 
-  async findCompletedForMetrics(branchId?: string, date?: Date): Promise<Queue[]> {
-    let all = [...this.queues.values()].filter((q) => q.status === 'COMPLETED');
-    if (branchId) all = all.filter((q) => q.branchId === branchId);
+  async findCompletedForMetrics(scope: QueueDashboardScope, date?: Date): Promise<Queue[]> {
+    let all = this.applyScope([...this.queues.values()].filter((q) => q.status === 'COMPLETED'), scope);
     if (date) all = all.filter((q) => q.queueDate.getTime() === date.getTime());
     return all;
   }

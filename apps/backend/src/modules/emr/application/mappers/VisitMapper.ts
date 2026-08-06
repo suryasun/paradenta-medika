@@ -77,6 +77,7 @@ export function toVisitDetailResponse(
   soapNote: SoapNote | null,
   diagnoses: VisitDiagnosis[],
   treatmentEntries: VisitTreatmentWithMaterials[],
+  isTreatmentLocked: boolean,
 ): VisitDetailResponseDto {
   return {
     ...toVisitResponse(visit),
@@ -84,5 +85,6 @@ export function toVisitDetailResponse(
     soapNote: soapNote ? toSoapNoteResponse(soapNote) : null,
     diagnoses: diagnoses.map(toDiagnosisResponse),
     treatmentEntries: treatmentEntries.map(toTreatmentEntryResponse),
+    isTreatmentLocked,
   };
 }

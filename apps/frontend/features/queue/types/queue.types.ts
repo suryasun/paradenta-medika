@@ -4,6 +4,8 @@ export interface QueueEntry {
   queueNumber: string;
   branchId: string;
   patientId: string;
+  patientMrn: string | null;
+  patientFullName: string | null;
   doctorId: string;
   reservationId: string | null;
   queueDate: string;
@@ -16,6 +18,8 @@ export interface QueueEntry {
   completedAt: string | null;
   cancelledAt: string | null;
   notes: string | null;
+  /** docs/06-tasks/task-319.md: id of the linked Visit if one already exists (any status). */
+  visitId: string | null;
 }
 
 export interface QueueDashboard {

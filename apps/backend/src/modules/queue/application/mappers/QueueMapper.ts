@@ -1,12 +1,14 @@
-import { Queue } from '@prisma/client';
+import { QueueWithOptionalPatient } from '../../domain/repositories/IQueueRepository';
 import { QueueResponseDto } from '../dtos/QueueResponseDto';
 
-export function toQueueResponse(queue: Queue): QueueResponseDto {
+export function toQueueResponse(queue: QueueWithOptionalPatient): QueueResponseDto {
   return {
     id: queue.id,
     queueNumber: queue.queueNumber,
     branchId: queue.branchId,
     patientId: queue.patientId,
+    patientMrn: queue.patient?.medicalRecordNo ?? null,
+    patientFullName: queue.patient?.patientName ?? null,
     doctorId: queue.doctorId,
     reservationId: queue.reservationId,
     queueDate: queue.queueDate.toISOString().slice(0, 10),
@@ -19,5 +21,6 @@ export function toQueueResponse(queue: Queue): QueueResponseDto {
     completedAt: queue.completedAt ? queue.completedAt.toISOString() : null,
     cancelledAt: queue.cancelledAt ? queue.cancelledAt.toISOString() : null,
     notes: queue.notes,
+    visitId: queue.visit?.id ?? null,
   };
 }

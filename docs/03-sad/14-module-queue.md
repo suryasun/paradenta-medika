@@ -327,6 +327,8 @@ A003
 
 Nomor antrian tidak saling bertabrakan.
 
+Sejak Queue Module Addendum #1 (lihat §29.1.1), independensi ini juga ditegakkan sebagai pembatasan akses di server — bukan hanya non-tabrakan penomoran — sehingga pengguna hanya dapat melihat Queue milik cabang yang menjadi hak aksesnya.
+
 ---
 
 # 7. Module Responsibilities
@@ -1296,6 +1298,26 @@ Parameter disimpan pada `system_parameters`.
 | queue_algorithm | PRIORITY_FIFO |
 
 Seluruh parameter dapat diubah oleh Administrator tanpa deployment ulang aplikasi.
+
+---
+
+# 29.1 Queue Module Addendum #1 — Branch & Doctor Scoping, Patient Snapshot (task-311–318)
+
+## 29.1.1 Server-Side Branch Scoping
+
+Sebelum addendum ini, filter `branchId` pada `GET /queues`/`GET /queues/dashboard` bersifat opsional dan tidak ditegakkan di server — pengguna dapat melihat Queue seluruh cabang tanpa batasan. Addendum ini menegakkan pembatasan tersebut secara wajib:
+
+- Setiap request ke `GET /queues`, `GET /queues/:id`, dan `GET /queues/dashboard` menghitung `allowedBranchIds` dari data `UserBranch` milik pengguna yang sedang login, kecuali role pengguna bertanda `isCrossBranch = true` (melihat seluruh cabang tanpa batas).
+- Query List/Dashboard menyaring `WHERE branchId IN (allowedBranchIds)`; query Detail mengembalikan "not found" (bukan "forbidden", untuk menghindari kebocoran informasi keberadaan data lintas-cabang) apabila `branchId` milik record berada di luar cakupan.
+- Ini melengkapi §6.4 (Support Multi Branch) — Queue tetap independen per cabang untuk penomoran, dan kini juga independen secara visibilitas akses.
+
+## 29.1.2 Doctor Self-Scoping
+
+Untuk pengguna dengan role Dokter, cakupan di atas dipersempit lebih lanjut: hanya entri Queue dengan `doctorId` sama dengan id Dokter yang bersangkutan yang ditampilkan pada List, Detail, dan Dashboard. Aturan ini adalah perluasan dari pola kepemilikan (ownership) yang sudah ada pada EMR/Visit ("Doctor Assigned", lihat SAD Auth §27.4) — sebelumnya Queue hanya tunduk pada aturan "Active Clinic" (cabang), kini juga tunduk pada aturan kepemilikan Dokter.
+
+## 29.1.3 Patient Snapshot pada Queue
+
+`GET /queues` dan `GET /queues/:id` kini menyertakan `patientMrn` dan `patientFullName` pada setiap entri, diambil dari snapshot ringan relasi `patient` (No. RM dan Nama Pasien saja) — bukan entitas Patient penuh. Pola ini identik dengan pola yang sudah diterapkan pada Reservation Module Addendum #2.
 
 ---
 

@@ -34,6 +34,8 @@ function buildQueueEntry(overrides: Partial<QueueEntry> = {}): QueueEntry {
     queueNumber: "A001",
     branchId: "b1",
     patientId: "p1",
+    patientMrn: null,
+    patientFullName: null,
     doctorId: "d1",
     reservationId: null,
     queueDate: "2026-08-02",
@@ -46,6 +48,7 @@ function buildQueueEntry(overrides: Partial<QueueEntry> = {}): QueueEntry {
     completedAt: null,
     cancelledAt: null,
     notes: null,
+    visitId: null,
     ...overrides,
   };
 }

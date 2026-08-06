@@ -57,6 +57,9 @@ export interface VisitDetail extends Visit {
   soapNote: SoapNote | null;
   diagnoses: Diagnosis[];
   treatmentEntries: TreatmentEntry[];
+  /** docs/06-tasks/task-318.md: true once the Visit's linked Invoice is PAID -- locks
+   * Treatment specifically, independent of the Visit's own status. */
+  isTreatmentLocked: boolean;
 }
 
 export interface RecordVitalSignInput {

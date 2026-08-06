@@ -8,12 +8,14 @@ async function seedVisit(repo: FakeVisitRepository) {
 }
 
 describe('CreatePeriodontalAssessmentUseCase (task-071)', () => {
-  it('rejects creating an assessment against a Completed (non-open) Visit', async () => {
+  // docs/06-tasks/task-316.md: COMPLETED no longer blocks documentation --
+  // only LOCKED/ARCHIVED do.
+  it('rejects creating an assessment against a Locked (non-open) Visit', async () => {
     const visitRepository = new FakeVisitRepository();
     const assessmentRepository = new FakePeriodontalAssessmentRepository();
     const auditService = new FakeAuditService();
     const visit = await seedVisit(visitRepository);
-    visitRepository.visits.get(visit.id)!.status = 'COMPLETED';
+    visitRepository.visits.get(visit.id)!.status = 'LOCKED';
     const useCase = new CreatePeriodontalAssessmentUseCase(visitRepository, assessmentRepository, auditService);
 
     await expect(

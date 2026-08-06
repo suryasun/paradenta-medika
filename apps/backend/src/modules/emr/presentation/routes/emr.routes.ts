@@ -92,6 +92,7 @@ import { VisitDiagnosisRepository } from '../../infrastructure/repositories/Visi
 import { VisitTreatmentRepository } from '../../infrastructure/repositories/VisitTreatmentRepository';
 import { ItemRepository } from '../../../warehouse/infrastructure/repositories/ItemRepository';
 import { WarehouseLocationRepository } from '../../../warehouse/infrastructure/repositories/WarehouseLocationRepository';
+import { InvoiceRepository } from '../../../billing/infrastructure/repositories/InvoiceRepository';
 import { MedicalHistoryRepository } from '../../infrastructure/repositories/MedicalHistoryRepository';
 import { AllergyRepository } from '../../infrastructure/repositories/AllergyRepository';
 import { OdontogramRepository } from '../../infrastructure/repositories/OdontogramRepository';
@@ -156,6 +157,10 @@ export function buildEmrModule(
   const diagnosisRepository = new VisitDiagnosisRepository();
   const visitTreatmentRepository = new VisitTreatmentRepository();
   const itemRepository = new ItemRepository();
+  // docs/06-tasks/task-317.md/task-318.md: shared, read-only Billing
+  // repository instance -- reused by both RecordTreatmentUseCase (payment
+  // lock check) and GetVisitDetailUseCase (isTreatmentLocked flag).
+  const invoiceRepository = new InvoiceRepository();
   const warehouseLocationRepository = new WarehouseLocationRepository();
   const queueRepository = new QueueRepository();
   const treatmentRepository = new TreatmentRepository();
@@ -197,11 +202,11 @@ export function buildEmrModule(
 
   const controller = new VisitController(
     new OpenVisitUseCase(visitRepository, queueRepository, visitNumberGenerator, auditService),
-    new GetVisitDetailUseCase(visitRepository, vitalSignRepository, soapNoteRepository, diagnosisRepository, visitTreatmentRepository),
+    new GetVisitDetailUseCase(visitRepository, vitalSignRepository, soapNoteRepository, diagnosisRepository, visitTreatmentRepository, invoiceRepository),
     new RecordVitalSignUseCase(visitRepository, vitalSignRepository, auditService),
     new RecordSoapNoteUseCase(visitRepository, soapNoteRepository, auditService),
     new RecordDiagnosisUseCase(visitRepository, diagnosisRepository, auditService),
-    new RecordTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, auditService),
+    new RecordTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, invoiceRepository, auditService),
     new CloseVisitUseCase(visitRepository, soapNoteRepository, visitTreatmentRepository, warehouseLocationRepository, auditService, eventBus),
   );
 

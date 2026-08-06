@@ -185,7 +185,7 @@ export function registerDashboardProjections(deps: RegisterDashboardProjectionsD
 
   const refreshQueueGauge = async (checkpointKey: string, payload: QueueEventPayload) => {
     if (!(await checkpointRepository.claim(checkpointKey, `${payload.queueId}:${payload.event}`))) return;
-    const counts = await queueRepository.countByStatus(payload.branchId);
+    const counts = await queueRepository.countByStatus({ branchId: payload.branchId });
     // Iterate the full status list, not just Object.entries(counts) -- a status with zero
     // queues right now must still overwrite its gauge back to 0, not leave a stale nonzero value.
     for (const status of QUEUE_STATUSES) {

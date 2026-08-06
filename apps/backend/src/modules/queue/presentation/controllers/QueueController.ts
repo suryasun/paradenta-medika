@@ -16,6 +16,9 @@ import { StartServiceUseCase } from '../../application/use-cases/StartServiceUse
 import { CompleteQueueUseCase } from '../../application/use-cases/CompleteQueueUseCase';
 import { CancelQueueUseCase } from '../../application/use-cases/CancelQueueUseCase';
 import { TransferQueueUseCase } from '../../application/use-cases/TransferQueueUseCase';
+import { QueueScope } from '../../application/services/resolveQueueScope';
+
+export type QueueScopeResolver = (userId: string, roleCodes: string[]) => Promise<QueueScope>;
 
 export class QueueController {
   constructor(
@@ -29,6 +32,7 @@ export class QueueController {
     private readonly completeQueueUseCase: CompleteQueueUseCase,
     private readonly cancelQueueUseCase: CancelQueueUseCase,
     private readonly transferQueueUseCase: TransferQueueUseCase,
+    private readonly resolveQueueScope: QueueScopeResolver,
   ) {}
 
   create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -49,8 +53,10 @@ export class QueueController {
 
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+      if (!req.auth) throw new AuthenticationException();
       const query = req.query as unknown as ListQueueQueryDto;
-      const { items, total } = await this.listQueueUseCase.execute(query);
+      const scope = await this.resolveQueueScope(req.auth.userId, req.auth.roleCodes);
+      const { items, total } = await this.listQueueUseCase.execute({ ...query, ...scope });
       sendSuccess(res, items, 'Queues retrieved', 200, buildPaginationMeta(query.page, query.limit, total));
     } catch (error) {
       next(error);
@@ -59,7 +65,9 @@ export class QueueController {
 
   detail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const queue = await this.getQueueDetailUseCase.execute(req.params.id);
+      if (!req.auth) throw new AuthenticationException();
+      const scope = await this.resolveQueueScope(req.auth.userId, req.auth.roleCodes);
+      const queue = await this.getQueueDetailUseCase.execute(req.params.id, scope);
       sendSuccess(res, queue, 'Queue retrieved');
     } catch (error) {
       next(error);

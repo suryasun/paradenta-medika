@@ -25,16 +25,29 @@ async function seedVisit(repo: FakeVisitRepository, status: string = 'DRAFT') {
 }
 
 describe('RecordVitalSignUseCase (task-049)', () => {
+  // docs/06-tasks/task-316.md: COMPLETED no longer blocks documentation --
+  // only LOCKED/ARCHIVED do.
   it('can only be recorded against an open Visit', async () => {
+    const visitRepository = new FakeVisitRepository();
+    const vitalSignRepository = new FakeVitalSignRepository();
+    const auditService = new FakeAuditService();
+    const visit = await seedVisit(visitRepository, 'LOCKED');
+    const useCase = new RecordVitalSignUseCase(visitRepository, vitalSignRepository, auditService);
+
+    await expect(useCase.execute({ visitId: visit.id, heartRate: 80, actorUserId: 'nurse-1' })).rejects.toBeInstanceOf(
+      VisitNotOpenException,
+    );
+  });
+
+  it('docs/06-tasks/task-316.md: can still be recorded against a COMPLETED Visit', async () => {
     const visitRepository = new FakeVisitRepository();
     const vitalSignRepository = new FakeVitalSignRepository();
     const auditService = new FakeAuditService();
     const visit = await seedVisit(visitRepository, 'COMPLETED');
     const useCase = new RecordVitalSignUseCase(visitRepository, vitalSignRepository, auditService);
 
-    await expect(useCase.execute({ visitId: visit.id, heartRate: 80, actorUserId: 'nurse-1' })).rejects.toBeInstanceOf(
-      VisitNotOpenException,
-    );
+    const result = await useCase.execute({ visitId: visit.id, heartRate: 80, actorUserId: 'nurse-1' });
+    expect(result.heartRate).toBe(80);
   });
 
   it('persists and is retrievable against the correct Visit', async () => {
@@ -86,11 +99,13 @@ describe('RecordSoapNoteUseCase (task-050)', () => {
 });
 
 describe('RecordDiagnosisUseCase (task-051)', () => {
+  // docs/06-tasks/task-316.md: COMPLETED no longer blocks documentation --
+  // only LOCKED/ARCHIVED do.
   it('can only be recorded against an open Visit', async () => {
     const visitRepository = new FakeVisitRepository();
     const diagnosisRepository = new FakeVisitDiagnosisRepository();
     const auditService = new FakeAuditService();
-    const visit = await seedVisit(visitRepository, 'COMPLETED');
+    const visit = await seedVisit(visitRepository, 'LOCKED');
     const useCase = new RecordDiagnosisUseCase(visitRepository, diagnosisRepository, auditService);
 
     await expect(

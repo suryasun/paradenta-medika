@@ -20,6 +20,7 @@ import { CompleteQueueUseCase } from '../../application/use-cases/CompleteQueueU
 import { CancelQueueUseCase } from '../../application/use-cases/CancelQueueUseCase';
 import { TransferQueueUseCase } from '../../application/use-cases/TransferQueueUseCase';
 import { QueueDashboardUseCase } from '../../application/use-cases/QueueDashboardUseCase';
+import { resolveQueueScope } from '../../application/services/resolveQueueScope';
 import { QueueRepository } from '../../infrastructure/repositories/QueueRepository';
 import { QueueHistoryRepository } from '../../infrastructure/repositories/QueueHistoryRepository';
 import { QueueCallRepository } from '../../infrastructure/repositories/QueueCallRepository';
@@ -28,6 +29,8 @@ import { QueueDashboardController } from '../controllers/QueueDashboardControlle
 import { PatientRepository } from '../../../patient/infrastructure/repositories/PatientRepository';
 import { DoctorRepository } from '../../../master-data/infrastructure/repositories/DoctorRepository';
 import { PATIENT_CHECKED_IN_EVENT, PatientCheckedInPayload } from '../../../reservation/domain/events/ReservationEvents';
+import { IUserRoleRepository } from '../../../system/domain/repositories/IUserRoleRepository';
+import { IUserBranchRepository } from '../../../system/domain/repositories/IUserBranchRepository';
 
 /**
  * docs/06-tasks/task-037.md..task-047.md composition root. Permission
@@ -41,12 +44,19 @@ import { PATIENT_CHECKED_IN_EVENT, PatientCheckedInPayload } from '../../../rese
  * modules/reservation/application/use-cases/CheckInPatientUseCase) to
  * create the Queue entry, per task-035.md's documented option of using the
  * event rather than a direct cross-module use-case call.
+ *
+ * docs/06-tasks/task-311.md/task-312.md: `userRoleRepository`/
+ * `userBranchRepository` are the same instances app.ts already constructs
+ * for branchScopeGuard -- reused here (not a new middleware) because real
+ * query-level narrowing, not just explicit-target rejection, is required.
  */
 export function buildQueueModule(
   auditService: IAuditService,
   eventBus: IEventBus,
   authenticate: RequestHandler,
   requirePermission: (code: string) => RequestHandler,
+  userRoleRepository: IUserRoleRepository,
+  userBranchRepository: IUserBranchRepository,
 ): Router {
   const queueRepository = new QueueRepository();
   const historyRepository = new QueueHistoryRepository();
@@ -54,6 +64,8 @@ export function buildQueueModule(
   const patientRepository = new PatientRepository();
   const doctorRepository = new DoctorRepository();
   const queueNumberGenerator = new QueueNumberGenerator(queueRepository);
+  const queueScopeResolver = (userId: string, roleCodes: string[]) =>
+    resolveQueueScope(userId, roleCodes, { userRoleRepository, userBranchRepository, doctorRepository });
 
   const createQueueUseCase = new CreateQueueUseCase(
     queueRepository,
@@ -84,9 +96,10 @@ export function buildQueueModule(
     new CompleteQueueUseCase(queueRepository, historyRepository, auditService, eventBus),
     new CancelQueueUseCase(queueRepository, historyRepository, auditService, eventBus),
     new TransferQueueUseCase(queueRepository, doctorRepository, historyRepository, auditService),
+    queueScopeResolver,
   );
 
-  const dashboardController = new QueueDashboardController(new QueueDashboardUseCase(queueRepository));
+  const dashboardController = new QueueDashboardController(new QueueDashboardUseCase(queueRepository), queueScopeResolver);
 
   const router = Router();
   router.use(authenticate);

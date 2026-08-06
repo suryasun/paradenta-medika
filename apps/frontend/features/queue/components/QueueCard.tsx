@@ -1,6 +1,7 @@
 "use client";
 
 import { DragEvent, useState } from "react";
+import Link from "next/link";
 import { GripVertical } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +19,7 @@ import {
 } from "../hooks/useQueueMutations";
 import { QUEUE_STATUS_TONE } from "../lib/status";
 import { QueueEntry } from "../types/queue.types";
+import { QueueDetailModal } from "./QueueDetailModal";
 import { QueueReasonModal } from "./QueueReasonModal";
 import { TransferQueueModal } from "./TransferQueueModal";
 
@@ -32,12 +34,12 @@ const STATUS_ACCENT: Record<QueueEntry["status"], string> = {
 };
 
 // docs/02-design/Parakita - Key Screens.dc.html "isQueue" board: a ticket
-// card with a left accent border colored by status. apps/backend's
-// QueueResponseDto only carries patientId/doctorId (no denormalized
-// name); doctor name is resolved client-side via Master Data's own
-// already-fetched Doctor list (same join pattern reservation.md's list
-// view uses) -- patient name has no equivalent cheap bulk lookup and
-// stays a flagged, out-of-scope backend gap (queue.md §2.1).
+// card with a left accent border colored by status. Doctor name is
+// resolved client-side via Master Data's own already-fetched Doctor list
+// (same join pattern reservation.md's list view uses). Patient name/MRN
+// (docs/06-tasks/task-313.md) is a server-side snapshot join on
+// QueueResponseDto -- unlike doctor name, patients are unbounded, so no
+// client-side bulk lookup would be practical.
 //
 // docs/02-design/design-system.md §11.2: the card is draggable between
 // board columns as an *accelerator* -- every existing button action below
@@ -52,7 +54,7 @@ export function QueueCard({
   onDragStart?: (queue: QueueEntry) => void;
   onDragEnd?: () => void;
 }) {
-  const [modal, setModal] = useState<"skip" | "cancel" | "transfer" | null>(null);
+  const [modal, setModal] = useState<"skip" | "cancel" | "transfer" | "detail" | null>(null);
   const callQueue = useCallQueue();
   const recallQueue = useRecallQueue();
   const startService = useStartQueueService();
@@ -91,11 +93,29 @@ export function QueueCard({
       <div className="mt-1.5">
         <Badge tone={QUEUE_STATUS_TONE[queue.status]}>{queue.status.replace("_", " ")}</Badge>
       </div>
-      {doctorName && <div className="mt-1.5 text-[13px] text-foreground">{doctorName}</div>}
+      {queue.patientFullName && (
+        <div className="mt-1.5 text-[13px] font-medium text-foreground">
+          {queue.patientFullName}
+          {queue.patientMrn && <span className="ml-1 font-tabular text-[11px] font-normal text-muted">({queue.patientMrn})</span>}
+        </div>
+      )}
+      {doctorName && <div className="mt-1 text-[13px] text-foreground">{doctorName}</div>}
       <div className="mt-0.5 text-[13px] text-muted">{queue.queueType}</div>
       <div className="mt-0.5 text-[11px] text-muted">{queue.priority}</div>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <Button variant="tertiary" onClick={() => setModal("detail")}>
+          Detail
+        </Button>
+        {/* docs/06-tasks/task-319.md: reach an already-existing Visit (e.g. a
+            COMPLETED entry) directly -- Open Visit below only ever creates one. */}
+        {queue.visitId && (
+          <PermissionGuard permission="emr.visit.read">
+            <Link href={`/emr/visits/${queue.visitId}`}>
+              <Button variant="tertiary">View Visit</Button>
+            </Link>
+          </PermissionGuard>
+        )}
         {(queue.status === "WAITING" || queue.status === "SKIPPED") && (
           <PermissionGuard permission="queue.call">
             <Button variant="tertiary" isLoading={callQueue.isPending} onClick={() => callQueue.mutate(queue.id)}>
@@ -115,11 +135,13 @@ export function QueueCard({
                 Start
               </Button>
             </PermissionGuard>
-            <PermissionGuard permission="emr.visit.create">
-              <Button variant="tertiary" isLoading={openVisit.isPending} onClick={() => openVisit.mutate(queue.id)}>
-                Open Visit
-              </Button>
-            </PermissionGuard>
+            {!queue.visitId && (
+              <PermissionGuard permission="emr.visit.create">
+                <Button variant="tertiary" isLoading={openVisit.isPending} onClick={() => openVisit.mutate(queue.id)}>
+                  Open Visit
+                </Button>
+              </PermissionGuard>
+            )}
           </>
         )}
         {queue.status === "IN_SERVICE" && (
@@ -173,6 +195,7 @@ export function QueueCard({
         />
       )}
       {modal === "transfer" && <TransferQueueModal queueId={queue.id} currentDoctorId={queue.doctorId} onClose={() => setModal(null)} />}
+      {modal === "detail" && <QueueDetailModal queueId={queue.id} onClose={() => setModal(null)} />}
     </div>
   );
 }

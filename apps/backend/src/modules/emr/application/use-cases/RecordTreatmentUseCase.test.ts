@@ -1,8 +1,9 @@
 import { RecordTreatmentUseCase } from './RecordTreatmentUseCase';
 import { FakeTreatmentRepository, FakeVisitRepository, FakeVisitTreatmentRepository } from '../../../../../tests/fakes/emrFakes';
 import { FakeItemRepository } from '../../../../../tests/fakes/warehouseFakes';
+import { FakeInvoiceRepository } from '../../../../../tests/fakes/billingFakes';
 import { FakeAuditService } from '../../../../../tests/fakes/authFakes';
-import { TreatmentNotActiveException } from '../../domain/exceptions/EmrExceptions';
+import { TreatmentLockedException, TreatmentNotActiveException } from '../../domain/exceptions/EmrExceptions';
 import { ItemNotConsumableException, ItemNotFoundException } from '../../../warehouse/domain/exceptions/WarehouseExceptions';
 
 async function seedVisit(repo: FakeVisitRepository) {
@@ -14,9 +15,17 @@ function buildSut() {
   const visitTreatmentRepository = new FakeVisitTreatmentRepository();
   const treatmentRepository = new FakeTreatmentRepository();
   const itemRepository = new FakeItemRepository();
+  const invoiceRepository = new FakeInvoiceRepository();
   const auditService = new FakeAuditService();
-  const useCase = new RecordTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, auditService);
-  return { visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, auditService, useCase };
+  const useCase = new RecordTreatmentUseCase(
+    visitRepository,
+    visitTreatmentRepository,
+    treatmentRepository,
+    itemRepository,
+    invoiceRepository,
+    auditService,
+  );
+  return { visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, invoiceRepository, auditService, useCase };
 }
 
 describe('RecordTreatmentUseCase (task-053)', () => {
@@ -88,5 +97,35 @@ describe('RecordTreatmentUseCase (task-053)', () => {
     await expect(
       useCase.execute({ visitId: visit.id, treatmentId: treatment.id, actorUserId: 'doc-1', materials: [{ itemId: item.id, quantity: 1 }] }),
     ).rejects.toBeInstanceOf(ItemNotConsumableException);
+  });
+
+  // docs/06-tasks/task-317.md
+  it('rejects recording a treatment once the linked invoice is PAID', async () => {
+    const { visitRepository, treatmentRepository, invoiceRepository, useCase } = buildSut();
+    const visit = await seedVisit(visitRepository);
+    const treatment = await treatmentRepository.create({ treatmentCode: 'T06', treatmentName: 'Cleaning', treatmentCategoryId: 'c1', defaultPrice: 100000 });
+    const invoice = await invoiceRepository.create({
+      invoiceNo: 'INV000001', visitId: visit.id, patientId: 'p1', branchId: 'b1',
+      subtotal: 100000, discount: 0, tax: 0, grandTotal: 100000, createdBy: 'admin',
+    });
+    invoiceRepository.invoices.get(invoice.id)!.status = 'PAID';
+
+    await expect(
+      useCase.execute({ visitId: visit.id, treatmentId: treatment.id, actorUserId: 'doc-1' }),
+    ).rejects.toBeInstanceOf(TreatmentLockedException);
+  });
+
+  it('allows recording a treatment on a COMPLETED visit whose invoice is not yet paid', async () => {
+    const { visitRepository, treatmentRepository, invoiceRepository, useCase } = buildSut();
+    const visit = await seedVisit(visitRepository);
+    visitRepository.visits.get(visit.id)!.status = 'COMPLETED';
+    const treatment = await treatmentRepository.create({ treatmentCode: 'T07', treatmentName: 'Filling', treatmentCategoryId: 'c1', defaultPrice: 100000 });
+    await invoiceRepository.create({
+      invoiceNo: 'INV000002', visitId: visit.id, patientId: 'p1', branchId: 'b1',
+      subtotal: 100000, discount: 0, tax: 0, grandTotal: 100000, createdBy: 'admin',
+    });
+
+    const entry = await useCase.execute({ visitId: visit.id, treatmentId: treatment.id, actorUserId: 'doc-1' });
+    expect(entry.treatmentId).toBe(treatment.id);
   });
 });

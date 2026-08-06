@@ -1,5 +1,6 @@
 import { IQueueRepository } from '../../domain/repositories/IQueueRepository';
 import { QueueDashboardResponseDto } from '../dtos/QueueDashboardResponseDto';
+import { QueueScope } from '../services/resolveQueueScope';
 
 function averageMinutes(diffsMs: number[]): number | null {
   if (diffsMs.length === 0) {
@@ -16,13 +17,16 @@ function averageMinutes(diffsMs: number[]): number | null {
 export class QueueDashboardUseCase {
   constructor(private readonly queueRepository: IQueueRepository) {}
 
-  async execute(branchId?: string, date?: string): Promise<QueueDashboardResponseDto> {
+  async execute(branchId?: string, date?: string, scope: QueueScope = {}): Promise<QueueDashboardResponseDto> {
     const queueDate = date ? new Date(`${date}T00:00:00.000Z`) : new Date(new Date().toISOString().slice(0, 10));
+    // docs/06-tasks/task-311.md/task-312.md: the dashboard's own explicit
+    // branchId param combines with the resolved branch/doctor scope.
+    const dashboardScope = { branchId, allowedBranchIds: scope.allowedBranchIds, restrictToDoctorId: scope.restrictToDoctorId };
 
     const [statusCounts, doctorCounts, completedQueues] = await Promise.all([
-      this.queueRepository.countByStatus(branchId, queueDate),
-      this.queueRepository.countByDoctor(branchId, queueDate),
-      this.queueRepository.findCompletedForMetrics(branchId, queueDate),
+      this.queueRepository.countByStatus(dashboardScope, queueDate),
+      this.queueRepository.countByDoctor(dashboardScope, queueDate),
+      this.queueRepository.findCompletedForMetrics(dashboardScope, queueDate),
     ]);
 
     const waitingTimes = completedQueues

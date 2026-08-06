@@ -48,7 +48,16 @@ export function VisitWorkspace({ visitId }: { visitId: string }) {
   if (isError) return <ErrorState message={getApiErrorMessage(error)} onRetry={() => refetch()} />;
   if (!visit) return null;
 
-  const readOnly = !OPEN_VISIT_STATUSES.includes(visit.status);
+  // docs/06-tasks/task-318.md: COMPLETED no longer implies read-only -- only
+  // LOCKED/ARCHIVED do (mirrors the backend's relaxed assertVisitOpen gate,
+  // task-316.md). Whether "Close Visit" itself is offered is a separate
+  // question (canClose, below) from whether the visit's sections are
+  // editable (readOnly) -- a COMPLETED visit is editable but not re-closable.
+  const readOnly = visit.status === "LOCKED" || visit.status === "ARCHIVED";
+  const canClose = OPEN_VISIT_STATUSES.includes(visit.status);
+  // docs/06-tasks/task-317.md: Treatment locks independently of the Visit's
+  // own status, purely on the linked Invoice being PAID.
+  const treatmentReadOnly = readOnly || visit.isTreatmentLocked;
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,7 +69,7 @@ export function VisitWorkspace({ visitId }: { visitId: string }) {
             {visit.chiefComplaint && <span className="ml-2">{visit.chiefComplaint}</span>}
           </p>
         </div>
-        {!readOnly && (
+        {canClose && (
           <PermissionGuard permission="emr.visit.close">
             <Button variant="danger" isLoading={closeVisit.isPending} onClick={() => closeVisit.mutate()}>
               Close Visit
@@ -97,7 +106,14 @@ export function VisitWorkspace({ visitId }: { visitId: string }) {
           {
             key: "treatment",
             label: "Treatment",
-            content: <TreatmentSection visitId={visitId} treatmentEntries={visit.treatmentEntries} readOnly={readOnly} />,
+            content: (
+              <TreatmentSection
+                visitId={visitId}
+                treatmentEntries={visit.treatmentEntries}
+                readOnly={treatmentReadOnly}
+                isPaymentLocked={visit.isTreatmentLocked && !readOnly}
+              />
+            ),
           },
           {
             key: "medical-history",

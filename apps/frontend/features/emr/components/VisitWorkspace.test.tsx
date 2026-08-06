@@ -42,6 +42,7 @@ function buildVisit(overrides: Partial<VisitDetail> = {}): VisitDetail {
     soapNote: null,
     diagnoses: [],
     treatmentEntries: [],
+    isTreatmentLocked: false,
     ...overrides,
   };
 }
@@ -196,7 +197,11 @@ describe("VisitWorkspace", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Visit cannot be closed");
   });
 
-  it("hides mutation controls once the visit is COMPLETED", async () => {
+  // docs/06-tasks/task-316.md: COMPLETED no longer implies read-only for
+  // non-Treatment sections -- only "Close Visit" itself is hidden (a
+  // COMPLETED visit can't be re-closed), SOAP/etc. stay editable so staff
+  // can correct entry errors after the fact.
+  it("hides Close Visit but keeps non-Treatment sections editable once the visit is COMPLETED", async () => {
     const user = userEvent.setup();
     mockedEmrService.detail.mockResolvedValue(buildVisit({ status: "COMPLETED" }));
 
@@ -205,6 +210,36 @@ describe("VisitWorkspace", () => {
     expect(screen.queryByRole("button", { name: "Close Visit" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "SOAP Note" }));
+    expect(screen.getByLabelText("Subjective")).not.toBeDisabled();
+  });
+
+  // docs/06-tasks/task-316.md: LOCKED/ARCHIVED remain fully read-only.
+  it("keeps every section read-only once the visit is LOCKED", async () => {
+    const user = userEvent.setup();
+    mockedEmrService.detail.mockResolvedValue(buildVisit({ status: "LOCKED" }));
+
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Visit VIS000001" });
+    expect(screen.queryByRole("button", { name: "Close Visit" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "SOAP Note" }));
     expect(screen.getByLabelText("Subjective")).toBeDisabled();
+  });
+
+  // docs/06-tasks/task-317.md/task-318.md: Treatment locks independently of
+  // the Visit's own status, purely on the linked Invoice being PAID.
+  it("locks only the Treatment section, with an explanation, when the invoice is paid on an otherwise-open visit", async () => {
+    const user = userEvent.setup();
+    mockedEmrService.detail.mockResolvedValue(buildVisit({ status: "COMPLETED", isTreatmentLocked: true }));
+
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Visit VIS000001" });
+
+    await user.click(screen.getByRole("tab", { name: "SOAP Note" }));
+    expect(screen.getByLabelText("Subjective")).not.toBeDisabled();
+
+    await user.click(screen.getByRole("tab", { name: "Treatment" }));
+    expect(screen.getByText(/Locked — invoice paid/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Treatment")).not.toBeInTheDocument();
   });
 });

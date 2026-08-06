@@ -3,10 +3,12 @@ import { ITreatmentRepository } from '../../../master-data/domain/repositories/I
 import { MasterDataNotFoundException } from '../../../master-data/domain/exceptions/MasterDataExceptions';
 import { IItemRepository } from '../../../warehouse/domain/repositories/IItemRepository';
 import { ItemNotConsumableException, ItemNotFoundException } from '../../../warehouse/domain/exceptions/WarehouseExceptions';
+import { IInvoiceRepository } from '../../../billing/domain/repositories/IInvoiceRepository';
 import { TreatmentNotActiveException, VisitNotFoundException } from '../../domain/exceptions/EmrExceptions';
 import { IVisitRepository } from '../../domain/repositories/IVisitRepository';
 import { IVisitTreatmentRepository } from '../../domain/repositories/IVisitTreatmentRepository';
 import { assertVisitOpen } from '../services/assertVisitOpen';
+import { assertTreatmentEditable } from '../services/assertTreatmentEditable';
 import { TreatmentEntryResponseDto } from '../dtos/VisitResponseDto';
 
 export interface RecordTreatmentMaterialInput {
@@ -40,6 +42,11 @@ export interface RecordTreatmentInput {
  * CloseVisitUseCase publishes `emr.treatment-material-finalized.v1`; this
  * use case only records what the Doctor says was used and defensively
  * confirms each item exists and is flagged consumable.
+ *
+ * docs/06-tasks/task-317.md: `invoiceRepository` is injected the same way
+ * `itemRepository` is -- a direct cross-module repository-interface read,
+ * not an event-derived flag, since Billing's Invoice.status is a cheap,
+ * live, single-row lookup with no need for eventual-consistency tolerance.
  */
 export class RecordTreatmentUseCase {
   constructor(
@@ -47,6 +54,7 @@ export class RecordTreatmentUseCase {
     private readonly visitTreatmentRepository: IVisitTreatmentRepository,
     private readonly treatmentRepository: ITreatmentRepository,
     private readonly itemRepository: IItemRepository,
+    private readonly invoiceRepository: IInvoiceRepository,
     private readonly auditService: IAuditService,
   ) {}
 
@@ -56,6 +64,7 @@ export class RecordTreatmentUseCase {
       throw new VisitNotFoundException();
     }
     assertVisitOpen(visit);
+    await assertTreatmentEditable(input.visitId, this.invoiceRepository);
 
     const treatment = await this.treatmentRepository.findById(input.treatmentId);
     if (!treatment) {

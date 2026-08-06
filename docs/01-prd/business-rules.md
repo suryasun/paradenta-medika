@@ -290,6 +290,17 @@ Billing hanya dapat dibuat apabila Queue COMPLETED.
 
 ---
 
+## Queue Module Addendum #1 (task-311–319)
+
+- Daftar/Board Queue (`GET /queues`, `GET /queues/dashboard`) wajib difilter di server berdasarkan cabang yang menjadi hak akses pengguna (`UserBranch`, atau seluruh cabang jika `Role.isCrossBranch`) — berbeda dari pola default "hari ini" pada Reservasi yang hanya diterapkan di klien, pembatasan cabang pada Queue adalah aturan wajib server-side.
+- Untuk pengguna dengan role Dokter, Daftar/Board Queue dan Queue Dashboard dibatasi lebih lanjut hanya menampilkan entri Queue dengan `doctorId` miliknya sendiri.
+- Daftar/Board Queue secara default hanya menampilkan data hari ini — pembatasan ini diterapkan di antarmuka (client-side default), mengikuti pola yang sama dengan default "hari ini" pada Daftar Reservasi (§7.5.1); filter `visitDate` pada `GET /queues` tetap opsional dan tidak memiliki default paksa di server.
+- Setiap kartu/baris Queue menampilkan No. RM dan Nama Pasien, diambil dari snapshot ringan relasi `patient` — bukan entitas Patient penuh, mengikuti pola yang sama dengan kolom Nama Pasien/No. RM pada Daftar Reservasi (§7.5.1) dan Kartu Reservasi (§7.5.2).
+- Aksi "Detail" pada tiap kartu/baris Queue membuka tampilan detail yang memuat seluruh aksi yang tersedia sesuai status Queue: Start, Call, Recall, Skip, Cancel, Transfer, dan Open Visit. Aksi ini melengkapi (bukan menggantikan) tombol aksi inline yang sudah ada pada kartu Queue.
+- Aksi "Open Visit" tetap dapat dilakukan sebelum Payment/Invoice selesai dibayar — tidak ada perubahan pada aturan ini; satu-satunya prasyarat Open Visit tetap Queue berstatus CALLED (lihat SAD EMR §15).
+- Visit dengan status COMPLETED dapat diedit kembali untuk seluruh data klinis non-Treatment (SOAP Note, Vital Sign, Diagnosis, dan dokumentasi klinis lain) — hanya Visit berstatus LOCKED atau ARCHIVED yang tetap tidak dapat diubah.
+- Entri Treatment pada suatu Visit tidak dapat lagi diedit atau ditambah begitu Invoice terkait Visit tersebut berstatus PAID — aturan ini independen dari status Visit itu sendiri (berlaku meskipun Visit belum COMPLETED/LOCKED).
+- Setiap kartu/baris Queue yang telah memiliki Visit terkait (status apa pun, tidak hanya CALLED) menampilkan tautan "View Visit" menuju Visit tersebut — melengkapi aksi "Open Visit" yang hanya membuat Visit baru dan hanya tersedia saat Queue berstatus CALLED (task-319).
 
 ---
 

@@ -42,6 +42,18 @@ export class TreatmentNotActiveException extends BusinessException {
 }
 
 /**
+ * docs/06-tasks/task-317.md: Treatment entries cannot be recorded/edited
+ * once the Visit's linked Invoice is fully paid -- independent of the
+ * Visit's own status (a COMPLETED-but-unpaid visit's Treatment stays
+ * editable per task-316; this is the stricter, payment-driven gate).
+ */
+export class TreatmentLockedException extends BusinessException {
+  constructor() {
+    super('TREATMENT_LOCKED', 'Treatment can no longer be edited: the linked invoice has already been paid');
+  }
+}
+
+/**
  * docs/06-tasks/task-052.md: minimum documentation (SOAP note + at least
  * one Treatment entry) is required before a Visit can be closed.
  */

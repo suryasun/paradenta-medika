@@ -471,6 +471,14 @@ flowchart LR
     Billing --> Payment
 ```text
 
+## 12.1 Queue Module Addendum #1 — Visit Editability After Completion (task-316–318)
+
+Sebelum addendum ini, seluruh dokumentasi klinis (SOAP Note, Vital Sign, Diagnosis, Treatment, dan lain-lain) tidak dapat diubah begitu Visit mencapai status `Completed` — sama seperti status `Locked`/`Archived`. Addendum ini memisahkan aturan tersebut:
+
+- Visit berstatus `Completed` kini dapat diedit kembali untuk seluruh data klinis **non-Treatment** (SOAP Note, Vital Sign, Diagnosis, Odontogram, Periodontal Assessment, Prescription, Consent, Medical Certificate, Referral, Follow-Up, Attachment). Hanya Visit berstatus `Locked` atau `Archived` yang tetap tidak dapat diubah tanpa otorisasi Administrator (lihat tabel Status Description di atas).
+- Entri **Treatment** tunduk pada aturan terpisah dan lebih ketat: Treatment tidak dapat diedit/ditambah begitu Invoice terkait Visit tersebut berstatus `PAID` di Module Billing — independen dari status Visit. Artinya Treatment dapat tetap diedit pada Visit `Completed` selama Invoice-nya belum `PAID`, namun akan terkunci begitu pembayaran selesai meskipun Visit belum ditutup/dikunci.
+- Pengecekan status Invoice dilakukan EMR secara read-only melalui `IInvoiceRepository` milik Module Billing (bukan sebaliknya) — konsisten dengan MOD-056 (EMR mengonsumsi integrasi Billing yang terotorisasi) dan tidak melanggar MOD-059 (EMR dilarang memutasi state Billing, bukan membacanya).
+
 ---
 
 # 13. EMR Status Flow
