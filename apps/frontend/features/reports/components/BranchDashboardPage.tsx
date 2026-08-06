@@ -11,6 +11,7 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { formatCurrency } from "@/utils/currency";
 import { useBranchDashboard } from "../hooks/useBranchDashboard";
 import { metricLabel } from "../lib/metricLabels";
+import { ReportExportButton } from "./ReportExportButton";
 
 // Phase 4, task-218 (docs/02-design/pages/reporting.md §8.1). Unlike the 5
 // fixed dashboards, this endpoint requires an explicit branchId -- the page
@@ -40,6 +41,8 @@ export function BranchDashboardPage() {
           </option>
         ))}
       </Select>
+
+      <ReportExportButton reportCode="branch.dashboard" permission="report.job.create" filters={{ branchIds: branchId ? [branchId] : undefined }} disabled={!branchId} />
 
       {!branchId && <p className="text-sm text-muted">Select a branch to view its dashboard.</p>}
       {branchId && isLoading && <LoadingState label="Loading branch dashboard..." cards={4} />}

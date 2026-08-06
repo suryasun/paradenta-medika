@@ -4,7 +4,11 @@ import { CancelReportJobUseCase } from './CancelReportJobUseCase';
 import { GetReportSnapshotUseCase } from './GetReportSnapshotUseCase';
 import { DownloadReportExportUseCase } from './DownloadReportExportUseCase';
 import { GetReportUseCase } from './GetReportUseCase';
+import { GetBranchDashboardUseCase } from './GetBranchDashboardUseCase';
+import { GetBranchComparisonReportUseCase } from './GetBranchComparisonReportUseCase';
+import { GetBranchPerformanceReportUseCase } from './GetBranchPerformanceReportUseCase';
 import { DashboardMetricAssembler } from '../services/DashboardMetricAssembler';
+import { BranchAuthorizationService } from '../services/BranchAuthorizationService';
 import { QueueDashboardUseCase } from '../../../queue/application/use-cases/QueueDashboardUseCase';
 import { GetTrialBalanceReportUseCase } from '../../../finance/application/use-cases/GetTrialBalanceReportUseCase';
 import { GetIncomeStatementReportUseCase } from '../../../finance/application/use-cases/GetIncomeStatementReportUseCase';
@@ -13,6 +17,7 @@ import { GetExpiryReportUseCase } from '../../../warehouse/application/use-cases
 import { ReportDateRangeResolver } from '../../../finance/application/services/ReportDateRangeResolver';
 import {
   ReportExportExpiredException,
+  ReportFilterInvalidException,
   ReportJobDuplicateException,
   ReportJobNotFoundException,
   ReportSnapshotTamperedException,
@@ -25,6 +30,8 @@ import {
 } from '../../../../../tests/fakes/reportsFakes';
 import { FakeBranchRepository } from '../../../../../tests/fakes/masterDataFakes';
 import { FakeQueueRepository } from '../../../../../tests/fakes/queueFakes';
+import { FakePaymentRepository } from '../../../../../tests/fakes/billingFakes';
+import { FakeUserRoleRepository, FakeUserBranchRepository, FakeRoleRepository, buildRole } from '../../../../../tests/fakes/systemFakes';
 import {
   FakeAccountRepository,
   FakeCashAccountRepository,
@@ -53,6 +60,11 @@ function buildSut() {
   const branchRepository = new FakeBranchRepository();
   const assembler = new DashboardMetricAssembler(dashboardSummaryRepository, branchRepository);
 
+  // Phase 4 hardening: branch.dashboard/comparison/performance are now
+  // reachable through the job/export pipeline too.
+  const roleRepository = new FakeRoleRepository();
+  const userRoleRepository = new FakeUserRoleRepository(roleRepository);
+  const branchAuthorizationService = new BranchAuthorizationService(userRoleRepository, new FakeUserBranchRepository());
   const getReportUseCase = new GetReportUseCase(
     new QueueDashboardUseCase(queueRepository),
     assembler,
@@ -60,6 +72,9 @@ function buildSut() {
     new GetIncomeStatementReportUseCase(financeReportRepository, dateRangeResolver),
     new GetStockCardReportUseCase(warehouseReportRepository),
     new GetExpiryReportUseCase(batchRepository),
+    new GetBranchDashboardUseCase(new QueueDashboardUseCase(queueRepository), assembler, branchAuthorizationService),
+    new GetBranchComparisonReportUseCase(assembler, branchRepository, branchAuthorizationService),
+    new GetBranchPerformanceReportUseCase(new QueueDashboardUseCase(queueRepository), new FakePaymentRepository(), branchAuthorizationService),
   );
 
   const reportJobRepository = new FakeReportJobRepository();
@@ -73,6 +88,8 @@ function buildSut() {
     reportSnapshotRepository,
     exportArtifactRepository,
     auditService,
+    roleRepository,
+    userRoleRepository,
     createReportJobUseCase: new CreateReportJobUseCase(reportJobRepository, reportSnapshotRepository, exportArtifactRepository, getReportUseCase),
     getReportJobUseCase: new GetReportJobUseCase(reportJobRepository),
     cancelReportJobUseCase: new CancelReportJobUseCase(reportJobRepository),
@@ -140,6 +157,34 @@ describe('Report Job/Snapshot/Export Lifecycle (task-187-191)', () => {
 
     expect(expired.job.id).not.toBe(active.job.id);
     expect(reportJobRepository.jobs.size).toBe(2);
+  });
+
+  it('Phase 4 hardening: branch.comparison accepts multiple branchIds (its supportsMultiBranch flag lifts the single-branch cap)', async () => {
+    const { createReportJobUseCase, roleRepository, userRoleRepository } = buildSut();
+    const ownerRole = buildRole({ roleCode: 'OWNER', isCrossBranch: true });
+    roleRepository.seed(ownerRole);
+    await userRoleRepository.assignRoles('owner-1', [ownerRole.id]);
+
+    const result = await createReportJobUseCase.execute({
+      reportCode: 'branch.comparison',
+      filters: { branchIds: ['branch-a', 'branch-b'] },
+      actorUserId: 'owner-1',
+      requesterPermissions: ['report.branch-comparison.read'],
+    });
+
+    expect(result.job.status).toBe('COMPLETED');
+  });
+
+  it('a report code without supportsMultiBranch still rejects more than one branchId with RPT_FILTER_INVALID', async () => {
+    const { createReportJobUseCase } = buildSut();
+    await expect(
+      createReportJobUseCase.execute({
+        reportCode: 'inventory.expiry',
+        filters: { branchIds: ['branch-a', 'branch-b'] },
+        actorUserId: 'u1',
+        requesterPermissions: ['report.warehouse.read'],
+      }),
+    ).rejects.toBeInstanceOf(ReportFilterInvalidException);
   });
 
   it('rejects a duplicate request while the original job is still active with RPT_JOB_DUPLICATE', async () => {

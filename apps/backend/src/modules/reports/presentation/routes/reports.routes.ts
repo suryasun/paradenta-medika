@@ -116,15 +116,26 @@ export function buildReportsModule(
 
   // docs/06-tasks/task-218.md/task-219.md/task-220.md (Phase 4 Epics BD/BE/BF).
   const branchAuthorizationService = new BranchAuthorizationService(new UserRoleRepository(), new UserBranchRepository());
+  const getBranchDashboardUseCase = new GetBranchDashboardUseCase(new QueueDashboardUseCase(new QueueRepository()), assembler, branchAuthorizationService);
+  const getBranchComparisonReportUseCase = new GetBranchComparisonReportUseCase(assembler, branchRepository, branchAuthorizationService);
+  const getBranchPerformanceReportUseCase = new GetBranchPerformanceReportUseCase(
+    new QueueDashboardUseCase(new QueueRepository()),
+    new PaymentRepository(),
+    branchAuthorizationService,
+  );
   const branchReportsController = new BranchReportsController(
-    new GetBranchDashboardUseCase(new QueueDashboardUseCase(new QueueRepository()), assembler, branchAuthorizationService),
-    new GetBranchComparisonReportUseCase(assembler, branchRepository, branchAuthorizationService),
-    new GetBranchPerformanceReportUseCase(new QueueDashboardUseCase(new QueueRepository()), new PaymentRepository(), branchAuthorizationService),
+    getBranchDashboardUseCase,
+    getBranchComparisonReportUseCase,
+    getBranchPerformanceReportUseCase,
   );
 
   // docs/06-tasks/task-185.md/task-186.md (Epic AH). GetReportUseCase
   // dispatches to the already-built report/aggregation use cases per
   // report code, rather than re-implementing the same report logic.
+  // Phase 4 hardening: the same branch-report use cases constructed above
+  // (not new instances) are also injected here, so branch.dashboard/
+  // comparison/performance are reachable through the catalog/job/export
+  // pipeline in addition to BranchReportsController's direct routes.
   const financialPeriodRepository = new FinancialPeriodRepository();
   const financeReportDateRangeResolver = new ReportDateRangeResolver(financialPeriodRepository);
   const getReportUseCase = new GetReportUseCase(
@@ -134,6 +145,9 @@ export function buildReportsModule(
     new GetIncomeStatementReportUseCase(new FinanceReportRepository(), financeReportDateRangeResolver),
     new GetStockCardReportUseCase(new WarehouseReportRepository()),
     new GetExpiryReportUseCase(new BatchRepository()),
+    getBranchDashboardUseCase,
+    getBranchComparisonReportUseCase,
+    getBranchPerformanceReportUseCase,
   );
   const reportCatalogController = new ReportCatalogController(new ListReportDefinitionsUseCase(), getReportUseCase);
 

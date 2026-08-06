@@ -15,6 +15,8 @@ export interface ReportCatalogEntry {
   permission: string;
   ownerModule: string;
   implemented: boolean;
+  /** Multi-branch report (accepts an array of branchIds instead of one) -- see branch.comparison below. */
+  supportsMultiBranch?: boolean;
 }
 
 export const REPORT_CATALOG: ReportCatalogEntry[] = [
@@ -28,6 +30,18 @@ export const REPORT_CATALOG: ReportCatalogEntry[] = [
   { code: 'hr.attendance', name: 'HR Attendance', permission: 'report.hr.read', ownerModule: 'hr', implemented: false },
   { code: 'hr.payroll-register', name: 'Payroll Register', permission: 'report.hr.payroll.read', ownerModule: 'hr', implemented: false },
   { code: 'system.activity-audit', name: 'Activity Audit', permission: 'report.audit.read', ownerModule: 'system', implemented: false },
+  // Phase 4 hardening: the three entries below are a deliberate extension of
+  // this catalog beyond the literal Section 6.3 table above -- Phase 4
+  // (docs/06-tasks/task-218.md/task-219.md/task-220.md) has no Section 6
+  // literal spec of its own (see those tasks' own "convention-derived"
+  // flags). Registering them here gives Branch Dashboard/Comparison/
+  // Performance the same catalog listing + CSV export/job pipeline every
+  // other implemented report already has, closing a gap where they were
+  // the only reports with zero export capability that wasn't a documented,
+  // deliberate limitation.
+  { code: 'branch.dashboard', name: 'Branch Dashboard', permission: 'report.dashboard.branch.read', ownerModule: 'reports', implemented: true },
+  { code: 'branch.comparison', name: 'Branch Comparison', permission: 'report.branch-comparison.read', ownerModule: 'reports', implemented: true, supportsMultiBranch: true },
+  { code: 'branch.performance', name: 'Branch Performance', permission: 'report.branch-performance.read', ownerModule: 'reports', implemented: true },
 ];
 
 export function findReportDefinition(code: string): ReportCatalogEntry | undefined {

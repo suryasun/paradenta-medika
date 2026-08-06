@@ -3,6 +3,9 @@ import { GetTrialBalanceReportUseCase } from '../../../finance/application/use-c
 import { GetIncomeStatementReportUseCase } from '../../../finance/application/use-cases/GetIncomeStatementReportUseCase';
 import { GetStockCardReportUseCase } from '../../../warehouse/application/use-cases/GetStockCardReportUseCase';
 import { GetExpiryReportUseCase } from '../../../warehouse/application/use-cases/GetExpiryReportUseCase';
+import { GetBranchDashboardUseCase } from './GetBranchDashboardUseCase';
+import { GetBranchComparisonReportUseCase } from './GetBranchComparisonReportUseCase';
+import { GetBranchPerformanceReportUseCase } from './GetBranchPerformanceReportUseCase';
 import { DashboardMetricAssembler } from '../services/DashboardMetricAssembler';
 import { CLINICAL_DASHBOARD_METRICS, BILLING_REPORT_METRICS, BILLING_GLOBAL_METRICS } from '../services/MetricDefinitions';
 import { findReportDefinition } from '../services/ReportCatalog';
@@ -24,6 +27,8 @@ export interface ReportQueryParams {
   sort?: string;
   order?: string;
   branchId?: string;
+  /** Phase 4 hardening: only branch.comparison's multi-branch dispatch reads this. */
+  branchIds?: string[];
   periodId?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -60,6 +65,12 @@ export class GetReportUseCase {
     private readonly getIncomeStatementReportUseCase: GetIncomeStatementReportUseCase,
     private readonly getStockCardReportUseCase: GetStockCardReportUseCase,
     private readonly getExpiryReportUseCase: GetExpiryReportUseCase,
+    // Phase 4 hardening: reused, not duplicated -- same use cases
+    // BranchReportsController already dispatches to directly, now also
+    // reachable through the catalog/job/export pipeline.
+    private readonly getBranchDashboardUseCase: GetBranchDashboardUseCase,
+    private readonly getBranchComparisonReportUseCase: GetBranchComparisonReportUseCase,
+    private readonly getBranchPerformanceReportUseCase: GetBranchPerformanceReportUseCase,
   ) {}
 
   /**
@@ -82,7 +93,15 @@ export class GetReportUseCase {
     return definition;
   }
 
-  async execute(reportCode: string, query: ReportQueryParams, requesterPermissions: string[]): Promise<unknown> {
+  /**
+   * `requesterUserId` is required (not optional) starting with the Phase 4
+   * hardening pass: branch.dashboard/comparison/performance need it for
+   * BranchAuthorizationService's scope check (the same check
+   * BranchReportsController already applies on the direct routes), and
+   * every call site (ReportCatalogController, CreateReportJobUseCase) has
+   * an authenticated actor available to pass.
+   */
+  async execute(reportCode: string, query: ReportQueryParams, requesterPermissions: string[], requesterUserId: string): Promise<unknown> {
     const definition = this.validate(reportCode, query, requesterPermissions);
 
     if (!definition.implemented) {
@@ -122,6 +141,20 @@ export class GetReportUseCase {
           expiryFrom: query.expiryFrom,
           expiryTo: query.expiryTo,
         });
+      case 'branch.dashboard':
+        this.requireBranchId(query);
+        return this.getBranchDashboardUseCase.execute(query.branchId!, requesterUserId);
+      case 'branch.comparison':
+        if (!query.branchIds || query.branchIds.length === 0) {
+          throw new ReportFilterInvalidException('branchIds is required for this report');
+        }
+        return this.getBranchComparisonReportUseCase.execute(query.branchIds, requesterUserId);
+      case 'branch.performance':
+        this.requireBranchId(query);
+        if (!query.dateFrom || !query.dateTo) {
+          throw new ReportFilterInvalidException('dateFrom and dateTo are required for this report');
+        }
+        return this.getBranchPerformanceReportUseCase.execute(query.branchId!, requesterUserId, query.dateFrom, query.dateTo);
       default:
         // Unreachable: every REPORT_CATALOG entry is handled above or by the `implemented` guard.
         throw new ReportDatasetUnavailableException();

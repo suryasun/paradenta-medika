@@ -12,6 +12,7 @@ import { branchService } from "@/features/master-data/services/branch.service";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { formatCurrency } from "@/utils/currency";
 import { useBranchPerformance } from "../hooks/useBranchPerformance";
+import { ReportExportButton } from "./ReportExportButton";
 
 function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -48,6 +49,13 @@ export function BranchPerformancePage() {
         <Input id="branch-performance-from" label="From" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
         <Input id="branch-performance-to" label="To" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
       </div>
+
+      <ReportExportButton
+        reportCode="branch.performance"
+        permission="report.job.create"
+        filters={{ branchIds: branchId ? [branchId] : undefined, dateFrom, dateTo }}
+        disabled={!branchId}
+      />
 
       {!branchId && <p className="text-sm text-muted">Select a branch and date range to view its performance trend.</p>}
       {branchId && isLoading && <LoadingState label="Loading branch performance..." rows={5} columns={5} />}

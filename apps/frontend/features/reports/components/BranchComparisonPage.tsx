@@ -12,6 +12,7 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { formatCurrency } from "@/utils/currency";
 import { useBranchComparison } from "../hooks/useBranchComparison";
 import { metricLabel } from "../lib/metricLabels";
+import { ReportExportButton } from "./ReportExportButton";
 
 interface MetricChartPoint {
   branchName: string;
@@ -48,6 +49,13 @@ export function BranchComparisonPage() {
           ))}
         </div>
       </div>
+
+      <ReportExportButton
+        reportCode="branch.comparison"
+        permission="report.job.create"
+        filters={{ branchIds: selectedBranchIds }}
+        disabled={selectedBranchIds.length === 0}
+      />
 
       {selectedBranchIds.length === 0 && <p className="text-sm text-muted">Select two or more branches to compare.</p>}
       {selectedBranchIds.length > 0 && isLoading && <LoadingState label="Loading comparison..." rows={4} columns={selectedBranchIds.length + 1} />}

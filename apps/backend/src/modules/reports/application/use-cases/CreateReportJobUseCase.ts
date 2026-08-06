@@ -28,15 +28,21 @@ export interface CreateReportJobInput {
 
 const EXPORT_RETENTION_HOURS = 24;
 
-export function buildIdempotencyKey(input: CreateReportJobInput, branchId?: string): string {
+export function buildIdempotencyKey(input: CreateReportJobInput, branchIds: string[] = []): string {
   // Every filter field that can change the report's result must be part of the
   // key -- an earlier version omitted status/warehouseId/itemId/periodId, which
   // caused two genuinely different requests to collide and the second one to
   // wrongly short-circuit to the first's stale result (caught during this
   // task's live verification).
+  // Phase 4 hardening: `branchIds` replaces the old single `branchId?`
+  // parameter so branch.comparison's multi-branch jobs get a stable,
+  // order-independent key (sorted + joined) -- for every pre-existing
+  // single-branch caller this produces the exact same string as before
+  // (a one-element sorted array joins to that element; an empty array
+  // joins to '', matching the old `branchId ?? ''`).
   const raw = [
     input.reportCode,
-    branchId ?? '',
+    branchIds.slice().sort().join(','),
     input.filters?.dateFrom ?? '',
     input.filters?.dateTo ?? '',
     input.filters?.periodId ?? '',
@@ -73,21 +79,28 @@ export class CreateReportJobUseCase {
     if (input.filters?.branchIds !== undefined && !Array.isArray(input.filters.branchIds)) {
       throw new ReportFilterInvalidException('filters.branchIds must be an array');
     }
-    if (input.filters?.branchIds && input.filters.branchIds.length > 1) {
+    // Phase 4 hardening: `definition` is looked up before the branch-count
+    // check (moved up from where it used to be looked up, further down,
+    // for the snapshot's `module` field only) so branch.comparison's
+    // `supportsMultiBranch` flag can lift the single-branch cap for that
+    // report specifically, without loosening it for every other report code.
+    const definition = findReportDefinition(input.reportCode);
+    const branchIds = input.filters?.branchIds ?? [];
+    if (branchIds.length > 1 && !definition?.supportsMultiBranch) {
       throw new ReportFilterInvalidException('Only a single branchId is supported per report job in this deployment');
     }
-    const branchId = input.filters?.branchIds?.[0];
+    const branchId = definition?.supportsMultiBranch ? undefined : branchIds[0];
 
     // Request-shape validation (unknown code / forbidden / oversized range) happens
     // BEFORE any report_jobs row is created, so it surfaces as a normal HTTP error on
     // this POST, not as a FAILED job -- see GetReportUseCase.validate's doc comment.
     this.getReportUseCase.validate(
       input.reportCode,
-      { branchId, dateFrom: input.filters?.dateFrom, dateTo: input.filters?.dateTo },
+      { branchId, branchIds: definition?.supportsMultiBranch ? branchIds : undefined, dateFrom: input.filters?.dateFrom, dateTo: input.filters?.dateTo },
       input.requesterPermissions,
     );
 
-    const idempotencyKey = buildIdempotencyKey(input, branchId);
+    const idempotencyKey = buildIdempotencyKey(input, branchIds);
 
     const existing = await this.reportJobRepository.findByIdempotencyKey(idempotencyKey);
     if (existing) {
@@ -101,11 +114,10 @@ export class CreateReportJobUseCase {
       // permanently blocked by the unique constraint on a terminal, non-successful job.
     }
 
-    const definition = findReportDefinition(input.reportCode);
     const job = await this.reportJobRepository.create({
       reportName: input.reportCode,
       requestedBy: input.actorUserId,
-      branchScope: branchId ? [branchId] : [],
+      branchScope: branchIds,
       parameters: { filters: input.filters ?? {}, format: input.format ?? 'json' },
       idempotencyKey: existing ? `${idempotencyKey}:${Date.now()}` : idempotencyKey,
     });
@@ -115,6 +127,7 @@ export class CreateReportJobUseCase {
         input.reportCode,
         {
           branchId,
+          branchIds: definition?.supportsMultiBranch ? branchIds : undefined,
           dateFrom: input.filters?.dateFrom,
           dateTo: input.filters?.dateTo,
           periodId: input.filters?.periodId,
@@ -123,6 +136,7 @@ export class CreateReportJobUseCase {
           status: input.filters?.status,
         },
         input.requesterPermissions,
+        input.actorUserId,
       );
 
       const payloadHash = computePayloadHash(result);
