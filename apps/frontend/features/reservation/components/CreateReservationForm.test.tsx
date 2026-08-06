@@ -5,13 +5,16 @@ import { CreateReservationForm } from "./CreateReservationForm";
 import { reservationService } from "../services/reservation.service";
 import { doctorService } from "@/features/master-data/services/doctor.service";
 import { patientService } from "@/features/patient/services/patient.service";
+import { referralSourceService } from "@/features/master-data/services/referralSource.service";
 
 jest.mock("../services/reservation.service");
 jest.mock("@/features/master-data/services/doctor.service");
 jest.mock("@/features/patient/services/patient.service");
+jest.mock("@/features/master-data/services/referralSource.service");
 const mockedReservationService = jest.mocked(reservationService);
 const mockedDoctorService = jest.mocked(doctorService);
 const mockedPatientService = jest.mocked(patientService);
+const mockedReferralSourceService = jest.mocked(referralSourceService);
 
 const push = jest.fn();
 jest.mock("next/navigation", () => ({
@@ -34,6 +37,9 @@ describe("CreateReservationForm", () => {
       items: [{ id: "d1", doctorCode: "DOC01", branchId: "b1", fullName: "Dr. Alice", specialization: "Orthodontics", isActive: true }],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
+    mockedReferralSourceService.list.mockResolvedValue([
+      { id: "rs-google", referralSourceCode: "GOOGLE", referralSourceName: "Google", requiresReferrer: false, isActive: true },
+    ]);
     mockedPatientService.list.mockResolvedValue({
       items: [
         {
@@ -79,6 +85,8 @@ describe("CreateReservationForm", () => {
       cancelledReason: null,
       cancelledAt: null,
       patientType: "NEW",
+      patientMrn: null,
+      patientFullName: null,
     });
 
     renderForm();
@@ -108,52 +116,19 @@ describe("CreateReservationForm", () => {
     expect(screen.getByRole("button", { name: "Register Walk-in" })).toBeDisabled();
   });
 
-  // task-289 (Epic PE6, Patient Module Enhancement addendum)
-  it("lets staff Quick Add a patient when Search Patient returns no results, then selects that patient", async () => {
+  // task-297 (Reservation Module Addendum #2, R3): Quick Add Patient was
+  // retired -- Search Patient's no-results state shows a plain message,
+  // with no "Quick Add Patient" affordance (superseded by the standalone
+  // "Quick Call: Create & Book Now" button, tested below).
+  it("shows a plain no-results message for Search Patient, with no Quick Add Patient affordance", async () => {
     const user = userEvent.setup();
     mockedPatientService.list.mockResolvedValue({ items: [], meta: { page: 1, limit: 8, total: 0, totalPages: 0 } });
-    mockedPatientService.quickAdd.mockResolvedValue({
-      id: "p2",
-      medicalRecordNumber: "MRN000002",
-      fullName: "Walk-in Patient",
-      gender: "MALE",
-      dateOfBirth: "1900-01-01",
-      phoneNumber: "08129998877",
-      status: "ACTIVE",
-      insuranceNumber: null,
-      instagramHandle: null,
-      facebookHandle: null,
-      tiktokHandle: null,
-      whatsappNumber: null,
-      referralSourceId: null,
-      referredByUserId: null,
-      patientType: "NEW",
-      firstReservationAt: null,
-    });
 
     renderForm();
 
     await user.type(screen.getByLabelText("Patient"), "Nobody");
     await screen.findByText("No patients found.");
-    await user.click(screen.getByRole("button", { name: "Quick Add Patient" }));
-
-    const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText("Full Name"), "Walk-in Patient");
-    await user.type(within(dialog).getByLabelText("Address"), "Jl. Contoh No. 99");
-    await user.type(within(dialog).getByLabelText("Phone Number"), "08129998877");
-    await user.type(within(dialog).getByLabelText("Identity Number"), "3171000000000001");
-    await user.click(within(dialog).getByRole("button", { name: "Create & Continue Booking" }));
-
-    await waitFor(() =>
-      expect(mockedPatientService.quickAdd).toHaveBeenCalledWith({
-        fullName: "Walk-in Patient",
-        address: "Jl. Contoh No. 99",
-        phoneNumber: "08129998877",
-        identityNumber: "3171000000000001",
-      }),
-    );
-    expect(await screen.findByText(/Walk-in Patient/)).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Quick Add Patient" })).not.toBeInTheDocument();
   });
 
   // task-292 (Epic RE3, Reservation Module Enhancement addendum)
@@ -177,6 +152,8 @@ describe("CreateReservationForm", () => {
       cancelledReason: null,
       cancelledAt: null,
       patientType: "NEW",
+      patientMrn: null,
+      patientFullName: null,
     });
 
     mockedReservationService.getTimeSlots.mockResolvedValue([
@@ -194,6 +171,8 @@ describe("CreateReservationForm", () => {
     await user.selectOptions(within(dialog).getByLabelText("Doctor"), "d1");
     await user.type(within(dialog).getByLabelText("Date"), "2026-08-10");
     await user.click(await within(dialog).findByRole("button", { name: "09:00" }));
+    // task-297 (Reservation Module Addendum #2, R2)
+    await user.selectOptions(await within(dialog).findByLabelText("Dari mana Anda mengetahui klinik kami?"), "rs-google");
     await user.click(within(dialog).getByRole("button", { name: "Create & Book Now" }));
 
     await waitFor(() =>
@@ -206,6 +185,7 @@ describe("CreateReservationForm", () => {
           doctorId: "d1",
           reservationDate: "2026-08-10",
           startTime: "09:00",
+          referralSourceId: "rs-google",
         }),
       ),
     );

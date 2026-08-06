@@ -30,16 +30,14 @@ function ReservationHistoryCard({ reservation }: { reservation: Reservation }) {
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          {/* docs/06-tasks/task-294.md / ReservationListView.tsx's own
-              precedent: ReservationResponseDto carries only patientId, not
-              a patient name -- Patient is an unbounded list with no cheap
-              bulk client-side join available, so this is left as a flagged
-              gap rather than worked around. */}
-          <span className="font-medium text-foreground">{reservation.reservationNumber}</span>
+          {/* task-296 (Reservation Module Addendum #2, R1): patient name/MRN
+              now returned directly by GET /reservations. */}
+          <span className="font-medium text-foreground">{reservation.patientFullName ?? reservation.reservationNumber}</span>
+          {reservation.patientMrn && <span className="text-sm text-muted">({reservation.patientMrn})</span>}
           <Badge tone={reservation.patientType === "NEW" ? "info" : "neutral"}>{reservation.patientType}</Badge>
         </div>
         <span className="text-sm text-muted">
-          {reservation.reservationDate} &middot; {reservation.startTime} &middot; {reservation.reservationType}
+          {reservation.reservationNumber} &middot; {reservation.reservationDate} &middot; {reservation.startTime} &middot; {reservation.reservationType}
         </span>
       </div>
       <div className="flex items-center gap-3">
@@ -65,8 +63,18 @@ function ReservationHistoryCard({ reservation }: { reservation: Reservation }) {
 // Reservation History tab on Patient Detail. No "Care Plan History" screen
 // exists anywhere in this product (docs/03-sad/13-module-reservation.md
 // §39.6 item 3) -- this screen is designed fresh, not copied from one.
+// docs/06-tasks/task-298.md (Reservation Module Addendum #2, R5/R6): the
+// mirror image of ReservationListView's todayIso() -- History is strictly
+// *before* today, so its default/max upper bound is yesterday, not today
+// (today's own reservations belong to the List screen, not History).
+function yesterdayIso(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function ReservationHistoryPage() {
-  const [filters, setFilters] = useState<ListReservationsParams>({ page: 1, limit: 20 });
+  const [filters, setFilters] = useState<ListReservationsParams>({ page: 1, limit: 20, dateTo: yesterdayIso() });
   const { data, isLoading, isError, error, refetch } = useReservations(filters);
 
   const summary = summarize(data?.items ?? []);
@@ -119,14 +127,16 @@ export function ReservationHistoryPage() {
         <Input
           type="date"
           aria-label="Date from"
+          max={yesterdayIso()}
           value={filters.dateFrom ?? ""}
           onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value || undefined, page: 1 }))}
         />
         <Input
           type="date"
           aria-label="Date to"
+          max={yesterdayIso()}
           value={filters.dateTo ?? ""}
-          onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value || undefined, page: 1 }))}
+          onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value || yesterdayIso(), page: 1 }))}
         />
       </div>
 

@@ -17,4 +17,7 @@ export class QuickNewPatientCallRequestDto {
   @IsDateString() reservationDate!: string;
   @Matches(TIME_PATTERN, { message: 'startTime must be in HH:mm format' }) startTime!: string;
   @IsOptional() @IsString() @MaxLength(1000) complaint?: string;
+  // docs/06-tasks/task-297.md (Reservation Module Addendum #2, R2)
+  @IsOptional() @IsUUID('4') referralSourceId?: string;
+  @IsOptional() @IsUUID('4') referredByUserId?: string;
 }

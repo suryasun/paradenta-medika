@@ -19,6 +19,10 @@ export interface Reservation {
   // task-290 (Epic RE1, Reservation Module Enhancement addendum): permanent
   // NEW/OLD snapshot taken at booking time.
   patientType: "NEW" | "OLD";
+  // task-296 (Reservation Module Addendum #2, R1): only populated on
+  // responses from GET /reservations (list search) -- null elsewhere.
+  patientMrn: string | null;
+  patientFullName: string | null;
 }
 
 export interface TimeSlot {
@@ -40,9 +44,10 @@ export interface CreateReservationInput {
   notes?: string;
 }
 
-// task-292 (Epic RE3, Reservation Module Enhancement addendum): the same 4
-// fields as QuickAddPatientInput plus doctorId/reservationDate/startTime
-// (required) and an optional complaint -- one submit creates both records.
+// task-292 (Epic RE3, Reservation Module Enhancement addendum): 4 patient
+// fields (matching the retired Quick Add Patient's contract, per
+// task-297/R3) plus doctorId/reservationDate/startTime (required) and an
+// optional complaint -- one submit creates both records.
 export interface QuickNewPatientCallInput {
   fullName: string;
   address: string;
@@ -52,6 +57,9 @@ export interface QuickNewPatientCallInput {
   reservationDate: string;
   startTime: string;
   complaint?: string;
+  // task-297 (Reservation Module Addendum #2, R2)
+  referralSourceId?: string;
+  referredByUserId?: string;
 }
 
 export interface UpdateReservationInput {

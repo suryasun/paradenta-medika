@@ -1,12 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { useReferralSources } from "@/features/master-data/hooks/useReferralSources";
-import { userService } from "@/features/system/services/user.service";
+import { ReferralSourceFields } from "./ReferralSourceFields";
 import { CreatePatientInput, PatientDetail, UpdatePatientInput } from "../types/patient.types";
 
 interface PatientFormProps {
@@ -43,13 +41,6 @@ export function PatientForm({ mode, initialPatient, isSubmitting, submitError, o
   // Klinik"), per docs/02-design/pages/patient.md §14.
   const [referralSourceId, setReferralSourceId] = useState(initialPatient?.profile.referralSourceId ?? "");
   const [referredByUserId, setReferredByUserId] = useState(initialPatient?.profile.referredByUserId ?? "");
-  const { data: referralSources } = useReferralSources();
-  const selectedReferralSource = referralSources?.find((source) => source.id === referralSourceId);
-  const { data: staffUsers } = useQuery({
-    queryKey: ["system", "users", "referrer-picker"],
-    queryFn: () => userService.list({ limit: 100 }),
-    enabled: Boolean(selectedReferralSource?.requiresReferrer),
-  });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,37 +175,12 @@ export function PatientForm({ mode, initialPatient, isSubmitting, submitError, o
       <div className="flex flex-col gap-4 border-t border-border pt-4">
         <span className="text-sm font-medium text-foreground">Sumber Rujukan</span>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Select
-            id="referralSourceId"
-            label="Dari mana Anda mengetahui klinik kami?"
-            value={referralSourceId}
-            onChange={(e) => {
-              setReferralSourceId(e.target.value);
-              setReferredByUserId("");
-            }}
-          >
-            <option value="">Pilih sumber...</option>
-            {referralSources?.map((source) => (
-              <option key={source.id} value={source.id}>
-                {source.referralSourceName}
-              </option>
-            ))}
-          </Select>
-          {selectedReferralSource?.requiresReferrer && (
-            <Select
-              id="referredByUserId"
-              label="Staf yang merujuk"
-              value={referredByUserId}
-              onChange={(e) => setReferredByUserId(e.target.value)}
-            >
-              <option value="">Pilih staf...</option>
-              {staffUsers?.items.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.username}
-                </option>
-              ))}
-            </Select>
-          )}
+          <ReferralSourceFields
+            referralSourceId={referralSourceId}
+            referredByUserId={referredByUserId}
+            onReferralSourceChange={setReferralSourceId}
+            onReferredByUserChange={setReferredByUserId}
+          />
         </div>
       </div>
 

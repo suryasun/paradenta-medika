@@ -2,8 +2,9 @@ import { randomUUID } from 'crypto';
 import { IEventBus } from '../../../../shared/events/EventBus';
 import { AuditContext, IAuditService } from '../../../system/domain/services/IAuditService';
 import { IDoctorRepository } from '../../../master-data/domain/repositories/IDoctorRepository';
+import { IReferralSourceRepository } from '../../../master-data/domain/repositories/IReferralSourceRepository';
 import { PatientEntity, PatientGenderValue } from '../../../patient/domain/entities/PatientEntity';
-import { DuplicateIdentityException } from '../../../patient/domain/exceptions/PatientExceptions';
+import { DuplicateIdentityException, PatientReferralSourceInvalidException } from '../../../patient/domain/exceptions/PatientExceptions';
 import { IPatientRepository } from '../../../patient/domain/repositories/IPatientRepository';
 import { MedicalRecordNumberGenerator } from '../../../patient/application/services/MedicalRecordNumberGenerator';
 import { PATIENT_REGISTERED_EVENT, PatientRegisteredPayload } from '../../../patient/domain/events/PatientEvents';
@@ -25,6 +26,12 @@ export interface QuickNewPatientCallInput {
   reservationDate: string;
   startTime: string;
   complaint?: string;
+  // docs/06-tasks/task-297.md (Reservation Module Addendum #2, R2): same
+  // optional pairing as CreatePatientUseCase's -- referredByUserId is
+  // accepted but never required server-side even when the selected
+  // source has requiresReferrer:true (the client prompts for it).
+  referralSourceId?: string;
+  referredByUserId?: string;
   actorUserId: string;
   ipAddress?: string;
   correlationId?: string;
@@ -60,6 +67,7 @@ export class QuickNewPatientCallUseCase {
     private readonly mrnGenerator: MedicalRecordNumberGenerator,
     private readonly reservationNumberGenerator: ReservationNumberGenerator,
     private readonly quickNewPatientCallRepository: IQuickNewPatientCallRepository,
+    private readonly referralSourceRepository: IReferralSourceRepository,
     private readonly auditService: IAuditService,
     private readonly eventBus: IEventBus,
   ) {}
@@ -70,6 +78,13 @@ export class QuickNewPatientCallUseCase {
       throw new DuplicateIdentityException();
     }
 
+    if (input.referralSourceId) {
+      const referralSource = await this.referralSourceRepository.findById(input.referralSourceId);
+      if (!referralSource || !referralSource.isActive) {
+        throw new PatientReferralSourceInvalidException();
+      }
+    }
+
     const patientEntity = PatientEntity.create({
       patientName: input.fullName,
       gender: QUICK_ADD_PLACEHOLDER_GENDER,
@@ -78,6 +93,8 @@ export class QuickNewPatientCallUseCase {
       identityNumber: input.identityNumber,
       phone: input.phoneNumber,
       address: input.address,
+      referralSourceId: input.referralSourceId,
+      referredByUserId: input.referredByUserId,
     });
 
     const reservationDate = new Date(`${input.reservationDate}T00:00:00.000Z`);

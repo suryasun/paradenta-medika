@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { useDoctors } from "@/features/master-data/hooks/useDoctors";
+import { ReferralSourceFields } from "@/features/patient/components/ReferralSourceFields";
 import { useQuickNewPatientCall } from "../hooks/useReservationMutations";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 
@@ -28,6 +29,8 @@ export function QuickNewPatientCallModal({ onClose }: { onClose: () => void }) {
   const [reservationDate, setReservationDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [complaint, setComplaint] = useState("");
+  const [referralSourceId, setReferralSourceId] = useState("");
+  const [referredByUserId, setReferredByUserId] = useState("");
 
   const { data: doctorsData } = useDoctors();
   const quickCall = useQuickNewPatientCall();
@@ -51,6 +54,8 @@ export function QuickNewPatientCallModal({ onClose }: { onClose: () => void }) {
       reservationDate,
       startTime,
       complaint: complaint || undefined,
+      referralSourceId: referralSourceId || undefined,
+      referredByUserId: referredByUserId || undefined,
     });
   }
 
@@ -99,6 +104,16 @@ export function QuickNewPatientCallModal({ onClose }: { onClose: () => void }) {
         )}
 
         <Textarea id="quickCallComplaint" label="Complaint" value={complaint} onChange={(e) => setComplaint(e.target.value)} />
+
+        {/* task-297 (Reservation Module Addendum #2, R2) */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <ReferralSourceFields
+            referralSourceId={referralSourceId}
+            referredByUserId={referredByUserId}
+            onReferralSourceChange={setReferralSourceId}
+            onReferredByUserChange={setReferredByUserId}
+          />
+        </div>
 
         {quickCall.isError && (
           <p role="alert" className="text-sm text-error">

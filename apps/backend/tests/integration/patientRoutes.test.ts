@@ -6,7 +6,6 @@ import { validateBody } from '../../src/shared/http/validateBody';
 import { validateQuery } from '../../src/shared/http/validateQuery';
 import { CreatePatientRequestDto } from '../../src/modules/patient/application/dtos/CreatePatientRequestDto';
 import { UpdatePatientRequestDto } from '../../src/modules/patient/application/dtos/UpdatePatientRequestDto';
-import { QuickAddPatientRequestDto } from '../../src/modules/patient/application/dtos/QuickAddPatientRequestDto';
 import { ListPatientQueryDto } from '../../src/modules/patient/application/dtos/ListPatientQueryDto';
 import { MedicalRecordNumberGenerator } from '../../src/modules/patient/application/services/MedicalRecordNumberGenerator';
 import { CreatePatientUseCase } from '../../src/modules/patient/application/use-cases/CreatePatientUseCase';
@@ -15,7 +14,6 @@ import { GetPatientUseCase } from '../../src/modules/patient/application/use-cas
 import { UpdatePatientUseCase } from '../../src/modules/patient/application/use-cases/UpdatePatientUseCase';
 import { ArchivePatientUseCase } from '../../src/modules/patient/application/use-cases/ArchivePatientUseCase';
 import { RestorePatientUseCase } from '../../src/modules/patient/application/use-cases/RestorePatientUseCase';
-import { QuickAddPatientUseCase } from '../../src/modules/patient/application/use-cases/QuickAddPatientUseCase';
 import { PatientController } from '../../src/modules/patient/presentation/controllers/PatientController';
 import { requirePermission } from '../../src/modules/auth/presentation/middlewares/authorize';
 import { AuthenticatedContext } from '../../src/modules/auth/presentation/middlewares/authenticate';
@@ -37,7 +35,6 @@ function buildApp(auth: AuthenticatedContext | undefined) {
     new UpdatePatientUseCase(patientRepository, auditService, eventBus, referralSourceRepository),
     new ArchivePatientUseCase(patientRepository, auditService, eventBus),
     new RestorePatientUseCase(patientRepository, auditService, eventBus),
-    new QuickAddPatientUseCase(patientRepository, mrnGenerator, auditService, eventBus),
   );
 
   const router = Router();
@@ -47,12 +44,6 @@ function buildApp(auth: AuthenticatedContext | undefined) {
   });
   router.get('/patients', requirePermission('patient.read', auditService), validateQuery(ListPatientQueryDto), controller.list);
   router.post('/patients', requirePermission('patient.create', auditService), validateBody(CreatePatientRequestDto), controller.create);
-  router.post(
-    '/patients/quick-add',
-    requirePermission('patient.create', auditService),
-    validateBody(QuickAddPatientRequestDto),
-    controller.quickAdd,
-  );
   router.get('/patients/:id', requirePermission('patient.read', auditService), controller.detail);
   router.put(
     '/patients/:id',
@@ -217,90 +208,4 @@ describe('Patient routes', () => {
     expect(response.body).toMatchObject({ success: false, code: 'NOT_FOUND' });
   });
 
-  // task-289 (Epic PE6, Patient Module Enhancement addendum)
-  describe('POST /patients/quick-add', () => {
-    it('registers a patient with exactly the 4 required fields, a real MRN, and ACTIVE status', async () => {
-      const { app } = buildApp(staffAuth);
-
-      const response = await request(app).post('/api/v1/patients/quick-add').send({
-        fullName: 'Walk-in Patient',
-        address: 'Jl. Contoh No. 99',
-        phoneNumber: '08129998877',
-        identityNumber: '3171000000000001',
-      });
-
-      expect(response.status).toBe(201);
-      expect(response.body.data.medicalRecordNumber).toBe('MRN000001');
-      expect(response.body.data.fullName).toBe('Walk-in Patient');
-      expect(response.body.data.status).toBe('ACTIVE');
-    });
-
-    it('rejects a request missing any of the 4 required fields (400)', async () => {
-      const { app } = buildApp(staffAuth);
-
-      const missingFields = await request(app).post('/api/v1/patients/quick-add').send({});
-      expect(missingFields.status).toBe(400);
-
-      const missingIdentityNumber = await request(app).post('/api/v1/patients/quick-add').send({
-        fullName: 'Walk-in Patient',
-        address: 'Jl. Contoh No. 99',
-        phoneNumber: '08129998877',
-      });
-      expect(missingIdentityNumber.status).toBe(400);
-    });
-
-    it('applies the same duplicate-identity check as full registration', async () => {
-      const { app } = buildApp(staffAuth);
-      const payload = {
-        fullName: 'Walk-in Patient',
-        address: 'Jl. Contoh No. 99',
-        phoneNumber: '08129998877',
-        identityNumber: '3171000000000009',
-      };
-
-      const first = await request(app).post('/api/v1/patients/quick-add').send(payload);
-      expect(first.status).toBe(201);
-
-      const duplicate = await request(app)
-        .post('/api/v1/patients/quick-add')
-        .send({ ...payload, fullName: 'Another Walk-in' });
-      expect(duplicate.status).toBe(422);
-      expect(duplicate.body.code).toBe('DUPLICATE_IDENTITY');
-    });
-
-    it('rejects a quick-add request without patient.create permission (403)', async () => {
-      const { app } = buildApp({ ...staffAuth, permissionKeys: ['patient.read'] });
-
-      const response = await request(app).post('/api/v1/patients/quick-add').send({
-        fullName: 'Walk-in Patient',
-        address: 'Jl. Contoh No. 99',
-        phoneNumber: '08129998877',
-        identityNumber: '3171000000000001',
-      });
-
-      expect(response.status).toBe(403);
-    });
-
-    it('the resulting patient can be completed later via PUT /patients/:id with no special-casing', async () => {
-      const { app } = buildApp(staffAuth);
-
-      const quickAddResponse = await request(app).post('/api/v1/patients/quick-add').send({
-        fullName: 'Walk-in Patient',
-        address: 'Jl. Contoh No. 99',
-        phoneNumber: '08129998877',
-        identityNumber: '3171000000000001',
-      });
-      const patientId = quickAddResponse.body.data.id;
-
-      const updateResponse = await request(app).put(`/api/v1/patients/${patientId}`).send({
-        gender: 'FEMALE',
-        dateOfBirth: '1990-01-01',
-        email: 'walkin@example.com',
-      });
-
-      expect(updateResponse.status).toBe(200);
-      expect(updateResponse.body.data.gender).toBe('FEMALE');
-      expect(updateResponse.body.data.dateOfBirth).toBe('1990-01-01');
-    });
-  });
 });

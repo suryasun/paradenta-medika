@@ -36,6 +36,8 @@ function buildReservation(overrides: Partial<Reservation>): Reservation {
     cancelledReason: null,
     cancelledAt: null,
     patientType: "NEW",
+    patientMrn: null,
+    patientFullName: null,
     ...overrides,
   };
 }
@@ -60,6 +62,34 @@ describe("ReservationHistoryPage", () => {
     expect(await screen.findByText(/2 completed/)).toBeInTheDocument();
     expect(screen.getByText(/2 cancelled\/no-show/)).toBeInTheDocument();
     expect(screen.getByText(/25% new patients/)).toBeInTheDocument();
+  });
+
+  // docs/06-tasks/task-296.md (Reservation Module Addendum #2, R1)
+  it("renders the patient's name and MRN on the card when the row carries a patient snapshot", async () => {
+    mockedReservationService.list.mockResolvedValue({
+      items: [buildReservation({ patientFullName: "Jane Doe", patientMrn: "MRN000001" })],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.getByText("(MRN000001)")).toBeInTheDocument();
+  });
+
+  // docs/06-tasks/task-298.md (Reservation Module Addendum #2, R6)
+  it("defaults dateTo to yesterday, so only past reservations are queried", async () => {
+    mockedReservationService.list.mockResolvedValue({ items: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(mockedReservationService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ dateTo: yesterday.toISOString().slice(0, 10) }),
+      ),
+    );
   });
 
   it("Status/Patient Type/Date Range/Procedure filters narrow the results, individually and combined", async () => {

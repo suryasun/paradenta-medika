@@ -1,25 +1,25 @@
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { NewPatientReportPage } from "./NewPatientReportPage";
-import { newPatientReportService } from "../services/newPatientReport.service";
+import { CompletedReservationReportPage } from "./CompletedReservationReportPage";
+import { completedReservationReportService } from "../services/completedReservationReport.service";
 import { doctorService } from "@/features/master-data/services/doctor.service";
 
-jest.mock("../services/newPatientReport.service");
+jest.mock("../services/completedReservationReport.service");
 jest.mock("@/features/master-data/services/doctor.service");
-const mockedNewPatientReportService = jest.mocked(newPatientReportService);
+const mockedCompletedReservationReportService = jest.mocked(completedReservationReportService);
 const mockedDoctorService = jest.mocked(doctorService);
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <NewPatientReportPage />
+      <CompletedReservationReportPage />
     </QueryClientProvider>,
   );
 }
 
-// docs/06-tasks/task-291.md
-describe("NewPatientReportPage", () => {
+// docs/06-tasks/task-299.md
+describe("CompletedReservationReportPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedDoctorService.list.mockResolvedValue({
@@ -28,13 +28,13 @@ describe("NewPatientReportPage", () => {
     });
   });
 
-  it("renders the summary cards and results table from a real date range", async () => {
-    mockedNewPatientReportService.get.mockResolvedValue({
+  it("renders the summary card, trend chart, and results table from a real date range", async () => {
+    mockedCompletedReservationReportService.get.mockResolvedValue({
       items: [
         {
           id: "r1",
           reservationNumber: "RSV-20260810-0001",
-          status: "BOOKED",
+          status: "COMPLETED",
           patientId: "p1",
           doctorId: "d1",
           branchId: "b1",
@@ -49,34 +49,32 @@ describe("NewPatientReportPage", () => {
           cancelledReason: null,
           cancelledAt: null,
           patientType: "NEW",
-          patientMrn: null,
-          patientFullName: null,
+          patientMrn: "MRN000001",
+          patientFullName: "Jane Doe",
         },
       ],
       meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
-      summary: { totalNewPatients: 12, topProcedure: "APPOINTMENT", conversionRate: 66.67 },
+      summary: { totalCompleted: 8, trend: [{ date: "2026-08-10", count: 8 }] },
     });
 
     renderPage();
 
-    expect(await screen.findByText("12")).toBeInTheDocument();
-    expect(screen.getAllByText("APPOINTMENT").length).toBeGreaterThan(0);
-    expect(screen.getByText("66.67%")).toBeInTheDocument();
+    expect(await screen.findByText("8")).toBeInTheDocument();
     expect(screen.getByText("RSV-20260810-0001")).toBeInTheDocument();
+    expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.getByText("(MRN000001)")).toBeInTheDocument();
     expect(screen.getByText("Dr. Alice")).toBeInTheDocument();
   });
 
-  it("disables the Export action with an explanatory title, never a client-side workaround", async () => {
-    mockedNewPatientReportService.get.mockResolvedValue({
+  it("shows an empty state on the trend chart when there is no data for the range", async () => {
+    mockedCompletedReservationReportService.get.mockResolvedValue({
       items: [],
       meta: { page: 1, limit: 20, total: 0, totalPages: 1 },
-      summary: { totalNewPatients: 0, topProcedure: null, conversionRate: 0 },
+      summary: { totalCompleted: 0, trend: [] },
     });
 
     renderPage();
 
-    const exportButton = screen.getByRole("button", { name: "Export" });
-    expect(exportButton).toBeDisabled();
-    expect(exportButton).toHaveAttribute("title", "Export isn't available yet");
+    expect(await screen.findByText("No data for this range")).toBeInTheDocument();
   });
 });

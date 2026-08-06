@@ -60,6 +60,9 @@ import { BranchReportsController } from '../controllers/BranchReportsController'
 import { NewPatientReportQueryDto } from '../../application/dtos/NewPatientReportQueryDto';
 import { GetNewPatientReportUseCase } from '../../application/use-cases/GetNewPatientReportUseCase';
 import { NewPatientReportController } from '../controllers/NewPatientReportController';
+import { CompletedReservationReportQueryDto } from '../../application/dtos/CompletedReservationReportQueryDto';
+import { GetCompletedReservationReportUseCase } from '../../application/use-cases/GetCompletedReservationReportUseCase';
+import { CompletedReservationReportController } from '../controllers/CompletedReservationReportController';
 import { ReservationRepository } from '../../../reservation/infrastructure/repositories/ReservationRepository';
 
 /**
@@ -131,6 +134,11 @@ export function buildReportsModule(
   // docs/06-tasks/task-291.md (Epic RE2, Reservation Module Enhancement addendum).
   const newPatientReportController = new NewPatientReportController(new GetNewPatientReportUseCase(new ReservationRepository()));
 
+  // docs/06-tasks/task-299.md (Reservation Module Addendum #2, R7).
+  const completedReservationReportController = new CompletedReservationReportController(
+    new GetCompletedReservationReportUseCase(new ReservationRepository()),
+  );
+
   // docs/06-tasks/task-187.md..task-191.md (Epic AH).
   const reportJobRepository = new ReportJobRepository();
   const reportSnapshotRepository = new ReportSnapshotRepository();
@@ -156,6 +164,15 @@ export function buildReportsModule(
     requirePermission('report.reservation.new-patient.read'),
     validateQuery(NewPatientReportQueryDto),
     newPatientReportController.report,
+  );
+
+  // docs/06-tasks/task-299.md: same convention -- new permission, no
+  // existing report.* code covers a Completed-Reservations-scoped report.
+  router.get(
+    '/reports/reservations/completed',
+    requirePermission('report.reservation.completed.read'),
+    validateQuery(CompletedReservationReportQueryDto),
+    completedReservationReportController.report,
   );
 
   // docs/03-sad/20-module-report.md Section 8.1: literal `report.job.*`/

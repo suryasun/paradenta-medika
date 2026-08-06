@@ -86,12 +86,13 @@ Reservation Module menyediakan seluruh fungsi yang dibutuhkan untuk mengelola ja
 | RSV-010 | Check-in Patient | Mengubah reservasi menjadi antrean |
 | RSV-011 | Reservation Timeline | Riwayat perubahan status |
 | RSV-012 | Reservation History | Riwayat reservasi pasien |
-| RSV-013 | Quick Add Patient | Registrasi cepat pasien baru (nama, alamat bebas, telepon, nomor identitas) langsung dari layar booking, tanpa berpindah ke Modul Patient — lihat `docs/03-sad/12-module-patient.md` §17.1/§21.1a dan `docs/06-tasks/task-289.md` |
+| RSV-013 | ~~Quick Add Patient~~ **(retired, task-297)** | Registrasi cepat pasien baru langsung dari layar booking — digantikan sepenuhnya oleh RSV-016 (Quick New Patient Call), yang membuat pasien + reservasi dalam satu transaksi. Lihat `docs/03-sad/12-module-patient.md` §21.1a dan `docs/03-sad/13-module-reservation.md` §40.3 |
 | RSV-014 | Determine Patient Type At Booking | Menandai reservasi sebagai `NEW` atau `OLD` berdasarkan riwayat reservasi pasien — server-side, bukan diturunkan di klien. Lihat `docs/03-sad/13-module-reservation.md` §39 |
 | RSV-015 | Filter by Patient Type | Filter `patientType` pada daftar reservasi dan daftar pasien |
-| RSV-016 | Quick New Patient Call | Form gabungan satu langkah: buat pasien baru + reservasi dalam satu transaksi, berbeda dari RSV-013 yang hanya membuat pasien lalu kembali ke form booking terpisah |
+| RSV-016 | Quick New Patient Call | Form gabungan satu langkah: buat pasien baru + reservasi dalam satu transaksi, termasuk sumber rujukan (referral source) opsional sejak task-296 — satu-satunya jalur "pasien belum terdaftar" yang tersedia sejak RSV-013 diretired |
 | RSV-017 | New Patient Date-Range Report | Laporan reservasi Pasien Baru pada rentang tanggal, dengan ringkasan statistik |
-| RSV-018 | Reservation History (clinic-wide) | Layar riwayat reservasi seluruh klinik dengan filter/pencarian — berbeda dari RSV-012 yang khusus per pasien (tab di Patient Detail) |
+| RSV-018 | Reservation History (clinic-wide) | Layar riwayat reservasi seluruh klinik dengan filter/pencarian, dibatasi pada reservasi dengan tanggal sebelum hari ini (task-298) — berbeda dari RSV-012 yang khusus per pasien (tab di Patient Detail), dan dari RSV-005 (Reservation List) yang kini dibatasi pada hari ini dan seterusnya |
+| RSV-019 | Completed Reservations Report | Laporan reservasi berstatus `COMPLETED` pada rentang tanggal, dengan tabel dan grafik tren harian — lihat `docs/03-sad/13-module-reservation.md` §40 |
 
 ---
 

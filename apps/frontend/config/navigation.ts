@@ -57,6 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Branch Comparison", href: "/reports/branch-comparison", permission: "report.branch-comparison.read" },
       { label: "Branch Performance", href: "/reports/branch-performance", permission: "report.branch-performance.read" },
       { label: "New Patients", href: "/reports/new-patients", permission: "report.reservation.new-patient.read" },
+      { label: "Completed Reservations", href: "/reports/completed-reservations", permission: "report.reservation.completed.read" },
     ],
   },
   {

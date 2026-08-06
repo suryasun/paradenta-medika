@@ -39,6 +39,8 @@ function buildReservation(overrides: Partial<Reservation>): Reservation {
     cancelledReason: null,
     cancelledAt: null,
     patientType: "NEW",
+    patientMrn: null,
+    patientFullName: null,
     ...overrides,
   };
 }

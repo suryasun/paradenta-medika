@@ -36,7 +36,8 @@ function endOfMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
 }
 
-function groupByDate(reservations: Reservation[]): DateCountPoint[] {
+/** docs/06-tasks/task-299.md (Reservation Module Addendum #2, R7): exported for reuse by GetCompletedReservationReportUseCase's trend aggregation, rather than re-implementing the same date-bucketing. */
+export function groupByDate(reservations: Reservation[]): DateCountPoint[] {
   const counts = new Map<string, number>();
   for (const reservation of reservations) {
     const key = reservation.reservationDate.toISOString().slice(0, 10);

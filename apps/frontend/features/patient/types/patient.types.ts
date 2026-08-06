@@ -106,17 +106,6 @@ export interface UpdatePatientInput {
   dateOfBirth?: string;
 }
 
-// task-289 (Epic PE6, Patient Module Enhancement addendum). Deliberately
-// flat and minimal per docs/03-sad/12-module-patient.md §21.1a -- no
-// gender/dateOfBirth/email, unlike CreatePatientInput. `address` is a
-// plain string here too.
-export interface QuickAddPatientInput {
-  fullName: string;
-  address: string;
-  phoneNumber: string;
-  identityNumber: string;
-}
-
 // task-286 (Epic PE3, Patient Module Enhancement addendum). Mirrors
 // apps/backend's PatientAddressResponseDto -- each FK is resolved to an
 // { id, name } pair server-side so address cards don't need a second

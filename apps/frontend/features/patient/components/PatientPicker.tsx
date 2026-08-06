@@ -5,30 +5,26 @@ import { Input } from "@/components/ui/Input";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { usePatients } from "../hooks/usePatients";
 import { Patient } from "../types/patient.types";
-import { QuickAddPatientModal } from "./QuickAddPatientModal";
 
 // Reusable typeahead: Reservation (task-002/031) needs to select an
 // existing patient by name/MRN/phone; no dedicated "patient picker" spec
 // exists anywhere in docs/02-design, so this reuses the same search
-// semantics as PatientListView's search box.
+// semantics as PatientListView's search box. Used by both the Reservation
+// booking screen and Queue's AddToQueueModal.
 //
-// `allowQuickAdd` (task-289, Epic PE6) surfaces a "Quick Add Patient"
-// affordance in the no-results state. Opt-in and off by default so it
-// stays confined to the Reservation booking screen, per that task's own
-// Acceptance Criteria ("not exposed as a general-purpose alternate
-// registration endpoint elsewhere in the product") -- AddToQueueModal's
-// existing PatientPicker usage is unaffected.
+// task-289's "Quick Add Patient" affordance (an `allowQuickAdd` prop that
+// used to live here) was retired by docs/06-tasks/task-297.md (Reservation
+// Module Addendum #2, R3): Quick Call (task-292) already covers the same
+// "caller not in the system" case in one atomic create-patient+create-
+// reservation step, making Quick Add Patient a duplicate feature.
 export function PatientPicker({
   selectedPatient,
   onSelect,
-  allowQuickAdd = false,
 }: {
   selectedPatient: Patient | null;
   onSelect: (patient: Patient) => void;
-  allowQuickAdd?: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const debouncedQuery = useDebouncedValue(query);
   const { data, isFetching } = usePatients({ search: debouncedQuery || undefined, limit: 8, status: "ACTIVE" });
   const showResults = query.trim().length > 0 && !selectedPatient;
@@ -59,18 +55,7 @@ export function PatientPicker({
         <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-white shadow-md">
           {isFetching && <div className="px-3 py-2 text-sm text-muted">Searching...</div>}
           {!isFetching && data?.items.length === 0 && (
-            <div className="flex flex-col gap-2 px-3 py-2 text-sm text-muted">
-              <span>No patients found.</span>
-              {allowQuickAdd && (
-                <button
-                  type="button"
-                  className="self-start text-xs font-medium text-primary hover:underline"
-                  onClick={() => setShowQuickAdd(true)}
-                >
-                  Quick Add Patient
-                </button>
-              )}
-            </div>
+            <div className="px-3 py-2 text-sm text-muted">No patients found.</div>
           )}
           {!isFetching &&
             data?.items.map((patient) => (
@@ -83,21 +68,13 @@ export function PatientPicker({
                   setQuery("");
                 }}
               >
-                {patient.fullName} <span className="text-muted">({patient.medicalRecordNumber})</span>
+                {/* task-297 (Reservation Module Addendum #2, R4): phone
+                    number shown alongside name/MRN so staff searching by
+                    phone can visually confirm the right match. */}
+                {patient.fullName} <span className="text-muted">({patient.medicalRecordNumber}) &middot; {patient.phoneNumber}</span>
               </button>
             ))}
         </div>
-      )}
-
-      {showQuickAdd && (
-        <QuickAddPatientModal
-          onClose={() => setShowQuickAdd(false)}
-          onCreated={(patient) => {
-            setShowQuickAdd(false);
-            setQuery("");
-            onSelect(patient);
-          }}
-        />
       )}
     </div>
   );

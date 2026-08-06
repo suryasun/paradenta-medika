@@ -139,13 +139,20 @@ export class FakeReservationRepository implements IReservationRepository {
     ).length;
   }
 
-  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string, patientType?: 'NEW' | 'OLD'): Promise<Reservation[]> {
+  async findAllInDateRange(
+    dateFrom: Date,
+    dateTo: Date,
+    branchId?: string,
+    patientType?: 'NEW' | 'OLD',
+    status?: string,
+  ): Promise<Reservation[]> {
     return [...this.reservations.values()].filter(
       (r) =>
         r.reservationDate.getTime() >= dateFrom.getTime() &&
         r.reservationDate.getTime() <= dateTo.getTime() &&
         (!branchId || r.branchId === branchId) &&
         (!patientType || r.patientTypeAtBooking === patientType) &&
+        (!status || r.status === status) &&
         !r.deletedAt,
     );
   }

@@ -35,6 +35,7 @@ import { ReservationController } from '../controllers/ReservationController';
 import { DoctorAvailabilityController } from '../controllers/DoctorAvailabilityController';
 import { PatientRepository } from '../../../patient/infrastructure/repositories/PatientRepository';
 import { DoctorRepository } from '../../../master-data/infrastructure/repositories/DoctorRepository';
+import { ReferralSourceRepository } from '../../../master-data/infrastructure/repositories/ReferralSourceRepository';
 
 /**
  * docs/06-tasks/task-002.md + task-031.md..task-036.md composition root.
@@ -91,6 +92,7 @@ export function buildReservationModule(
       new MedicalRecordNumberGenerator(patientRepository),
       reservationNumberGenerator,
       new QuickNewPatientCallRepository(),
+      new ReferralSourceRepository(),
       auditService,
       eventBus,
     ),

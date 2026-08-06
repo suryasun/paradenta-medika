@@ -147,6 +147,20 @@ export interface NewPatientReportParams {
   limit?: number;
 }
 
+// task-299 (Reservation Module Addendum #2, R7). Mirrors apps/backend's
+// GetCompletedReservationReportUseCase's CompletedReservationReportSummary.
+export interface CompletedReservationReportSummary {
+  totalCompleted: number;
+  trend: { date: string; count: number }[];
+}
+
+export interface CompletedReservationReportParams {
+  dateFrom: string;
+  dateTo: string;
+  page?: number;
+  limit?: number;
+}
+
 export interface ReportJobFilters {
   branchIds?: string[];
   dateFrom?: string;

@@ -6,6 +6,7 @@ import {
   CreateReservationInput,
   IReservationRepository,
   ReservationListFilters,
+  ReservationWithOptionalPatient,
   UpdateReservationInput,
 } from '../../domain/repositories/IReservationRepository';
 
@@ -46,7 +47,7 @@ export class ReservationRepository implements IReservationRepository {
     return prisma.reservation.findFirst({ where: { reservationNo } });
   }
 
-  async search(filters: ReservationListFilters): Promise<PagedResult<Reservation>> {
+  async search(filters: ReservationListFilters): Promise<PagedResult<ReservationWithOptionalPatient>> {
     const where: Prisma.ReservationWhereInput = {
       deletedAt: null,
       ...(filters.search
@@ -75,6 +76,11 @@ export class ReservationRepository implements IReservationRepository {
     const [items, total] = await Promise.all([
       prisma.reservation.findMany({
         where,
+        // docs/06-tasks/task-296.md (R1): lightweight MRN+name snapshot
+        // only -- not a full Patient embed (see ReservationMapper's own
+        // comment on why this module doesn't duplicate cross-module
+        // entities beyond what a list screen needs to render).
+        include: { patient: { select: { medicalRecordNo: true, patientName: true } } },
         orderBy: { [sanitizeSortField(filters.sort, ALLOWED_SORT_FIELDS)]: filters.order },
         skip: (filters.page - 1) * filters.limit,
         take: filters.limit,
@@ -151,13 +157,20 @@ export class ReservationRepository implements IReservationRepository {
     });
   }
 
-  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string, patientType?: 'NEW' | 'OLD'): Promise<Reservation[]> {
+  async findAllInDateRange(
+    dateFrom: Date,
+    dateTo: Date,
+    branchId?: string,
+    patientType?: 'NEW' | 'OLD',
+    status?: string,
+  ): Promise<Reservation[]> {
     return prisma.reservation.findMany({
       where: {
         reservationDate: { gte: dateFrom, lte: dateTo },
         deletedAt: null,
         ...(branchId ? { branchId } : {}),
         ...(patientType ? { patientTypeAtBooking: patientType } : {}),
+        ...(status ? { status: status as ReservationStatus } : {}),
       },
     });
   }

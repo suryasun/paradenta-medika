@@ -29,14 +29,13 @@ export const RESERVATION_STATUS_TONE: Record<Reservation["status"], "neutral" | 
   NO_SHOW: "error",
 };
 
-// docs/02-design/pages/reservation.md §2.1: the list is missing 5 of SAD
-// §33.3's 10 spec'd columns. Doctor is fixable client-side (joined against
-// Master Data's own already-fetched Doctor list, same pattern
-// CreateReservationForm already uses) -- added below. Patient Name is a
-// flagged, out-of-scope backend gap: ReservationResponseDto carries only
-// patientId, and unlike Doctor (a small clinic roster, cheap to fetch in
-// full), Patient is an unbounded list with no cheap bulk client-side join
-// available -- not worked around here.
+// docs/02-design/pages/reservation.md §2.1: the list was missing 5 of SAD
+// §33.3's 10 spec'd columns. Doctor is joined client-side against Master
+// Data's own already-fetched Doctor list, same pattern CreateReservationForm
+// already uses. Patient Name/MRN (task-296, Reservation Module Addendum #2
+// R1) are now returned directly by GET /reservations (a lightweight
+// server-side snapshot, not a client-side join -- Patient is an unbounded
+// list, unlike the small Doctor roster).
 function ReservationRow({ reservation, doctorName }: { reservation: Reservation; doctorName: string }) {
   const checkInReservation = useCheckInReservation(reservation.id);
   const canCheckIn = reservation.status === "BOOKED" || reservation.status === "CONFIRMED";
@@ -44,6 +43,10 @@ function ReservationRow({ reservation, doctorName }: { reservation: Reservation;
   return (
     <TableRow>
       <TableCell>{reservation.reservationNumber}</TableCell>
+      <TableCell>
+        {reservation.patientFullName ?? "—"}
+        {reservation.patientMrn && <span className="text-muted"> ({reservation.patientMrn})</span>}
+      </TableCell>
       <TableCell className="font-tabular">{reservation.reservationDate}</TableCell>
       <TableCell className="font-tabular">{reservation.startTime}</TableCell>
       <TableCell>{doctorName}</TableCell>
@@ -77,8 +80,17 @@ function ReservationRow({ reservation, doctorName }: { reservation: Reservation;
   );
 }
 
+// docs/06-tasks/task-298.md (Reservation Module Addendum #2, R5/R6): the
+// List/History split is by reservationDate relative to today, not status --
+// List = today and onward ("now and next"), History = strictly before
+// today. UTC-day-truncated, matching the existing convention already used
+// by useReservations/ReservationAnalyticsUseCase.
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function ReservationListView() {
-  const [filters, setFilters] = useState<ListReservationsParams>({ page: 1, limit: 20 });
+  const [filters, setFilters] = useState<ListReservationsParams>({ page: 1, limit: 20, dateFrom: todayIso() });
   const { data, isLoading, isError, error, refetch } = useReservations(filters);
   const { data: doctorsData } = useDoctors();
   const doctorName = (id: string) => doctorsData?.items.find((d) => d.id === id)?.fullName ?? "—";
@@ -115,11 +127,13 @@ export function ReservationListView() {
         </Select>
         <Input
           type="date"
+          min={todayIso()}
           value={filters.dateFrom ?? ""}
-          onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value || undefined, page: 1 }))}
+          onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value || todayIso(), page: 1 }))}
         />
         <Input
           type="date"
+          min={todayIso()}
           value={filters.dateTo ?? ""}
           onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value || undefined, page: 1 }))}
         />
@@ -144,6 +158,7 @@ export function ReservationListView() {
           <TableHead>
             <TableRow>
               <TableHeaderCell>No.</TableHeaderCell>
+              <TableHeaderCell>Patient</TableHeaderCell>
               <TableHeaderCell>Date</TableHeaderCell>
               <TableHeaderCell>Time</TableHeaderCell>
               <TableHeaderCell>Doctor</TableHeaderCell>

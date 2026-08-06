@@ -147,6 +147,7 @@ const PERMISSION_KEYS = [
   'report.branch-comparison.read',
   'report.branch-performance.read',
   'report.reservation.new-patient.read',
+  'report.reservation.completed.read',
   'report.finance.read',
   'report.hr.payroll.read',
   'report.hr.read',
@@ -302,6 +303,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'report.operations.read',
     'report.billing.read',
     'report.reservation.new-patient.read',
+    'report.reservation.completed.read',
   ],
   CASHIER: [
     'billing.invoice.read',

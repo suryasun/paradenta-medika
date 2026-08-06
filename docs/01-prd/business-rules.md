@@ -197,6 +197,14 @@ Apabila ditemukan data dengan tingkat kemiripan tinggi, sistem menampilkan perin
 - Laporan Pasien Baru (New Patient Report) memfilter reservasi berdasarkan `patient_type_at_booking = NEW` dan rentang tanggal `reservation_date`, mengikuti zona waktu klinik yang dikonfigurasi.
 - Fitur ini tidak mengubah alur Reservasi yang sudah ada (Create/Update/Cancel/Reschedule/Check-in) — seluruhnya adalah kapabilitas tambahan di atas alur tersebut.
 
+### 7.5.1 Reservation Module Addendum #2 (task-295–299)
+
+- Daftar Reservasi (`GET /reservations` sebagaimana dirender `ReservationListView`) menampilkan kolom Nama Pasien dan No. RM, diambil dari snapshot ringan relasi `patient` — bukan entitas Patient penuh.
+- Quick Add Patient (registrasi cepat pasien tanpa reservasi) **dihentikan** — digantikan sepenuhnya oleh Quick New Patient Call, yang membuat pasien dan reservasi dalam satu transaksi.
+- Quick New Patient Call kini mendukung sumber rujukan (referral source) opsional, dengan validasi yang sama seperti Registrasi Pasien penuh.
+- Daftar Reservasi (List) secara default hanya menampilkan reservasi hari ini dan seterusnya; Riwayat Reservasi (History) secara default hanya menampilkan reservasi sebelum hari ini. Pembatasan ini diterapkan di antarmuka (client-side default + batas input tanggal), bukan sebagai aturan wajib di server.
+- Laporan Reservasi Selesai (Completed Reservations Report) memfilter reservasi berdasarkan `status = COMPLETED` dan rentang tanggal `reservation_date`, ditampilkan sebagai tabel dan grafik tren harian.
+
 ---
 
 

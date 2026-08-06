@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { patientService } from "../services/patient.service";
-import { CreatePatientInput, QuickAddPatientInput, UpdatePatientInput } from "../types/patient.types";
+import { CreatePatientInput, UpdatePatientInput } from "../types/patient.types";
 
 export function useCreatePatient() {
   const router = useRouter();
@@ -12,21 +12,6 @@ export function useCreatePatient() {
     onSuccess: (patient) => {
       queryClient.invalidateQueries({ queryKey: ["patients", "list"] });
       router.push(`/patients/${patient.id}`);
-    },
-  });
-}
-
-// task-289 (Epic PE6, Patient Module Enhancement addendum): deliberately
-// does not redirect to the Patient detail page like useCreatePatient --
-// callers (the Reservation booking screen) select the resulting patient
-// and continue their own flow instead.
-export function useQuickAddPatient() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (payload: QuickAddPatientInput) => patientService.quickAdd(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["patients", "list"] });
     },
   });
 }

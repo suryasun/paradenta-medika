@@ -1,6 +1,6 @@
 # Pages: Reservation Module
 
-> Status: **Verified against shipped code** (Phase 1, task-002/031-036). `docs/03-sad/13-module-reservation.md` has its own §33 "User Interface Guidelines" (screens, list columns, quick actions, a literal color standard) — unlike Master Data, this is a real source spec, not purely PRD-derived, though it predates and partly conflicts with what shipped (see §5). Sourced from SAD §6 (status lifecycle), §7 (business rules), §12–18 (create/update/search/schedule-validation/walk-in/reschedule-cancel), §26 (permission matrix), §33 (UI guidelines), cross-checked against `apps/frontend/features/reservation/`. **+Reservation Module Enhancement addendum** (§8, task-290–294, post-roadmap, docs-only pass — no code shipped yet): Patient Type badge/filter, Quick New Patient Call, and 3 net-new screens (Calendar/Agenda, New Patient Report, Reservation History).
+> Status: **Verified against shipped code** (Phase 1, task-002/031-036). `docs/03-sad/13-module-reservation.md` has its own §33 "User Interface Guidelines" (screens, list columns, quick actions, a literal color standard) — unlike Master Data, this is a real source spec, not purely PRD-derived, though it predates and partly conflicts with what shipped (see §5). Sourced from SAD §6 (status lifecycle), §7 (business rules), §12–18 (create/update/search/schedule-validation/walk-in/reschedule-cancel), §26 (permission matrix), §33 (UI guidelines), cross-checked against `apps/frontend/features/reservation/`. **+Reservation Module Enhancement addendum** (§8, task-290–294, post-roadmap, shipped): Patient Type badge/filter, Quick New Patient Call, and 3 net-new screens (Calendar/Agenda, New Patient Report, Reservation History). **+Addendum #2** (§10, task-295–299, post-roadmap, shipped): Patient MRN/Name on List/History, Referral Source on Quick Call, Quick Add Patient retired, List/History date split, Completed Reservations Report.
 
 ---
 
@@ -300,6 +300,18 @@ Permission: `reservation.read` (same data as §2's List, different presentation 
 
 ---
 
-## 9. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
+## 10. Reservation Module Addendum #2 (task-295–299, Post-Roadmap Addendum)
+
+Five changes on top of §8's already-shipped screens (Epic RE, task-290–294):
+
+1. **Patient MRN/Name on List/History** (task-295): §2's Reservation List table and §8.5's History cards both gain a Patient column/line (name + MRN), sourced from a server-side join — no client-side lookup.
+2. **Referral Source on Quick Call** (task-296): §8.2's Quick Call modal gains the same Referral Source (+ conditional "Staf yang merujuk") field pair `patient.md` §14 already specs, via a shared component.
+3. **Quick Add Patient retired** (task-297): the "Quick Add Patient" link that used to appear in §2's Patient Picker no-results state is removed. Quick Call (§8.2) is the only remaining fast-registration entry point.
+4. **List/History date split** (task-298): §2's List defaults to and is date-bounded to today-and-later; §8.5's History defaults to and is date-bounded to before-today. A UI convention, not a server-enforced rule — `GET /reservations` itself is unchanged.
+5. **Completed Reservations Report** (task-299): new page, `/reports/completed-reservations` — date-range picker (same presets as §8.4's New Patient Report), one summary card (Total Completed), a `TrendChart` (day-by-day completed count), and a results table. The first Reservation-module report to pair a table with a chart.
+
+---
+
+## 11. Interactivity (2026 refresh — `design-system.md` §11, `ui-guidelines.md` §9)
 
 **Live update** is this module's headline fit: `TimeSlotPicker` (§3) currently fetches slots once per doctor/date selection — a slot going from Available to Full because another staff member just booked it should be reflected without the user re-selecting the date, per `ui-guidelines.md` §9.2 (poll/subscribe, animate the diff, don't silently re-render). This directly prevents the double-booking race condition SAD §15.4 already treats as a rejectable error — catching it live, before submit, is strictly better than the current reject-after-submit behavior. **Interactive charts** (§5, `design-system.md` §11.4): Reservation Analytics's proportional `BarList`s (Reservation Trend, Peak Hour Analysis, Doctor Utilization, Cancellation/No-Show Trends) upgrade to Recharts, now that it's approved — each retains its "View as table" toggle (`ui-guidelines.md` §9.5) and animates on date-range filter change rather than hard-cutting. **Micro-interactions**: status pill transitions on the List/Detail Badge (§2.1, §4) cross-fade over `motion-standard` when a reservation's status changes (e.g. after Check-in) rather than an instant swap — same pattern `design-system.md` §11.7 establishes generally, concretely useful here since Check-in is this module's most common state transition.

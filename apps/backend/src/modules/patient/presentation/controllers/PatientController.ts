@@ -5,14 +5,12 @@ import { AuthenticationException } from '../../../../shared/http/exceptions';
 import { ListPatientQueryDto } from '../../application/dtos/ListPatientQueryDto';
 import { CreatePatientRequestDto } from '../../application/dtos/CreatePatientRequestDto';
 import { UpdatePatientRequestDto } from '../../application/dtos/UpdatePatientRequestDto';
-import { QuickAddPatientRequestDto } from '../../application/dtos/QuickAddPatientRequestDto';
 import { CreatePatientUseCase } from '../../application/use-cases/CreatePatientUseCase';
 import { ListPatientsUseCase } from '../../application/use-cases/ListPatientsUseCase';
 import { GetPatientUseCase } from '../../application/use-cases/GetPatientUseCase';
 import { UpdatePatientUseCase } from '../../application/use-cases/UpdatePatientUseCase';
 import { ArchivePatientUseCase } from '../../application/use-cases/ArchivePatientUseCase';
 import { RestorePatientUseCase } from '../../application/use-cases/RestorePatientUseCase';
-import { QuickAddPatientUseCase } from '../../application/use-cases/QuickAddPatientUseCase';
 
 export class PatientController {
   constructor(
@@ -22,7 +20,6 @@ export class PatientController {
     private readonly updatePatientUseCase: UpdatePatientUseCase,
     private readonly archivePatientUseCase: ArchivePatientUseCase,
     private readonly restorePatientUseCase: RestorePatientUseCase,
-    private readonly quickAddPatientUseCase: QuickAddPatientUseCase,
   ) {}
 
   create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -30,22 +27,6 @@ export class PatientController {
       if (!req.auth) throw new AuthenticationException();
       const body = req.body as CreatePatientRequestDto;
       const patient = await this.createPatientUseCase.execute({
-        ...body,
-        actorUserId: req.auth.userId,
-        ipAddress: req.ip,
-        correlationId: req.correlationId,
-      });
-      sendSuccess(res, patient, 'Patient registered', 201);
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  quickAdd = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      if (!req.auth) throw new AuthenticationException();
-      const body = req.body as QuickAddPatientRequestDto;
-      const patient = await this.quickAddPatientUseCase.execute({
         ...body,
         actorUserId: req.auth.userId,
         ipAddress: req.ip,

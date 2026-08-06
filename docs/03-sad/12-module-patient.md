@@ -508,7 +508,7 @@ Modul Patient memiliki beberapa use case utama yang digunakan oleh petugas regis
 | UC-PAT-011 | Archive Patient | Administrator |
 | UC-PAT-012 | Export Patient List | Administrator |
 | UC-PAT-013 | Record Patient Referral Source | Registration Staff |
-| UC-PAT-014 | Quick Add Patient (from Reservation) | Registration Staff |
+| UC-PAT-014 | Quick Add Patient (from Reservation) — **retired**, see §21.1a | Registration Staff |
 
 ---
 
@@ -1354,7 +1354,9 @@ Semua endpoint:
 
 ---
 
-## 21.1a QuickAddPatientRequest
+## 21.1a QuickAddPatientRequest — RETIRED (see `docs/03-sad/13-module-reservation.md` §40.3)
+
+> **This endpoint (`POST /patients/quick-add`) has been removed** as of the Reservation Module Addendum #2 (task-297). Quick New Patient Call (`docs/03-sad/13-module-reservation.md` §39.3 RSV-016) already covers the same "caller not yet in the system" case in one atomic patient+reservation transaction, making this a strict subset — kept below for historical reference only.
 
 ```json
 {

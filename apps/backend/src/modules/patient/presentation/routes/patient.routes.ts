@@ -5,7 +5,6 @@ import { validateBody } from '../../../../shared/http/validateBody';
 import { validateQuery } from '../../../../shared/http/validateQuery';
 import { CreatePatientRequestDto } from '../../application/dtos/CreatePatientRequestDto';
 import { UpdatePatientRequestDto } from '../../application/dtos/UpdatePatientRequestDto';
-import { QuickAddPatientRequestDto } from '../../application/dtos/QuickAddPatientRequestDto';
 import { ListPatientQueryDto } from '../../application/dtos/ListPatientQueryDto';
 import { MedicalRecordNumberGenerator } from '../../application/services/MedicalRecordNumberGenerator';
 import { CreatePatientUseCase } from '../../application/use-cases/CreatePatientUseCase';
@@ -14,7 +13,6 @@ import { GetPatientUseCase } from '../../application/use-cases/GetPatientUseCase
 import { UpdatePatientUseCase } from '../../application/use-cases/UpdatePatientUseCase';
 import { ArchivePatientUseCase } from '../../application/use-cases/ArchivePatientUseCase';
 import { RestorePatientUseCase } from '../../application/use-cases/RestorePatientUseCase';
-import { QuickAddPatientUseCase } from '../../application/use-cases/QuickAddPatientUseCase';
 import { PatientRepository } from '../../infrastructure/repositories/PatientRepository';
 import { PatientController } from '../controllers/PatientController';
 
@@ -76,7 +74,6 @@ export function buildPatientModule(
     new UpdatePatientUseCase(patientRepository, auditService, eventBus, referralSourceRepository),
     new ArchivePatientUseCase(patientRepository, auditService, eventBus),
     new RestorePatientUseCase(patientRepository, auditService, eventBus),
-    new QuickAddPatientUseCase(patientRepository, mrnGenerator, auditService, eventBus),
   );
 
   const router = Router();
@@ -84,10 +81,6 @@ export function buildPatientModule(
 
   router.get('/patients', requirePermission('patient.read'), validateQuery(ListPatientQueryDto), controller.list);
   router.post('/patients', requirePermission('patient.create'), validateBody(CreatePatientRequestDto), controller.create);
-  // task-289 (Epic PE6): gated by patient.create, same as full
-  // registration -- no new permission code, per the task's own Security
-  // Impact.
-  router.post('/patients/quick-add', requirePermission('patient.create'), validateBody(QuickAddPatientRequestDto), controller.quickAdd);
   router.get('/patients/:id', requirePermission('patient.read'), controller.detail);
   router.put('/patients/:id', requirePermission('patient.update'), validateBody(UpdatePatientRequestDto), controller.update);
   router.patch('/patients/:id/archive', requirePermission('patient.archive'), controller.archive);

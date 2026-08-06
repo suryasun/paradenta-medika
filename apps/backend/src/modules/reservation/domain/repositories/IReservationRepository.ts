@@ -1,6 +1,21 @@
-import { Reservation } from '@prisma/client';
+import { Patient, Reservation } from '@prisma/client';
 import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 import { PagedResult } from '../../../../shared/http/pagination';
+
+/**
+ * docs/06-tasks/task-296.md (Reservation Module Addendum #2, R1): a
+ * lightweight patient snapshot (MRN + name only, not a full Patient
+ * embed) joined onto list rows so the Reservation List/History screens
+ * can render Patient Name/MRN without an unbounded client-side join --
+ * closes the documented gap in docs/03-sad/13-module-reservation.md
+ * §33.3 and ReservationListView.tsx's own long-standing comment.
+ * `patient` is optional so every other call site that returns a plain
+ * `Reservation` (create/update/cancel/checkIn/findById, none of which
+ * join the relation) still satisfies this type unmodified.
+ */
+export type ReservationWithOptionalPatient = Reservation & {
+  patient?: Pick<Patient, 'medicalRecordNo' | 'patientName'>;
+};
 
 export interface ReservationListFilters extends ListQueryDto {
   doctorId?: string;
@@ -57,7 +72,7 @@ export interface IReservationRepository {
   create(input: CreateReservationInput): Promise<Reservation>;
   findById(id: string): Promise<Reservation | null>;
   findByReservationNo(reservationNo: string): Promise<Reservation | null>;
-  search(filters: ReservationListFilters): Promise<PagedResult<Reservation>>;
+  search(filters: ReservationListFilters): Promise<PagedResult<ReservationWithOptionalPatient>>;
   update(id: string, input: UpdateReservationInput): Promise<Reservation>;
   cancel(id: string, reason: string, updatedBy: string): Promise<Reservation>;
   checkIn(id: string, updatedBy: string): Promise<Reservation>;
@@ -70,9 +85,18 @@ export interface IReservationRepository {
    * over a date range. docs/06-tasks/task-291.md extends this with an
    * optional patientType filter, reused for that report's summary
    * aggregation (totalNewPatients/topProcedure/conversionRate) over the
-   * full matching set, not just one paginated page.
+   * full matching set, not just one paginated page. docs/06-tasks/task-299.md
+   * (Reservation Module Addendum #2, R7) adds an optional status filter,
+   * following that same precedent, for the Completed Reservation Report's
+   * trend aggregation.
    */
-  findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string, patientType?: 'NEW' | 'OLD'): Promise<Reservation[]>;
+  findAllInDateRange(
+    dateFrom: Date,
+    dateTo: Date,
+    branchId?: string,
+    patientType?: 'NEW' | 'OLD',
+    status?: string,
+  ): Promise<Reservation[]>;
   /** docs/06-tasks/task-225.md: reservations not yet in a terminal status (COMPLETED/CANCELLED/NO_SHOW), for the Branch Deactivation Guard. */
   countOpenByBranch(branchId: string): Promise<number>;
   /**

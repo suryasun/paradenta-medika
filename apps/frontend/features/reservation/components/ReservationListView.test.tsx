@@ -42,6 +42,8 @@ const RESERVATION: Reservation = {
   cancelledReason: null,
   cancelledAt: null,
   patientType: "NEW",
+  patientMrn: null,
+  patientFullName: null,
 };
 
 describe("ReservationListView", () => {
@@ -77,6 +79,31 @@ describe("ReservationListView", () => {
     expect(await screen.findByText("RSV-20260802-0001")).toBeInTheDocument();
     expect(screen.getByText("2026-08-05")).toBeInTheDocument();
     expect(screen.getByText("BOOKED", { selector: "span" })).toBeInTheDocument();
+  });
+
+  // docs/06-tasks/task-296.md (Reservation Module Addendum #2, R1)
+  it("renders the patient's name and MRN when the row carries a patient snapshot", async () => {
+    mockedReservationService.list.mockResolvedValue({
+      items: [{ ...RESERVATION, patientFullName: "Jane Doe", patientMrn: "MRN000001" }],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
+
+    renderView();
+
+    expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.getByText("(MRN000001)")).toBeInTheDocument();
+  });
+
+  // docs/06-tasks/task-298.md (Reservation Module Addendum #2, R5)
+  it("defaults dateFrom to today, so only current/future reservations are queried", async () => {
+    mockedReservationService.list.mockResolvedValue({ items: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
+
+    renderView();
+    await waitFor(() =>
+      expect(mockedReservationService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ dateFrom: new Date().toISOString().slice(0, 10) }),
+      ),
+    );
   });
 
   it("checking in a BOOKED reservation calls the check-in endpoint", async () => {

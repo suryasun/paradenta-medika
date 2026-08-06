@@ -1,4 +1,4 @@
-import { Reservation } from '@prisma/client';
+import { ReservationWithOptionalPatient } from '../../domain/repositories/IReservationRepository';
 import { ReservationResponseDto } from '../dtos/ReservationResponseDto';
 
 function toIsoDate(date: Date): string {
@@ -16,7 +16,7 @@ function toTimeString(date: Date): string {
  * clients fetch full Patient/Doctor detail from those modules' own
  * endpoints (task-028, task-023) rather than receiving a duplicated copy.
  */
-export function toReservationResponse(reservation: Reservation): ReservationResponseDto {
+export function toReservationResponse(reservation: ReservationWithOptionalPatient): ReservationResponseDto {
   return {
     id: reservation.id,
     reservationNumber: reservation.reservationNo,
@@ -35,5 +35,7 @@ export function toReservationResponse(reservation: Reservation): ReservationResp
     cancelledReason: reservation.cancelledReason,
     cancelledAt: reservation.cancelledAt ? reservation.cancelledAt.toISOString() : null,
     patientType: reservation.patientTypeAtBooking,
+    patientMrn: reservation.patient?.medicalRecordNo ?? null,
+    patientFullName: reservation.patient?.patientName ?? null,
   };
 }

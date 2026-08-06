@@ -22,7 +22,7 @@ import { requirePermission } from '../../src/modules/auth/presentation/middlewar
 import { AuthenticatedContext } from '../../src/modules/auth/presentation/middlewares/authenticate';
 import { FakeAuditService } from '../fakes/authFakes';
 import { FakeEventBus, FakePatientRepository } from '../fakes/patientFakes';
-import { FakeDoctorRepository } from '../fakes/masterDataFakes';
+import { FakeDoctorRepository, FakeReferralSourceRepository } from '../fakes/masterDataFakes';
 import {
   FakeDoctorScheduleRepository,
   FakeQuickNewPatientCallRepository,
@@ -51,6 +51,7 @@ function buildApp(auth: AuthenticatedContext | undefined) {
   const scheduleValidator = new DoctorScheduleValidator(doctorRepository, scheduleRepository, reservationRepository);
   const reservationNumberGenerator = new ReservationNumberGenerator(reservationRepository);
   const quickNewPatientCallRepository = new FakeQuickNewPatientCallRepository(patientRepository, reservationRepository);
+  const referralSourceRepository = new FakeReferralSourceRepository();
 
   const controller = new ReservationController(
     new CreateReservationUseCase(reservationRepository, patientRepository, doctorRepository, scheduleValidator, reservationNumberGenerator, auditService, eventBus),
@@ -69,6 +70,7 @@ function buildApp(auth: AuthenticatedContext | undefined) {
       new MedicalRecordNumberGenerator(patientRepository),
       reservationNumberGenerator,
       quickNewPatientCallRepository,
+      referralSourceRepository,
       auditService,
       eventBus,
     ),

@@ -2478,6 +2478,64 @@ The Quick New Patient Call form (RSV-016) reuses `docs/02-design/pages/patient.m
 
 ---
 
+# 40. Reservation Module Addendum #2 (task-295–299)
+
+> Second post-roadmap addendum on top of §39 (Epic RE, task-290–294, already implemented and shipped — commit `b8466ff`). Requested directly by the product owner after using Epic RE in practice; documented and implemented in the same pass (not a docs-only research cycle like §39's origin), following the exact same numbered-use-case / new-endpoint / data-model-change structure §39 established. Epic code **RE2** ("Reservation Enhancement" continuation).
+
+## 40.1 Scope
+
+Seven requests, grouped into five capabilities:
+
+1. **Patient MRN/Name on Reservation List** (task-295) — closes the SAD §33.3 gap (Patient Name/MRN were always spec'd as List columns but never implemented; `ReservationListView.tsx`'s own long-standing comment flagged this exact gap).
+2. **Referral Source on Quick New Patient Call** (task-296) — RSV-016 (§39.3) gains the same `referralSourceId`/`referredByUserId` fields `CreatePatientRequest` already has (`docs/03-sad/12-module-patient.md` §21.1/§14.5).
+3. **Retire Quick Add Patient** (task-297) — resolves §39.7 item 1's open UX question by removing one of the two "no results found" actions entirely, rather than picking a primary. RSV-013 (Quick Add Patient, task-289) is **superseded and removed**: RSV-016 (Quick New Patient Call) already covers the same "caller not in the system" case in one atomic step, making RSV-013 a strict subset of RSV-016's capability. `POST /patients/quick-add` is removed from the API surface.
+4. **Reservation List / History date split** (task-298) — List (`GET /reservations` as rendered by `ReservationListView`) now defaults to and is bounded to `reservationDate >= today` ("now and next"); History (`/reservations/history`, RSV-018) now defaults to and is bounded to `reservationDate < today` ("past only"). Split is by date, not status — a still-`BOOKED` reservation whose date has passed is History's concern, not List's.
+5. **Completed Reservations Report** (task-299) — a new report (RSV-019) parallel to RSV-017 (New Patient Report, §39.4), scoped to `status = COMPLETED` instead of `patient_type_at_booking = NEW`, with a day-by-day trend chart in addition to the table (the New Patient Report has no chart; this is the first Reservation-module report to pair a table with a `TrendChart`).
+
+**Explicitly out of scope:** any further change to `POST/PUT/PATCH /reservations*` beyond RSV-016 gaining two optional fields; a backend-enforced (vs. UI-bounded) List/History date split (see §40.3); CSV/PDF export for the new Completed Reservations Report (same async-job deferral as RSV-017, API-105/106).
+
+## 40.2 Data Model Changes
+
+No schema/migration changes. Every requirement in this addendum is a query-shape or presentation change over already-existing columns:
+
+- **Patient MRN/Name on List**: `GET /reservations`'s `search()` read now joins (Prisma `include`) a lightweight `{ medicalRecordNo, patientName }` projection of the existing `patient` relation — not a schema change, and not a full Patient entity embed (per the same "don't duplicate cross-module entities beyond what's needed" principle §21.2/`ReservationMapper.ts`'s own doc comment already establishes). Returned as `patientMrn`/`patientFullName` on `ReservationResponse`, both `null` on any response that doesn't join the relation (create/update/cancel/checkIn/detail).
+- **Referral Source on Quick Call**: reuses the existing `patient.referral_source_id`/`referred_by_user_id` columns (`docs/03-sad/12-module-patient.md` §26.4, task-287) — RSV-016 now populates them the same way RSV-011 (Create Patient) already does, including the same `PATIENT_REFERRAL_SOURCE_INVALID` validation (module-boundary-respecting read via `IReferralSourceRepository`, same precedent as Create/Update Patient).
+- **List/History date split**: no new column — both screens already send `dateFrom`/`dateTo` to the existing `GET /reservations` filter (§20.3); this addendum only changes each screen's *default* values and the range each screen's date inputs allow the user to pick (see §40.3 for why this is UI-bounded, not server-enforced).
+- **Completed Reservations Report**: `findAllInDateRange` (already extended once, for `patientType`, in §39.2) gains a second optional filter param, `status`, following that exact precedent.
+
+## 40.3 New/Extended Use Cases
+
+| Code | Name | Notes |
+|---|---|---|
+| RSV-016 | Quick New Patient Call *(extended)* | Gains optional `referralSourceId`/`referredByUserId`, validated the same way RSV-011 (Create Patient) validates them. |
+| RSV-019 | Completed Reservations Report | New — parallel structure to RSV-017 (§39.3/§39.4): `search({status:'COMPLETED', dateFrom, dateTo})` for the paginated table, `findAllInDateRange(..., status:'COMPLETED')` for a `summary.trend` day-by-day count, reusing RSV-060's existing date-bucketing helper (`groupByDate`, `ReservationAnalyticsUseCase`) rather than a new implementation. |
+
+**RSV-013 (Quick Add Patient) — retired.** `POST /patients/quick-add`, its use case, DTO, and the "Quick Add Patient" UI affordance on the booking screen's Search Patient no-results state are all removed. `docs/03-sad/12-module-patient.md` §21.1a's Quick Add Patient Request spec should be read as historical/superseded, not a currently-live endpoint.
+
+**List/History split is deliberately UI-bounded, not server-enforced:** `GET /reservations` itself is unchanged — it still accepts any `dateFrom`/`dateTo` a caller sends. `ReservationListView.tsx` and `ReservationHistoryPage.tsx` each set their own default filter value and clamp their own date-input `min`/`max` (today for List's lower bound, yesterday for History's upper bound) client-side. This was a deliberate scope decision, not an oversight: a hard server-side constraint would also block legitimate cross-cutting reads (e.g. RSV-017/RSV-019's reports, which query arbitrary ranges through the same endpoint) from ever seeing a mix of past-and-future rows.
+
+## 40.4 New/Extended API Endpoints
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET /api/v1/reservations` | *(extended, response shape only)* | `ReservationResponse` gains `patientMrn: string \| null` and `patientFullName: string \| null`. No new query params. |
+| `POST /api/v1/reservations/quick-call` | *(extended)* | Body gains optional `referralSourceId`, `referredByUserId`. |
+| `POST /api/v1/patients/quick-add` | **Removed** | See §40.3. |
+| `GET /api/v1/reports/reservations/completed` | New | Query: `dateFrom`, `dateTo` (required) + existing pagination/sort params. Response: paginated `ReservationResponse[]` (status always `COMPLETED`) + `summary: { totalCompleted, trend: DateCountPoint[] }`. New permission `report.reservation.completed.read`, following the `report.reservation.<name>.read` convention RSV-017 already established. |
+
+## 40.5 New/Proposed Screens
+
+- **Reservation List** (`/reservations`) and **Reservation History** (`/reservations/history`) — both existing screens (§33, §39.6), no new routes. List gains a Patient column (name + MRN) and defaults/clamps its date filters to today-onward. History gains the same Patient column on its cards and defaults/clamps to before-today.
+- **Quick New Patient Call modal** — gains the same Referral Source (+ conditional "Staf yang merujuk") field pair `docs/02-design/pages/patient.md` §14 already specs for Patient Registration, via a shared component rather than a duplicated implementation.
+- **Completed Reservations Report** — `/reports/completed-reservations`. Date-range picker with the same presets as the New Patient Report (§39.6), one summary stat card (Total Completed), a `TrendChart` (day-by-day completed count), and a results table (Reservation No., Patient, Date, Time, Procedure, Staff).
+
+## 40.6 Ambiguities and Gaps Reported
+
+1. **§39.7 item 1 (two similar "no results found" actions) is now resolved** — by removal of one, per the product owner's explicit direction, not by a UX decision between them.
+2. **List/History's UI-only date bound is soft, not absolute.** A sufficiently determined user could still reach a past reservation through List (e.g. by navigating directly to `/reservations/{id}` from a link) or bypass the date-input `min`/`max` via devtools. This is accepted as within scope for a filtering/default-view convenience feature, not a security or data-integrity boundary — flagged so a future task doesn't mistake it for one.
+
+---
+
 # Final Summary
 
 Dokumen **13 - Module Reservation** mendefinisikan desain lengkap Reservation Module sebagai pusat pengelolaan appointment pada Parakita. Dokumen ini mencakup proses bisnis, kebutuhan fungsional, model data, API, validasi, workflow, integrasi lintas modul, keamanan, audit trail, pelaporan, KPI, skenario pengujian, hingga roadmap pengembangan di masa depan. Seluruh rancangan disusun mengikuti prinsip **Clean Architecture**, **Domain Driven Design (DDD)**, **Modular Monolith**, serta standar dokumentasi yang digunakan pada seluruh blueprint Parakita sehingga siap menjadi acuan implementasi backend maupun frontend.

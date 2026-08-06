@@ -61,7 +61,7 @@ export function CreateReservationForm() {
         Walk-in (no appointment slot needed)
       </label>
 
-      <PatientPicker selectedPatient={patient} onSelect={setPatient} allowQuickAdd />
+      <PatientPicker selectedPatient={patient} onSelect={setPatient} />
 
       {/* task-292 (Epic RE3): alongside Quick Add Patient (task-289) for a
           caller not yet in the system who also wants to book in the same

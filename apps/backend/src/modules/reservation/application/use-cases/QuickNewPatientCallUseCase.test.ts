@@ -3,7 +3,7 @@ import { DoctorScheduleValidator } from '../services/DoctorScheduleValidator';
 import { MedicalRecordNumberGenerator } from '../../../patient/application/services/MedicalRecordNumberGenerator';
 import { ReservationNumberGenerator } from '../services/ReservationNumberGenerator';
 import { DuplicateIdentityException } from '../../../patient/domain/exceptions/PatientExceptions';
-import { FakeDoctorRepository } from '../../../../../tests/fakes/masterDataFakes';
+import { FakeDoctorRepository, FakeReferralSourceRepository } from '../../../../../tests/fakes/masterDataFakes';
 import {
   FakeDoctorScheduleRepository,
   FakeQuickNewPatientCallRepository,
@@ -32,6 +32,7 @@ function buildSut() {
   const mrnGenerator = new MedicalRecordNumberGenerator(patientRepository);
   const reservationNumberGenerator = new ReservationNumberGenerator(reservationRepository);
   const quickNewPatientCallRepository = new FakeQuickNewPatientCallRepository(patientRepository, reservationRepository);
+  const referralSourceRepository = new FakeReferralSourceRepository();
   const auditService = new FakeAuditService();
   const eventBus = new FakeEventBus();
   const useCase = new QuickNewPatientCallUseCase(
@@ -41,10 +42,21 @@ function buildSut() {
     mrnGenerator,
     reservationNumberGenerator,
     quickNewPatientCallRepository,
+    referralSourceRepository,
     auditService,
     eventBus,
   );
-  return { patientRepository, reservationRepository, doctorRepository, scheduleRepository, quickNewPatientCallRepository, auditService, eventBus, useCase };
+  return {
+    patientRepository,
+    reservationRepository,
+    doctorRepository,
+    scheduleRepository,
+    quickNewPatientCallRepository,
+    referralSourceRepository,
+    auditService,
+    eventBus,
+    useCase,
+  };
 }
 
 // docs/06-tasks/task-292.md Testing Required
@@ -74,6 +86,60 @@ describe('QuickNewPatientCallUseCase', () => {
     expect(eventBus.published.map((e) => e.eventName)).toEqual(
       expect.arrayContaining([PATIENT_REGISTERED_EVENT, RESERVATION_CREATED_EVENT]),
     );
+  });
+
+  // docs/06-tasks/task-297.md (Reservation Module Addendum #2, R2)
+  it('passes a valid referralSourceId/referredByUserId through to the created patient', async () => {
+    const { patientRepository, doctorRepository, scheduleRepository, referralSourceRepository, useCase } = buildSut();
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const monday = nextMonday();
+    scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
+    referralSourceRepository.items.push({
+      id: 'rs-1',
+      referralSourceCode: 'WHATSAPP',
+      referralSourceName: 'WhatsApp',
+      requiresReferrer: false,
+      isActive: true,
+    });
+
+    await useCase.execute({
+      fullName: 'Phone Caller',
+      address: 'Jl. Contoh No. 5',
+      phoneNumber: '081200000005',
+      identityNumber: '3171000000009005',
+      doctorId: doctor.id,
+      reservationDate: monday.toISOString().slice(0, 10),
+      startTime: '09:00',
+      referralSourceId: 'rs-1',
+      actorUserId: 'staff-1',
+    });
+
+    const patient = [...patientRepository.patients.values()][0];
+    expect(patient.referralSourceId).toBe('rs-1');
+  });
+
+  it('rejects an inactive/unknown referralSourceId, creating neither a patient nor a reservation', async () => {
+    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, useCase } = buildSut();
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const monday = nextMonday();
+    scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
+
+    await expect(
+      useCase.execute({
+        fullName: 'Phone Caller',
+        address: 'Jl. Contoh No. 5',
+        phoneNumber: '081200000006',
+        identityNumber: '3171000000009006',
+        doctorId: doctor.id,
+        reservationDate: monday.toISOString().slice(0, 10),
+        startTime: '09:00',
+        referralSourceId: 'does-not-exist',
+        actorUserId: 'staff-1',
+      }),
+    ).rejects.toThrow();
+
+    expect(patientRepository.patients.size).toBe(0);
+    expect(reservationRepository.reservations.size).toBe(0);
   });
 
   it('rolls back the patient creation too when the reservation write fails mid-transaction', async () => {
