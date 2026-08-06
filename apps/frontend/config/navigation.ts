@@ -25,6 +25,8 @@ export const NAV_ITEMS: NavItem[] = [
     permission: "reservation.read",
     children: [
       { label: "List", href: "/reservations", permission: "reservation.read" },
+      { label: "Calendar", href: "/reservations/calendar", permission: "reservation.read" },
+      { label: "History", href: "/reservations/history", permission: "reservation.read" },
       { label: "Analytics", href: "/reservations/analytics", permission: "reservation.analytics.read" },
     ],
   },
@@ -54,6 +56,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Catalog", href: "/reports/catalog", permission: "report.catalog.read" },
       { label: "Branch Comparison", href: "/reports/branch-comparison", permission: "report.branch-comparison.read" },
       { label: "Branch Performance", href: "/reports/branch-performance", permission: "report.branch-performance.read" },
+      { label: "New Patients", href: "/reports/new-patients", permission: "report.reservation.new-patient.read" },
     ],
   },
   {

@@ -57,6 +57,10 @@ import { GetBranchDashboardUseCase } from '../../application/use-cases/GetBranch
 import { GetBranchComparisonReportUseCase } from '../../application/use-cases/GetBranchComparisonReportUseCase';
 import { GetBranchPerformanceReportUseCase } from '../../application/use-cases/GetBranchPerformanceReportUseCase';
 import { BranchReportsController } from '../controllers/BranchReportsController';
+import { NewPatientReportQueryDto } from '../../application/dtos/NewPatientReportQueryDto';
+import { GetNewPatientReportUseCase } from '../../application/use-cases/GetNewPatientReportUseCase';
+import { NewPatientReportController } from '../controllers/NewPatientReportController';
+import { ReservationRepository } from '../../../reservation/infrastructure/repositories/ReservationRepository';
 
 /**
  * docs/06-tasks/task-178.md..task-191.md (Epic AG + Epic AH) composition
@@ -124,6 +128,9 @@ export function buildReportsModule(
   );
   const reportCatalogController = new ReportCatalogController(new ListReportDefinitionsUseCase(), getReportUseCase);
 
+  // docs/06-tasks/task-291.md (Epic RE2, Reservation Module Enhancement addendum).
+  const newPatientReportController = new NewPatientReportController(new GetNewPatientReportUseCase(new ReservationRepository()));
+
   // docs/06-tasks/task-187.md..task-191.md (Epic AH).
   const reportJobRepository = new ReportJobRepository();
   const reportSnapshotRepository = new ReportSnapshotRepository();
@@ -140,6 +147,16 @@ export function buildReportsModule(
   router.use(authenticate);
 
   router.get('/reports/definitions', requirePermission('report.catalog.read'), reportCatalogController.definitions);
+
+  // docs/06-tasks/task-291.md: new permission (no existing report.*
+  // permission covers a Reservation-scoped report), following the existing
+  // `report.<dashboard>.read` namespace convention.
+  router.get(
+    '/reports/reservations/new-patients',
+    requirePermission('report.reservation.new-patient.read'),
+    validateQuery(NewPatientReportQueryDto),
+    newPatientReportController.report,
+  );
 
   // docs/03-sad/20-module-report.md Section 8.1: literal `report.job.*`/
   // `report.export.*` verbs -- no dedicated "read" permission exists for

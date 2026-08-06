@@ -14,6 +14,10 @@ import { DoctorScheduleValidator } from '../../application/services/DoctorSchedu
 import { ReservationNumberGenerator } from '../../application/services/ReservationNumberGenerator';
 import { CreateReservationUseCase } from '../../application/use-cases/CreateReservationUseCase';
 import { WalkInRegistrationUseCase } from '../../application/use-cases/WalkInRegistrationUseCase';
+import { QuickNewPatientCallUseCase } from '../../application/use-cases/QuickNewPatientCallUseCase';
+import { QuickNewPatientCallRequestDto } from '../../application/dtos/QuickNewPatientCallRequestDto';
+import { MedicalRecordNumberGenerator } from '../../../patient/application/services/MedicalRecordNumberGenerator';
+import { QuickNewPatientCallRepository } from '../../infrastructure/repositories/QuickNewPatientCallRepository';
 import { ListReservationsUseCase } from '../../application/use-cases/ListReservationsUseCase';
 import { GetReservationUseCase } from '../../application/use-cases/GetReservationUseCase';
 import { UpdateReservationUseCase } from '../../application/use-cases/UpdateReservationUseCase';
@@ -80,6 +84,16 @@ export function buildReservationModule(
     new CancelReservationUseCase(reservationRepository, timelineRepository, auditService, eventBus),
     new CheckInPatientUseCase(reservationRepository, timelineRepository, auditService, eventBus),
     new ReservationAnalyticsUseCase(reservationRepository),
+    new QuickNewPatientCallUseCase(
+      patientRepository,
+      doctorRepository,
+      scheduleValidator,
+      new MedicalRecordNumberGenerator(patientRepository),
+      reservationNumberGenerator,
+      new QuickNewPatientCallRepository(),
+      auditService,
+      eventBus,
+    ),
   );
 
   const availabilityController = new DoctorAvailabilityController(
@@ -96,6 +110,16 @@ export function buildReservationModule(
     requirePermission('reservation.create'),
     validateBody(CreatePatientReservationRequestDto),
     reservationController.create,
+  );
+  // docs/06-tasks/task-292.md: gated by both patient.create and
+  // reservation.create -- the same two permissions already required to do
+  // each step separately, no new permission code.
+  router.post(
+    '/reservations/quick-call',
+    requirePermission('patient.create'),
+    requirePermission('reservation.create'),
+    validateBody(QuickNewPatientCallRequestDto),
+    reservationController.quickCall,
   );
   // docs/06-tasks/task-060.md: registered before /reservations/:id so
   // Express doesn't match "analytics" as the :id param.

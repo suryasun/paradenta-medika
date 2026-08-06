@@ -10,6 +10,8 @@ import { ListReservationQueryDto } from '../../application/dtos/ListReservationQ
 import { ReservationAnalyticsQueryDto } from '../../application/dtos/ReservationAnalyticsQueryDto';
 import { CreateReservationUseCase } from '../../application/use-cases/CreateReservationUseCase';
 import { WalkInRegistrationUseCase } from '../../application/use-cases/WalkInRegistrationUseCase';
+import { QuickNewPatientCallUseCase } from '../../application/use-cases/QuickNewPatientCallUseCase';
+import { QuickNewPatientCallRequestDto } from '../../application/dtos/QuickNewPatientCallRequestDto';
 import { ListReservationsUseCase } from '../../application/use-cases/ListReservationsUseCase';
 import { GetReservationUseCase } from '../../application/use-cases/GetReservationUseCase';
 import { UpdateReservationUseCase } from '../../application/use-cases/UpdateReservationUseCase';
@@ -29,6 +31,7 @@ export class ReservationController {
     private readonly cancelReservationUseCase: CancelReservationUseCase,
     private readonly checkInPatientUseCase: CheckInPatientUseCase,
     private readonly reservationAnalyticsUseCase: ReservationAnalyticsUseCase,
+    private readonly quickNewPatientCallUseCase: QuickNewPatientCallUseCase,
   ) {}
 
   /**
@@ -76,6 +79,23 @@ export class ReservationController {
         correlationId: req.correlationId,
       });
       sendSuccess(res, reservation, 'Reservation created', 201);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /** docs/06-tasks/task-292.md */
+  quickCall = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.auth) throw new AuthenticationException();
+      const body = req.body as QuickNewPatientCallRequestDto;
+      const reservation = await this.quickNewPatientCallUseCase.execute({
+        ...body,
+        actorUserId: req.auth.userId,
+        ipAddress: req.ip,
+        correlationId: req.correlationId,
+      });
+      sendSuccess(res, reservation, 'Patient registered and reservation created', 201);
     } catch (error) {
       next(error);
     }

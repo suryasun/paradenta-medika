@@ -10,4 +10,6 @@ import { ListQueryDto } from '../../../../shared/http/ListQueryDto';
 export class ListPatientQueryDto extends ListQueryDto {
   @IsOptional() @IsIn(['ACTIVE', 'ARCHIVED']) status?: 'ACTIVE' | 'ARCHIVED';
   @IsOptional() @IsIn(['MALE', 'FEMALE']) gender?: 'MALE' | 'FEMALE';
+  /** docs/06-tasks/task-290.md */
+  @IsOptional() @IsIn(['NEW', 'OLD']) patientType?: 'NEW' | 'OLD';
 }

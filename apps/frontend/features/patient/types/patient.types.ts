@@ -16,6 +16,11 @@ export interface Patient {
   // task-287 (Epic PE4)
   referralSourceId: string | null;
   referredByUserId: string | null;
+  // task-290 (Epic RE1, Reservation Module Enhancement addendum): owned
+  // exclusively by the Patient module, kept in sync via a
+  // RESERVATION_CREATED_EVENT subscriber.
+  patientType: "NEW" | "OLD";
+  firstReservationAt: string | null;
 }
 
 export interface PatientDetail {
@@ -43,6 +48,9 @@ export interface PatientDetail {
     // task-287 (Epic PE4)
     referralSourceId: string | null;
     referredByUserId: string | null;
+    // task-290 (Epic RE1)
+    patientType: "NEW" | "OLD";
+    firstReservationAt: string | null;
   };
   addresses: string[];
   // Always empty in Phase 1 -- apps/backend's PatientMapper.toPatientDetailResponse
@@ -177,4 +185,6 @@ export interface ListPatientsParams {
   search?: string;
   status?: "ACTIVE" | "ARCHIVED";
   gender?: "MALE" | "FEMALE";
+  // task-290 (Epic RE1)
+  patientType?: "NEW" | "OLD";
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { reservationService } from "../services/reservation.service";
-import { CreateReservationInput, UpdateReservationInput } from "../types/reservation.types";
+import { CreateReservationInput, QuickNewPatientCallInput, UpdateReservationInput } from "../types/reservation.types";
 
 function invalidateReservation(queryClient: ReturnType<typeof useQueryClient>, id: string) {
   queryClient.invalidateQueries({ queryKey: ["reservations", "list"] });
@@ -16,6 +16,24 @@ export function useCreateReservation() {
     mutationFn: (payload: CreateReservationInput) => reservationService.create(payload),
     onSuccess: (reservation) => {
       queryClient.invalidateQueries({ queryKey: ["reservations", "list"] });
+      router.push(`/reservations/${reservation.id}`);
+    },
+  });
+}
+
+// task-292 (Epic RE3): a single submit creates both records -- on success,
+// navigate straight to the new Reservation's Detail page (skipping the
+// intermediate "patient selected, now finish booking" step Quick Add
+// Patient still requires), same as useCreateReservation.
+export function useQuickNewPatientCall() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: QuickNewPatientCallInput) => reservationService.quickCall(payload),
+    onSuccess: (reservation) => {
+      queryClient.invalidateQueries({ queryKey: ["reservations", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["patients", "list"] });
       router.push(`/reservations/${reservation.id}`);
     },
   });

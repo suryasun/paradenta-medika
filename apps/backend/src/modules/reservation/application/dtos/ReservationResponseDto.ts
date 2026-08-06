@@ -15,4 +15,6 @@ export interface ReservationResponseDto {
   checkedInAt: string | null;
   cancelledReason: string | null;
   cancelledAt: string | null;
+  /** docs/06-tasks/task-290.md: permanent NEW/OLD snapshot taken at booking time. */
+  patientType: 'NEW' | 'OLD';
 }

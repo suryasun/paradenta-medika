@@ -15,6 +15,10 @@ export interface PatientResponseDto {
   // task-287 (Epic PE4)
   referralSourceId: string | null;
   referredByUserId: string | null;
+  // task-290 (Epic RE1): owned exclusively by this module, kept in sync via
+  // a RESERVATION_CREATED_EVENT subscriber.
+  patientType: 'NEW' | 'OLD';
+  firstReservationAt: string | null;
 }
 
 export interface PatientDetailResponseDto {
@@ -42,6 +46,9 @@ export interface PatientDetailResponseDto {
     // task-287 (Epic PE4)
     referralSourceId: string | null;
     referredByUserId: string | null;
+    // task-290 (Epic RE1)
+    patientType: 'NEW' | 'OLD';
+    firstReservationAt: string | null;
   };
   addresses: string[];
   emergencyContacts: unknown[];

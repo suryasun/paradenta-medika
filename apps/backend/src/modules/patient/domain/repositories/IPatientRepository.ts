@@ -6,6 +6,8 @@ import { PatientProps } from '../entities/PatientEntity';
 export interface PatientListFilters extends ListQueryDto {
   status?: 'ACTIVE' | 'ARCHIVED';
   gender?: 'MALE' | 'FEMALE';
+  /** docs/06-tasks/task-290.md: filters against `Patient.patient_type`. */
+  patientType?: 'NEW' | 'OLD';
 }
 
 export type UpdatePatientProps = Partial<Omit<PatientProps, 'identityNumber' | 'identityType'>> & {
@@ -28,4 +30,13 @@ export interface IPatientRepository {
   restore(id: string): Promise<Patient>;
   exists(id: string): Promise<boolean>;
   count(): Promise<number>;
+  /**
+   * docs/06-tasks/task-290.md: flips `patient_type` NEW -> OLD and records
+   * `first_reservation_at`, in response to the patient's second eligible
+   * reservation. The WHERE patient_type = 'NEW' guard (not "patient_type IS
+   * currently anything") is what makes this idempotent under event
+   * redelivery -- a second call is a no-op update (matchedCount 0), never a
+   * second overwrite of first_reservation_at.
+   */
+  markAsReturning(patientId: string, firstReservationAt: Date): Promise<void>;
 }

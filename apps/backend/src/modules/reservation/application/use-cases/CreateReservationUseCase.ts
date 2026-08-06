@@ -72,6 +72,12 @@ export class CreateReservationUseCase {
 
     const reservationNo = await this.reservationNumberGenerator.generate(reservationDate);
 
+    // docs/06-tasks/task-290.md: computed synchronously, before this
+    // reservation exists, so it never counts itself -- permanent snapshot,
+    // never recomputed after creation.
+    const priorCount = await this.reservationRepository.countEligibleForPatient(input.patientId);
+    const patientTypeAtBooking = priorCount === 0 ? 'NEW' : 'OLD';
+
     const reservation = await this.reservationRepository.create({
       reservationNo,
       patientId: input.patientId,
@@ -85,6 +91,7 @@ export class CreateReservationUseCase {
       complaint: input.complaint,
       notes: input.notes,
       treatmentPlanItemId: input.treatmentPlanItemId,
+      patientTypeAtBooking,
       createdBy: input.actorUserId,
     });
 

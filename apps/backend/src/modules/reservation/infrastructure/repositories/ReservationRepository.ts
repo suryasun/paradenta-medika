@@ -13,25 +13,29 @@ const ALLOWED_SORT_FIELDS = ['createdAt', 'reservationDate', 'reservationTime'] 
 const SLOT_BLOCKING_STATUSES: ReservationStatus[] = ['BOOKED', 'CONFIRMED', 'CHECK_IN', 'IN_QUEUE', 'IN_SERVICE', 'COMPLETED'];
 const PATIENT_CONFLICT_STATUSES: ReservationStatus[] = ['BOOKED', 'CONFIRMED', 'CHECK_IN', 'IN_QUEUE', 'IN_SERVICE'];
 
+/** docs/06-tasks/task-292.md: exported for reuse by QuickNewPatientCallRepository's atomic transaction, so that combined write does not duplicate this field-mapping. */
+export function toReservationCreateData(input: CreateReservationInput): Prisma.ReservationUncheckedCreateInput {
+  return {
+    reservationNo: input.reservationNo,
+    patientId: input.patientId,
+    doctorId: input.doctorId,
+    branchId: input.branchId,
+    scheduleId: input.scheduleId,
+    reservationDate: input.reservationDate,
+    reservationTime: input.reservationTime,
+    reservationType: input.reservationType,
+    source: input.source,
+    complaint: input.complaint,
+    notes: input.notes,
+    treatmentPlanItemId: input.treatmentPlanItemId,
+    patientTypeAtBooking: input.patientTypeAtBooking ?? 'NEW',
+    createdBy: input.createdBy,
+  };
+}
+
 export class ReservationRepository implements IReservationRepository {
   async create(input: CreateReservationInput): Promise<Reservation> {
-    return prisma.reservation.create({
-      data: {
-        reservationNo: input.reservationNo,
-        patientId: input.patientId,
-        doctorId: input.doctorId,
-        branchId: input.branchId,
-        scheduleId: input.scheduleId,
-        reservationDate: input.reservationDate,
-        reservationTime: input.reservationTime,
-        reservationType: input.reservationType,
-        source: input.source,
-        complaint: input.complaint,
-        notes: input.notes,
-        treatmentPlanItemId: input.treatmentPlanItemId,
-        createdBy: input.createdBy,
-      },
-    });
+    return prisma.reservation.create({ data: toReservationCreateData(input) });
   }
 
   async findById(id: string): Promise<Reservation | null> {
@@ -57,6 +61,7 @@ export class ReservationRepository implements IReservationRepository {
       ...(filters.status ? { status: filters.status as ReservationStatus } : {}),
       ...(filters.reservationType ? { reservationType: filters.reservationType } : {}),
       ...(filters.reservationSource ? { source: filters.reservationSource as Prisma.EnumReservationSourceFilter['equals'] } : {}),
+      ...(filters.patientType ? { patientTypeAtBooking: filters.patientType } : {}),
       ...(filters.dateFrom || filters.dateTo
         ? {
             reservationDate: {
@@ -146,12 +151,13 @@ export class ReservationRepository implements IReservationRepository {
     });
   }
 
-  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string): Promise<Reservation[]> {
+  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string, patientType?: 'NEW' | 'OLD'): Promise<Reservation[]> {
     return prisma.reservation.findMany({
       where: {
         reservationDate: { gte: dateFrom, lte: dateTo },
         deletedAt: null,
         ...(branchId ? { branchId } : {}),
+        ...(patientType ? { patientTypeAtBooking: patientType } : {}),
       },
     });
   }
@@ -162,6 +168,16 @@ export class ReservationRepository implements IReservationRepository {
         branchId,
         deletedAt: null,
         status: { notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'] },
+      },
+    });
+  }
+
+  async countEligibleForPatient(patientId: string): Promise<number> {
+    return prisma.reservation.count({
+      where: {
+        patientId,
+        deletedAt: null,
+        status: { notIn: ['CANCELLED', 'NO_SHOW'] },
       },
     });
   }

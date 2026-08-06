@@ -40,6 +40,8 @@ const PATIENTS: Patient[] = [
     whatsappNumber: null,
     referralSourceId: null,
     referredByUserId: null,
+    patientType: "NEW",
+    firstReservationAt: null,
   },
 ];
 

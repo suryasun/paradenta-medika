@@ -132,6 +132,21 @@ export interface BranchPerformancePeriodEntry {
   billingCollected: number;
 }
 
+// task-291 (Epic RE2, Reservation Module Enhancement addendum). Mirrors
+// apps/backend's GetNewPatientReportUseCase's NewPatientReportSummary.
+export interface NewPatientReportSummary {
+  totalNewPatients: number;
+  topProcedure: string | null;
+  conversionRate: number;
+}
+
+export interface NewPatientReportParams {
+  dateFrom: string;
+  dateTo: string;
+  page?: number;
+  limit?: number;
+}
+
 export interface ReportJobFilters {
   branchIds?: string[];
   dateFrom?: string;

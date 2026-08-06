@@ -12,7 +12,8 @@ const ALLOWED_SORT_FIELDS = ['createdAt', 'patientName', 'birthDate', 'medicalRe
 // so this function can keep passing raw scalar FKs directly, matching
 // PatientAddressRepository's own precedent -- prisma.patient.create()'s
 // `data` param accepts either shape.
-function toCreateData(medicalRecordNo: string, props: PatientProps): Prisma.PatientUncheckedCreateInput {
+/** docs/06-tasks/task-292.md: exported for reuse by QuickNewPatientCallRepository's atomic transaction, so that combined write does not duplicate this field-mapping. */
+export function toPatientCreateData(medicalRecordNo: string, props: PatientProps): Prisma.PatientUncheckedCreateInput {
   return {
     medicalRecordNo,
     patientName: props.patientName,
@@ -63,6 +64,7 @@ export class PatientRepository implements IPatientRepository {
           }
         : {}),
       ...(filters.gender ? { gender: filters.gender } : {}),
+      ...(filters.patientType ? { patientType: filters.patientType } : {}),
       // docs/06-tasks/task-030.md AC: archived patients are excluded from
       // the default list; an explicit status filter can still request them.
       active: filters.status ? filters.status === 'ACTIVE' : true,
@@ -82,7 +84,7 @@ export class PatientRepository implements IPatientRepository {
   }
 
   async create(medicalRecordNo: string, props: PatientProps): Promise<Patient> {
-    return prisma.patient.create({ data: toCreateData(medicalRecordNo, props) });
+    return prisma.patient.create({ data: toPatientCreateData(medicalRecordNo, props) });
   }
 
   async update(id: string, props: UpdatePatientProps): Promise<Patient> {
@@ -127,5 +129,12 @@ export class PatientRepository implements IPatientRepository {
 
   async count(): Promise<number> {
     return prisma.patient.count();
+  }
+
+  async markAsReturning(patientId: string, firstReservationAt: Date): Promise<void> {
+    await prisma.patient.updateMany({
+      where: { id: patientId, patientType: 'NEW' },
+      data: { patientType: 'OLD', firstReservationAt },
+    });
   }
 }

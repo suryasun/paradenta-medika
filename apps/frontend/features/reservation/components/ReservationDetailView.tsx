@@ -70,6 +70,7 @@ export function ReservationDetailView({ reservationId }: { reservationId: string
         <Field label="Source" value={reservation.reservationSource} />
         <Field label="Complaint" value={reservation.complaint} />
         <Field label="Notes" value={reservation.notes} />
+        <Field label="Patient Type" value={reservation.patientType} />
         <Field label="Checked In At" value={reservation.checkedInAt} />
         {reservation.status === "CANCELLED" && <Field label="Cancellation Reason" value={reservation.cancelledReason} />}
       </dl>

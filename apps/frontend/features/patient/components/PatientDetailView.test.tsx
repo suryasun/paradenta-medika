@@ -46,6 +46,8 @@ const DETAIL: PatientDetail = {
     whatsappNumber: null,
     referralSourceId: null,
     referredByUserId: null,
+    patientType: "NEW",
+    firstReservationAt: null,
   },
   addresses: ["Jl. Contoh No. 1"],
   emergencyContacts: [],
@@ -101,6 +103,8 @@ describe("PatientDetailView", () => {
       whatsappNumber: "0812",
       referralSourceId: null,
       referredByUserId: null,
+      patientType: "NEW",
+      firstReservationAt: null,
     });
 
     renderView();
@@ -170,6 +174,8 @@ describe("PatientDetailView", () => {
       whatsappNumber: null,
       referralSourceId: null,
       referredByUserId: null,
+      patientType: "NEW",
+      firstReservationAt: null,
     });
 
     renderView();
@@ -202,6 +208,8 @@ describe("PatientDetailView", () => {
       whatsappNumber: null,
       referralSourceId: null,
       referredByUserId: null,
+      patientType: "NEW",
+      firstReservationAt: null,
     });
 
     renderView();

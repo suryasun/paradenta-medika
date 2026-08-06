@@ -57,6 +57,8 @@ describe("RegisterPatientForm", () => {
       whatsappNumber: null,
       referralSourceId: null,
       referredByUserId: null,
+      patientType: "NEW",
+      firstReservationAt: null,
     });
 
     renderForm();
@@ -125,6 +127,8 @@ describe("RegisterPatientForm", () => {
       whatsappNumber: null,
       referralSourceId: "rs-staff",
       referredByUserId: "u1",
+      patientType: "NEW",
+      firstReservationAt: null,
     });
 
     renderForm();

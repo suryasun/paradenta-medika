@@ -9,6 +9,8 @@ export interface ReservationListFilters extends ListQueryDto {
   reservationSource?: string;
   dateFrom?: string;
   dateTo?: string;
+  /** docs/06-tasks/task-290.md: filters against the stored `patient_type_at_booking` snapshot. */
+  patientType?: 'NEW' | 'OLD';
 }
 
 export interface CreateReservationInput {
@@ -25,6 +27,17 @@ export interface CreateReservationInput {
   notes?: string;
   /** docs/06-tasks/task-064.md: set when this Reservation originates from converting a Treatment Plan item. */
   treatmentPlanItemId?: string;
+  /**
+   * docs/06-tasks/task-290.md: permanent snapshot, computed by the caller
+   * (CreateReservationUseCase / WalkInRegistrationUseCase /
+   * QuickNewPatientCallUseCase) via countEligibleForPatient() below --
+   * never recomputed after creation. Optional (defaults to 'NEW' at the
+   * repository layer) only so pre-existing tests that construct a
+   * reservation directly through this interface without exercising that
+   * computation don't need updating one-by-one; every real use case always
+   * passes it explicitly.
+   */
+  patientTypeAtBooking?: 'NEW' | 'OLD';
   createdBy: string;
 }
 
@@ -52,8 +65,24 @@ export interface IReservationRepository {
   countActiveForPatientOnDate(patientId: string, date: Date, excludeId?: string): Promise<number>;
   count(): Promise<number>;
   countByDate(date: Date, branchId?: string): Promise<number>;
-  /** docs/06-tasks/task-060.md: raw rows for in-memory analytics aggregation over a date range. */
-  findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string): Promise<Reservation[]>;
+  /**
+   * docs/06-tasks/task-060.md: raw rows for in-memory analytics aggregation
+   * over a date range. docs/06-tasks/task-291.md extends this with an
+   * optional patientType filter, reused for that report's summary
+   * aggregation (totalNewPatients/topProcedure/conversionRate) over the
+   * full matching set, not just one paginated page.
+   */
+  findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string, patientType?: 'NEW' | 'OLD'): Promise<Reservation[]>;
   /** docs/06-tasks/task-225.md: reservations not yet in a terminal status (COMPLETED/CANCELLED/NO_SHOW), for the Branch Deactivation Guard. */
   countOpenByBranch(branchId: string): Promise<number>;
+  /**
+   * docs/06-tasks/task-290.md: count of this patient's reservations with
+   * status NOT IN (CANCELLED, NO_SHOW), across all dates. Used both by
+   * CreateReservationUseCase/WalkInRegistrationUseCase/
+   * QuickNewPatientCallUseCase (called BEFORE creating the new reservation,
+   * to compute patient_type_at_booking) and by the Patient module's
+   * RESERVATION_CREATED_EVENT subscriber (called AFTER creation, to decide
+   * whether the patient has now had a second eligible reservation).
+   */
+  countEligibleForPatient(patientId: string): Promise<number>;
 }

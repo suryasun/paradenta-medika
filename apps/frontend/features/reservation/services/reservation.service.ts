@@ -3,6 +3,7 @@ import { ApiSuccessBody, PaginationMeta } from "@/types/api";
 import {
   CreateReservationInput,
   ListReservationsParams,
+  QuickNewPatientCallInput,
   Reservation,
   ReservationAnalytics,
   ReservationAnalyticsParams,
@@ -24,6 +25,12 @@ export const reservationService = {
 
   async create(payload: CreateReservationInput): Promise<Reservation> {
     const response = await apiClient.post<ApiSuccessBody<Reservation>>("/reservations", payload);
+    return response.data.data;
+  },
+
+  // task-292 (Epic RE3)
+  async quickCall(payload: QuickNewPatientCallInput): Promise<Reservation> {
+    const response = await apiClient.post<ApiSuccessBody<Reservation>>("/reservations/quick-call", payload);
     return response.data.data;
   },
 

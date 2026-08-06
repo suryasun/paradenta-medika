@@ -11,6 +11,7 @@ import { PatientPicker } from "@/features/patient/components/PatientPicker";
 import { Patient } from "@/features/patient/types/patient.types";
 import { useCreateReservation } from "../hooks/useReservationMutations";
 import { CreateReservationInput, Reservation } from "../types/reservation.types";
+import { QuickNewPatientCallModal } from "./QuickNewPatientCallModal";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 
 const RESERVATION_TYPES: Reservation["reservationType"][] = ["APPOINTMENT", "FOLLOW_UP", "EMERGENCY", "CONSULTATION"];
@@ -30,6 +31,7 @@ export function CreateReservationForm() {
   const [source, setSource] = useState<Reservation["reservationSource"]>("PHONE");
   const [complaint, setComplaint] = useState("");
   const [notes, setNotes] = useState("");
+  const [showQuickCall, setShowQuickCall] = useState(false);
 
   const { data: doctorsData } = useDoctors();
   const createReservation = useCreateReservation();
@@ -60,6 +62,21 @@ export function CreateReservationForm() {
       </label>
 
       <PatientPicker selectedPatient={patient} onSelect={setPatient} allowQuickAdd />
+
+      {/* task-292 (Epic RE3): alongside Quick Add Patient (task-289) for a
+          caller not yet in the system who also wants to book in the same
+          step -- which of the two is visually primary is an open product
+          decision (SAD §39.7 item 1), not resolved here. */}
+      {!patient && (
+        <button
+          type="button"
+          className="self-start text-xs font-medium text-primary hover:underline"
+          onClick={() => setShowQuickCall(true)}
+        >
+          Quick Call: Create & Book Now
+        </button>
+      )}
+      {showQuickCall && <QuickNewPatientCallModal onClose={() => setShowQuickCall(false)} />}
 
       <Select id="doctorId" label="Doctor" value={doctorId} onChange={(e) => setDoctorId(e.target.value)} required>
         <option value="">Select a doctor</option>

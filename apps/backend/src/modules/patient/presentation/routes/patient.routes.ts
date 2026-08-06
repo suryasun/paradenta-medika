@@ -44,6 +44,9 @@ import { UpdateEmergencyContactUseCase } from '../../application/use-cases/Updat
 import { DeleteEmergencyContactUseCase } from '../../application/use-cases/DeleteEmergencyContactUseCase';
 import { PatientEmergencyContactRepository } from '../../infrastructure/repositories/PatientEmergencyContactRepository';
 import { PatientEmergencyContactController } from '../controllers/PatientEmergencyContactController';
+import { UpdatePatientTypeOnReservationCreatedUseCase } from '../../application/use-cases/UpdatePatientTypeOnReservationCreatedUseCase';
+import { ReservationRepository } from '../../../reservation/infrastructure/repositories/ReservationRepository';
+import { RESERVATION_CREATED_EVENT, ReservationEventPayload } from '../../../reservation/domain/events/ReservationEvents';
 
 /**
  * docs/06-tasks/task-001.md + task-027.md..task-030.md composition root.
@@ -89,6 +92,18 @@ export function buildPatientModule(
   router.put('/patients/:id', requirePermission('patient.update'), validateBody(UpdatePatientRequestDto), controller.update);
   router.patch('/patients/:id/archive', requirePermission('patient.archive'), controller.archive);
   router.patch('/patients/:id/restore', requirePermission('patient.archive'), controller.restore);
+
+  // --- task-290 (Epic RE1, Reservation Module Enhancement addendum):
+  // subscribes to RESERVATION_CREATED_EVENT (published by
+  // CreateReservationUseCase/WalkInRegistrationUseCase, and, once built,
+  // task-292's QuickNewPatientCallUseCase) to keep patient_type/
+  // first_reservation_at in sync, following the PATIENT_CHECKED_IN_EVENT ->
+  // CreateQueueUseCase subscription precedent in
+  // modules/queue/presentation/routes/queue.routes.ts exactly. ---
+  const updatePatientTypeUseCase = new UpdatePatientTypeOnReservationCreatedUseCase(patientRepository, new ReservationRepository());
+  eventBus.subscribe<ReservationEventPayload>(RESERVATION_CREATED_EVENT, async (payload) => {
+    await updatePatientTypeUseCase.execute({ patientId: payload.patientId, occurredAt: payload.occurredAt });
+  });
 
   // --- Patient Address Book (task-286, Epic PE3, Patient Module
   // Enhancement addendum). Gated by the existing patient.read/patient.update

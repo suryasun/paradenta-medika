@@ -146,6 +146,7 @@ const PERMISSION_KEYS = [
   'report.dashboard.branch.read',
   'report.branch-comparison.read',
   'report.branch-performance.read',
+  'report.reservation.new-patient.read',
   'report.finance.read',
   'report.hr.payroll.read',
   'report.hr.read',
@@ -300,6 +301,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'report.export.download',
     'report.operations.read',
     'report.billing.read',
+    'report.reservation.new-patient.read',
   ],
   CASHIER: [
     'billing.invoice.read',
@@ -1208,6 +1210,9 @@ async function seedTransactionalData(userIdByUsername: Map<string, string>) {
       status: 'COMPLETED',
       source: 'PHONE',
       checkedInAt: new Date(todayDateOnly.getTime() + 8.5 * 3600 * 1000),
+      // task-290 (Epic RE1): seeded as a returning patient's visit for
+      // manual-testing variety across the new Patient Type badge/filter.
+      patientTypeAtBooking: 'OLD',
       createdBy: userIdByUsername.get('registration1'),
     },
   });
@@ -1225,6 +1230,7 @@ async function seedTransactionalData(userIdByUsername: Map<string, string>) {
       complaint: 'Kontrol rutin scaling',
       status: 'BOOKED',
       source: 'WHATSAPP',
+      patientTypeAtBooking: 'NEW',
       createdBy: userIdByUsername.get('registration1'),
     },
   });
@@ -1244,6 +1250,7 @@ async function seedTransactionalData(userIdByUsername: Map<string, string>) {
       source: 'WEBSITE',
       cancelledReason: 'Pasien meminta reschedule',
       cancelledAt: twoDaysAgo,
+      patientTypeAtBooking: 'NEW',
       createdBy: userIdByUsername.get('registration1'),
     },
   });

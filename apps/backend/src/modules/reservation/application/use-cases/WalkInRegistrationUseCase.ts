@@ -59,6 +59,12 @@ export class WalkInRegistrationUseCase {
 
     const reservationNo = await this.reservationNumberGenerator.generate(reservationDate);
 
+    // docs/06-tasks/task-290.md: same determination CreateReservationUseCase
+    // applies -- a walk-in is just another entry point into reservation
+    // creation, not a different rule.
+    const priorCount = await this.reservationRepository.countEligibleForPatient(input.patientId);
+    const patientTypeAtBooking = priorCount === 0 ? 'NEW' : 'OLD';
+
     const reservation = await this.reservationRepository.create({
       reservationNo,
       patientId: input.patientId,
@@ -70,6 +76,7 @@ export class WalkInRegistrationUseCase {
       source: 'WALK_IN',
       complaint: input.complaint,
       notes: input.notes,
+      patientTypeAtBooking,
       createdBy: input.actorUserId,
     });
 

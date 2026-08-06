@@ -51,6 +51,8 @@ describe("CreateReservationForm", () => {
           whatsappNumber: null,
           referralSourceId: null,
           referredByUserId: null,
+          patientType: "NEW",
+          firstReservationAt: null,
         },
       ],
       meta: { page: 1, limit: 8, total: 1, totalPages: 1 },
@@ -76,6 +78,7 @@ describe("CreateReservationForm", () => {
       checkedInAt: "2026-08-02T10:00:00.000Z",
       cancelledReason: null,
       cancelledAt: null,
+      patientType: "NEW",
     });
 
     renderForm();
@@ -124,6 +127,8 @@ describe("CreateReservationForm", () => {
       whatsappNumber: null,
       referralSourceId: null,
       referredByUserId: null,
+      patientType: "NEW",
+      firstReservationAt: null,
     });
 
     renderForm();
@@ -149,5 +154,61 @@ describe("CreateReservationForm", () => {
     );
     expect(await screen.findByText(/Walk-in Patient/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  // task-292 (Epic RE3, Reservation Module Enhancement addendum)
+  it("lets staff Quick Call a new patient (create + book in one submit) and navigates straight to the new reservation", async () => {
+    const user = userEvent.setup();
+    mockedReservationService.quickCall.mockResolvedValue({
+      id: "r2",
+      reservationNumber: "RSV-20260810-0001",
+      status: "BOOKED",
+      patientId: "p3",
+      doctorId: "d1",
+      branchId: "b1",
+      scheduleId: "s1",
+      reservationDate: "2026-08-10",
+      startTime: "09:00",
+      reservationType: "APPOINTMENT",
+      reservationSource: "PHONE",
+      complaint: null,
+      notes: null,
+      checkedInAt: null,
+      cancelledReason: null,
+      cancelledAt: null,
+      patientType: "NEW",
+    });
+
+    mockedReservationService.getTimeSlots.mockResolvedValue([
+      { time: "09:00", capacity: 1, reserved: 0, available: 1, status: "AVAILABLE" },
+    ]);
+
+    renderForm();
+
+    await user.click(screen.getByRole("button", { name: "Quick Call: Create & Book Now" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Full Name"), "Phone Caller");
+    await user.type(within(dialog).getByLabelText("Address"), "Jl. Contoh No. 5");
+    await user.type(within(dialog).getByLabelText("Phone Number"), "081200000010");
+    await user.type(within(dialog).getByLabelText("Identity Number"), "3171000000009010");
+    await user.selectOptions(within(dialog).getByLabelText("Doctor"), "d1");
+    await user.type(within(dialog).getByLabelText("Date"), "2026-08-10");
+    await user.click(await within(dialog).findByRole("button", { name: "09:00" }));
+    await user.click(within(dialog).getByRole("button", { name: "Create & Book Now" }));
+
+    await waitFor(() =>
+      expect(mockedReservationService.quickCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fullName: "Phone Caller",
+          address: "Jl. Contoh No. 5",
+          phoneNumber: "081200000010",
+          identityNumber: "3171000000009010",
+          doctorId: "d1",
+          reservationDate: "2026-08-10",
+          startTime: "09:00",
+        }),
+      ),
+    );
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/reservations/r2"));
   });
 });

@@ -34,5 +34,6 @@ export function toReservationResponse(reservation: Reservation): ReservationResp
     checkedInAt: reservation.checkedInAt ? reservation.checkedInAt.toISOString() : null,
     cancelledReason: reservation.cancelledReason,
     cancelledAt: reservation.cancelledAt ? reservation.cancelledAt.toISOString() : null,
+    patientType: reservation.patientTypeAtBooking,
   };
 }

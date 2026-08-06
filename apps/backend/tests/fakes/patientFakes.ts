@@ -35,6 +35,8 @@ function toPatientRow(medicalRecordNo: string, props: PatientProps): Patient {
     whatsappNumber: props.whatsappNumber ?? null,
     referralSourceId: props.referralSourceId ?? null,
     referredByUserId: props.referredByUserId ?? null,
+    patientType: 'NEW',
+    firstReservationAt: null,
     registrationDate: new Date(),
     active: true,
     createdAt: new Date(),
@@ -68,6 +70,7 @@ export class FakePatientRepository implements IPatientRepository {
     const activeFilter = filters.status ? filters.status === 'ACTIVE' : true;
     all = all.filter((p) => p.active === activeFilter);
     if (filters.gender) all = all.filter((p) => p.gender === filters.gender);
+    if (filters.patientType) all = all.filter((p) => p.patientType === filters.patientType);
     if (filters.search) {
       const term = filters.search.toLowerCase();
       all = all.filter((p) => p.patientName.toLowerCase().includes(term) || p.medicalRecordNo.toLowerCase().includes(term));
@@ -122,6 +125,13 @@ export class FakePatientRepository implements IPatientRepository {
 
   async count(): Promise<number> {
     return this.patients.size;
+  }
+
+  async markAsReturning(patientId: string, firstReservationAt: Date): Promise<void> {
+    const patient = this.patients.get(patientId);
+    if (!patient || patient.patientType !== 'NEW') return;
+    patient.patientType = 'OLD';
+    patient.firstReservationAt = firstReservationAt;
   }
 }
 

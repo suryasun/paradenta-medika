@@ -43,4 +43,42 @@ describe('ListReservationsUseCase', () => {
     const noMatch = await useCase.execute({ doctorId: 'doctor-b', status: 'CANCELLED', page: 1, limit: 20, sort: 'createdAt', order: 'desc' });
     expect(noMatch.items).toHaveLength(0);
   });
+
+  // docs/06-tasks/task-290.md Testing Required: "GET /reservations?patientType=NEW ... returns correctly filtered results"
+  it('narrows results by the patientType filter (task-290)', async () => {
+    const reservationRepository = new FakeReservationRepository();
+    const useCase = new ListReservationsUseCase(reservationRepository);
+    await reservationRepository.create({
+      reservationNo: 'RSV-3',
+      patientId: 'p3',
+      doctorId: 'doctor-a',
+      branchId: 'b1',
+      reservationDate: new Date(),
+      reservationTime: parseTimeToDate('09:00'),
+      reservationType: 'APPOINTMENT',
+      source: 'PHONE',
+      patientTypeAtBooking: 'NEW',
+      createdBy: 'staff-1',
+    });
+    await reservationRepository.create({
+      reservationNo: 'RSV-4',
+      patientId: 'p4',
+      doctorId: 'doctor-a',
+      branchId: 'b1',
+      reservationDate: new Date(),
+      reservationTime: parseTimeToDate('10:00'),
+      reservationType: 'APPOINTMENT',
+      source: 'PHONE',
+      patientTypeAtBooking: 'OLD',
+      createdBy: 'staff-1',
+    });
+
+    const onlyNew = await useCase.execute({ patientType: 'NEW', page: 1, limit: 20, sort: 'createdAt', order: 'desc' });
+    expect(onlyNew.items).toHaveLength(1);
+    expect(onlyNew.items[0].reservationNumber).toBe('RSV-3');
+
+    const onlyOld = await useCase.execute({ patientType: 'OLD', page: 1, limit: 20, sort: 'createdAt', order: 'desc' });
+    expect(onlyOld.items).toHaveLength(1);
+    expect(onlyOld.items[0].reservationNumber).toBe('RSV-4');
+  });
 });

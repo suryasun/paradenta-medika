@@ -61,6 +61,15 @@ export function PatientListView() {
           <option value="MALE">Male</option>
           <option value="FEMALE">Female</option>
         </Select>
+        {/* task-290 (Epic RE1, Reservation Module Enhancement addendum) */}
+        <Select
+          value={filters.patientType ?? ""}
+          onChange={(e) => setFilters((f) => ({ ...f, patientType: (e.target.value || undefined) as "NEW" | "OLD" | undefined, page: 1 }))}
+        >
+          <option value="">All patients</option>
+          <option value="NEW">New</option>
+          <option value="OLD">Old</option>
+        </Select>
       </div>
 
       {isLoading && <LoadingState label="Loading patients..." rows={5} columns={6} />}
@@ -77,6 +86,7 @@ export function PatientListView() {
               <TableHeaderCell>Gender</TableHeaderCell>
               <TableHeaderCell>Phone</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
+              <TableHeaderCell>Patient Type</TableHeaderCell>
               <TableHeaderCell>Actions</TableHeaderCell>
             </TableRow>
           </TableHead>
@@ -89,6 +99,9 @@ export function PatientListView() {
                 <TableCell>{patient.phoneNumber}</TableCell>
                 <TableCell>
                   <Badge tone={patient.status === "ACTIVE" ? "success" : "neutral"}>{patient.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge tone={patient.patientType === "NEW" ? "info" : "neutral"}>{patient.patientType}</Badge>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-2">

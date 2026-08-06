@@ -35,6 +35,7 @@ const RESERVATION: Reservation = {
   checkedInAt: null,
   cancelledReason: null,
   cancelledAt: null,
+  patientType: "NEW",
 };
 
 describe("ReservationDetailView", () => {

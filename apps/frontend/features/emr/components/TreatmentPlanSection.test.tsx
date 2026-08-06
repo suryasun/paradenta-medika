@@ -96,6 +96,7 @@ describe("TreatmentPlanSection", () => {
       checkedInAt: null,
       cancelledReason: null,
       cancelledAt: null,
+      patientType: "NEW",
     });
     renderSection();
 

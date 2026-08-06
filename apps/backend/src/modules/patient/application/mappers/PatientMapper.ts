@@ -25,6 +25,8 @@ export function toPatientResponse(patient: Patient): PatientResponseDto {
     whatsappNumber: patient.whatsappNumber,
     referralSourceId: patient.referralSourceId,
     referredByUserId: patient.referredByUserId,
+    patientType: patient.patientType,
+    firstReservationAt: patient.firstReservationAt ? patient.firstReservationAt.toISOString() : null,
   };
 }
 
@@ -55,6 +57,8 @@ export function toPatientDetailResponse(patient: Patient): PatientDetailResponse
       whatsappNumber: patient.whatsappNumber,
       referralSourceId: patient.referralSourceId,
       referredByUserId: patient.referredByUserId,
+      patientType: patient.patientType,
+      firstReservationAt: patient.firstReservationAt ? patient.firstReservationAt.toISOString() : null,
     },
     addresses: [patient.address],
     emergencyContacts: [],

@@ -116,4 +116,66 @@ describe('CreateReservationUseCase', () => {
       }),
     ).rejects.toBeInstanceOf(InactivePatientException);
   });
+
+  // docs/06-tasks/task-290.md Testing Required
+  describe('patient_type_at_booking (task-290)', () => {
+    it("tags a patient's first reservation NEW", async () => {
+      const { patientRepository, doctorRepository, scheduleRepository, useCase } = buildSut();
+      const patient = await seedPatient(patientRepository, true);
+      const doctor = await doctorRepository.create({ doctorCode: 'DOC04', userId: 'u4', branchId: 'branch-1', fullName: 'Dr. Test' });
+      const monday = nextMonday();
+      scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay(), maxPatient: 5 }));
+
+      const result = await useCase.execute({
+        patientId: patient.id,
+        doctorId: doctor.id,
+        reservationDate: monday.toISOString().slice(0, 10),
+        startTime: '09:00',
+        reservationType: 'APPOINTMENT',
+        source: 'PHONE',
+        actorUserId: 'staff-1',
+      });
+
+      expect(result.patientType).toBe('NEW');
+    });
+
+    it("tags a patient's second reservation OLD, and does not retroactively change it if the first reservation is cancelled afterward", async () => {
+      const { patientRepository, doctorRepository, scheduleRepository, reservationRepository, useCase } = buildSut();
+      const patient = await seedPatient(patientRepository, true);
+      const doctor = await doctorRepository.create({ doctorCode: 'DOC05', userId: 'u5', branchId: 'branch-1', fullName: 'Dr. Test' });
+      const monday = nextMonday();
+      const nextWeekMonday = new Date(monday);
+      nextWeekMonday.setUTCDate(nextWeekMonday.getUTCDate() + 7);
+      scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay(), maxPatient: 5 }));
+
+      const first = await useCase.execute({
+        patientId: patient.id,
+        doctorId: doctor.id,
+        reservationDate: monday.toISOString().slice(0, 10),
+        startTime: '09:00',
+        reservationType: 'APPOINTMENT',
+        source: 'PHONE',
+        actorUserId: 'staff-1',
+      });
+      expect(first.patientType).toBe('NEW');
+
+      const second = await useCase.execute({
+        patientId: patient.id,
+        doctorId: doctor.id,
+        reservationDate: nextWeekMonday.toISOString().slice(0, 10),
+        startTime: '10:00',
+        reservationType: 'APPOINTMENT',
+        source: 'PHONE',
+        actorUserId: 'staff-1',
+      });
+      expect(second.patientType).toBe('OLD');
+
+      // The first reservation is cancelled *after* the second was already
+      // computed -- patient_type_at_booking is a permanent snapshot, never
+      // recomputed, so the second reservation must remain OLD.
+      await reservationRepository.cancel(first.id, 'Patient request', 'staff-1');
+      const secondAfterCancel = await reservationRepository.findById(second.id);
+      expect(secondAfterCancel?.patientTypeAtBooking).toBe('OLD');
+    });
+  });
 });

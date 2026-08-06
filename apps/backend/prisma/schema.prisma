@@ -649,6 +649,15 @@ model Patient {
   referralSourceId String? @map("referral_source_id") @db.Char(36)
   referredByUserId String? @map("referred_by_user_id") @db.Char(36)
 
+  // docs/06-tasks/task-290.md (Epic RE1): owned exclusively by the Patient
+  // module, kept in sync via a RESERVATION_CREATED_EVENT subscriber -- never
+  // written directly by Reservation (MOD-003). firstReservationAt records
+  // when the patient stopped being NEW (their second real reservation), not
+  // their first reservation's timestamp -- see the use-case's own note on
+  // why this makes the flip idempotent under event redelivery.
+  patientType        PatientType @default(NEW) @map("patient_type")
+  firstReservationAt DateTime?   @map("first_reservation_at")
+
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -713,6 +722,15 @@ enum ReservationSource {
   MOBILE_APP
 }
 
+/// docs/06-tasks/task-290.md (Epic RE1, Reservation Module Enhancement
+/// addendum): a patient's lifecycle stage, distinct from ReservationSource
+/// (intake channel) -- see docs/03-sad/13-module-reservation.md Section
+/// 39.2's naming-collision analysis for why this is not named `source`.
+enum PatientType {
+  NEW
+  OLD
+}
+
 /// docs/03-sad/13-module-reservation.md Section 19.3 Reservation Entity,
 /// reconciled with the Phase 1 table set already established: scheduleId
 /// is nullable because Walk-in reservations (Section 17) have no schedule
@@ -734,6 +752,10 @@ model Reservation {
   checkedInAt     DateTime?         @map("checked_in_at")
   cancelledReason String?           @map("cancelled_reason") @db.Text
   cancelledAt     DateTime?         @map("cancelled_at")
+
+  // docs/06-tasks/task-290.md: permanent snapshot computed synchronously in
+  // CreateReservationUseCase -- never recomputed/overwritten after creation.
+  patientTypeAtBooking PatientType @map("patient_type_at_booking")
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)

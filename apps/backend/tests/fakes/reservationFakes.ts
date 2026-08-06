@@ -1,4 +1,4 @@
-import { DoctorSchedule, Reservation, ReservationStatus } from '@prisma/client';
+import { Patient, DoctorSchedule, Reservation, ReservationStatus } from '@prisma/client';
 import {
   CreateReservationInput,
   IReservationRepository,
@@ -7,8 +7,13 @@ import {
 } from '../../src/modules/reservation/domain/repositories/IReservationRepository';
 import { IDoctorScheduleRepository } from '../../src/modules/reservation/domain/repositories/IDoctorScheduleRepository';
 import { AppendTimelineInput, IReservationTimelineRepository } from '../../src/modules/reservation/domain/repositories/IReservationTimelineRepository';
+import {
+  IQuickNewPatientCallRepository,
+  QuickNewPatientCallWriteInput,
+} from '../../src/modules/reservation/domain/repositories/IQuickNewPatientCallRepository';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
+import { FakePatientRepository } from './patientFakes';
 
 const SLOT_BLOCKING_STATUSES: ReservationStatus[] = ['BOOKED', 'CONFIRMED', 'CHECK_IN', 'IN_QUEUE', 'IN_SERVICE', 'COMPLETED'];
 const PATIENT_CONFLICT_STATUSES: ReservationStatus[] = ['BOOKED', 'CONFIRMED', 'CHECK_IN', 'IN_QUEUE', 'IN_SERVICE'];
@@ -32,6 +37,7 @@ export class FakeReservationRepository implements IReservationRepository {
       status: 'BOOKED',
       source: input.source,
       treatmentPlanItemId: input.treatmentPlanItemId ?? null,
+      patientTypeAtBooking: input.patientTypeAtBooking ?? 'NEW',
       checkedInAt: null,
       cancelledReason: null,
       cancelledAt: null,
@@ -60,6 +66,9 @@ export class FakeReservationRepository implements IReservationRepository {
     if (filters.status) all = all.filter((r) => r.status === filters.status);
     if (filters.reservationType) all = all.filter((r) => r.reservationType === filters.reservationType);
     if (filters.reservationSource) all = all.filter((r) => r.source === filters.reservationSource);
+    if (filters.patientType) all = all.filter((r) => r.patientTypeAtBooking === filters.patientType);
+    if (filters.dateFrom) all = all.filter((r) => r.reservationDate.getTime() >= new Date(filters.dateFrom!).getTime());
+    if (filters.dateTo) all = all.filter((r) => r.reservationDate.getTime() <= new Date(filters.dateTo!).getTime());
     const start = (filters.page - 1) * filters.limit;
     return { items: all.slice(start, start + filters.limit), total: all.length };
   }
@@ -130,12 +139,13 @@ export class FakeReservationRepository implements IReservationRepository {
     ).length;
   }
 
-  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string): Promise<Reservation[]> {
+  async findAllInDateRange(dateFrom: Date, dateTo: Date, branchId?: string, patientType?: 'NEW' | 'OLD'): Promise<Reservation[]> {
     return [...this.reservations.values()].filter(
       (r) =>
         r.reservationDate.getTime() >= dateFrom.getTime() &&
         r.reservationDate.getTime() <= dateTo.getTime() &&
         (!branchId || r.branchId === branchId) &&
+        (!patientType || r.patientTypeAtBooking === patientType) &&
         !r.deletedAt,
     );
   }
@@ -143,6 +153,12 @@ export class FakeReservationRepository implements IReservationRepository {
   async countOpenByBranch(branchId: string): Promise<number> {
     return [...this.reservations.values()].filter(
       (r) => r.branchId === branchId && !r.deletedAt && !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(r.status),
+    ).length;
+  }
+
+  async countEligibleForPatient(patientId: string): Promise<number> {
+    return [...this.reservations.values()].filter(
+      (r) => r.patientId === patientId && !r.deletedAt && !['CANCELLED', 'NO_SHOW'].includes(r.status),
     ).length;
   }
 }
@@ -185,5 +201,34 @@ export class FakeReservationTimelineRepository implements IReservationTimelineRe
 
   async append(input: AppendTimelineInput): Promise<void> {
     this.entries.push(input);
+  }
+}
+
+/**
+ * docs/06-tasks/task-292.md Testing Required: "verified against a fake
+ * repository that can be made to throw mid-transaction" -- `failNextWrite`
+ * simulates the reservation half of the write failing after the patient
+ * half has already run, and rolls the patient creation back (deleting it
+ * from the shared FakePatientRepository) to prove no orphaned patient
+ * record is left behind, mirroring what the real Prisma $transaction does.
+ */
+export class FakeQuickNewPatientCallRepository implements IQuickNewPatientCallRepository {
+  failNextWrite = false;
+
+  constructor(
+    private readonly patientRepository: FakePatientRepository,
+    private readonly reservationRepository: FakeReservationRepository,
+  ) {}
+
+  async execute(input: QuickNewPatientCallWriteInput): Promise<{ patient: Patient; reservation: Reservation }> {
+    const patient = await this.patientRepository.create(input.medicalRecordNo, input.patientProps);
+
+    if (this.failNextWrite) {
+      this.patientRepository.patients.delete(patient.id);
+      throw new Error('Simulated reservation-write failure (task-292 rollback test)');
+    }
+
+    const reservation = await this.reservationRepository.create({ ...input.reservation, patientId: patient.id });
+    return { patient, reservation };
   }
 }

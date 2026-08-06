@@ -52,6 +52,9 @@ function ReservationRow({ reservation, doctorName }: { reservation: Reservation;
         <Badge tone={RESERVATION_STATUS_TONE[reservation.status]}>{reservation.status}</Badge>
       </TableCell>
       <TableCell>
+        <Badge tone={reservation.patientType === "NEW" ? "info" : "neutral"}>{reservation.patientType}</Badge>
+      </TableCell>
+      <TableCell>
         <div className="flex gap-2">
           <Link href={`/reservations/${reservation.id}`} className="text-sm font-medium text-primary hover:underline">
             View
@@ -120,6 +123,15 @@ export function ReservationListView() {
           value={filters.dateTo ?? ""}
           onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value || undefined, page: 1 }))}
         />
+        {/* task-290 (Epic RE1) */}
+        <Select
+          value={filters.patientType ?? ""}
+          onChange={(e) => setFilters((f) => ({ ...f, patientType: (e.target.value || undefined) as "NEW" | "OLD" | undefined, page: 1 }))}
+        >
+          <option value="">All patients</option>
+          <option value="NEW">New</option>
+          <option value="OLD">Old</option>
+        </Select>
       </div>
 
       {isLoading && <LoadingState label="Loading reservations..." rows={5} columns={6} />}
@@ -137,6 +149,7 @@ export function ReservationListView() {
               <TableHeaderCell>Doctor</TableHeaderCell>
               <TableHeaderCell>Type</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
+              <TableHeaderCell>Patient Type</TableHeaderCell>
               <TableHeaderCell>Actions</TableHeaderCell>
             </TableRow>
           </TableHead>
