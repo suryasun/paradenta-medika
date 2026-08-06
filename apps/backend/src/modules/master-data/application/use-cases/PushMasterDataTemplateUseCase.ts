@@ -3,6 +3,7 @@ import { IMasterDataTemplateRepository } from '../../domain/repositories/IMaster
 import { IMasterDataTemplateBranchLinkRepository } from '../../domain/repositories/IMasterDataTemplateBranchLinkRepository';
 import { IBranchRepository } from '../../domain/repositories/IBranchRepository';
 import { MasterDataNotFoundException, MasterDataReferenceInvalidException } from '../../domain/exceptions/MasterDataExceptions';
+import { IMasterDataTemplateEntityAdapter } from '../services/IMasterDataTemplateEntityAdapter';
 
 export interface PushMasterDataTemplateInput {
   templateId: string;
@@ -17,6 +18,9 @@ export type PushResultStatus = 'CREATED' | 'UPDATED' | 'CONFLICT';
 export interface PushMasterDataTemplateResult {
   branchId: string;
   status: PushResultStatus;
+  /** Phase 4 hardening: true when entityType is adapter-registered and this push actually wrote to the real Treatment/PaymentMethod/ToothCondition row (false for CONFLICT, or for any unregistered entityType -- JSON-only as before). */
+  appliedToEntity: boolean;
+  appliedEntityId?: string;
 }
 
 function deepEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
@@ -37,6 +41,12 @@ export class PushMasterDataTemplateUseCase {
     private readonly branchLinkRepository: IMasterDataTemplateBranchLinkRepository,
     private readonly branchRepository: IBranchRepository,
     private readonly auditService: IAuditService,
+    // Phase 4 hardening: entityType -> real-entity adapter, keyed by the
+    // literal strings TREATMENT/PAYMENT_METHOD/TOOTH_CONDITION (see
+    // masterDataTemplateEntityAdapters.ts). Any other entityType (or no
+    // registry at all, for callers/tests that don't need it) keeps the
+    // pre-existing JSON-only behavior unchanged.
+    private readonly entityAdapters?: Map<string, IMasterDataTemplateEntityAdapter>,
   ) {}
 
   async execute(input: PushMasterDataTemplateInput): Promise<PushMasterDataTemplateResult[]> {
@@ -46,6 +56,7 @@ export class PushMasterDataTemplateUseCase {
     }
 
     const templatePayload = template.templatePayload as Record<string, unknown>;
+    const adapter = this.entityAdapters?.get(template.entityType);
     const results: PushMasterDataTemplateResult[] = [];
 
     for (const branchId of input.branchIds) {
@@ -56,14 +67,16 @@ export class PushMasterDataTemplateUseCase {
 
       const existingLink = await this.branchLinkRepository.findByTemplateAndBranch(input.templateId, branchId);
       if (!existingLink) {
+        const applied = await adapter?.applyToEntity(branchId, templatePayload);
         await this.branchLinkRepository.create({
           templateId: input.templateId,
           branchId,
           pushedVersion: template.version,
           snapshotPayload: templatePayload,
           currentPayload: templatePayload,
+          appliedEntityId: applied?.entityId,
         });
-        results.push({ branchId, status: 'CREATED' });
+        results.push({ branchId, status: 'CREATED', appliedToEntity: !!applied, appliedEntityId: applied?.entityId });
         continue;
       }
 
@@ -72,12 +85,13 @@ export class PushMasterDataTemplateUseCase {
         existingLink.snapshotPayload as Record<string, unknown>,
       );
       if (hasLocalDivergence) {
-        results.push({ branchId, status: 'CONFLICT' });
+        results.push({ branchId, status: 'CONFLICT', appliedToEntity: false });
         continue;
       }
 
-      await this.branchLinkRepository.overwriteWithPush(existingLink.id, template.version, templatePayload);
-      results.push({ branchId, status: 'UPDATED' });
+      const applied = await adapter?.applyToEntity(branchId, templatePayload);
+      await this.branchLinkRepository.overwriteWithPush(existingLink.id, template.version, templatePayload, applied?.entityId ?? existingLink.appliedEntityId ?? undefined);
+      results.push({ branchId, status: 'UPDATED', appliedToEntity: !!applied, appliedEntityId: applied?.entityId ?? existingLink.appliedEntityId ?? undefined });
     }
 
     const auditContext: AuditContext = { userId: input.actorUserId, ipAddress: input.ipAddress, correlationId: input.correlationId };

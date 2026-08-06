@@ -42,6 +42,18 @@ export class ToothConditionRepository implements IToothConditionRepository {
     return prisma.toothCondition.findFirst({ where: { conditionCode, deletedAt: null } });
   }
 
+  // Phase 4 hardening: see TreatmentRepository.findByCodeForBranch's comment.
+  async findByCodeForBranch(conditionCode: string, branchId: string): Promise<ToothCondition | null> {
+    const branchSpecific = await prisma.toothCondition.findFirst({ where: { conditionCode, branchId, deletedAt: null } });
+    if (branchSpecific) return branchSpecific;
+    return prisma.toothCondition.findFirst({ where: { conditionCode, branchId: null, deletedAt: null } });
+  }
+
+  async existsForBranch(conditionCode: string, branchId: string | null): Promise<boolean> {
+    const match = await prisma.toothCondition.findFirst({ where: { conditionCode, branchId, deletedAt: null } });
+    return match !== null;
+  }
+
   async update(id: string, input: UpdateToothConditionInput): Promise<ToothCondition> {
     return prisma.toothCondition.update({ where: { id }, data: input });
   }

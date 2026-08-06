@@ -22,18 +22,32 @@ export class MasterDataTemplateBranchLinkRepository implements IMasterDataTempla
         pushedVersion: input.pushedVersion,
         snapshotPayload: input.snapshotPayload as Prisma.InputJsonValue,
         currentPayload: input.currentPayload as Prisma.InputJsonValue,
+        appliedEntityId: input.appliedEntityId,
       },
     });
   }
 
-  async overwriteWithPush(id: string, pushedVersion: number, payload: Record<string, unknown>): Promise<MasterDataTemplateBranchLink> {
+  async overwriteWithPush(
+    id: string,
+    pushedVersion: number,
+    payload: Record<string, unknown>,
+    appliedEntityId?: string,
+  ): Promise<MasterDataTemplateBranchLink> {
     return prisma.masterDataTemplateBranchLink.update({
       where: { id },
       data: {
         pushedVersion,
         snapshotPayload: payload as Prisma.InputJsonValue,
         currentPayload: payload as Prisma.InputJsonValue,
+        appliedEntityId: appliedEntityId ?? undefined,
       },
+    });
+  }
+
+  async updateCurrentPayload(id: string, currentPayload: Record<string, unknown>): Promise<MasterDataTemplateBranchLink> {
+    return prisma.masterDataTemplateBranchLink.update({
+      where: { id },
+      data: { currentPayload: currentPayload as Prisma.InputJsonValue },
     });
   }
 }

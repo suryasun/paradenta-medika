@@ -42,6 +42,18 @@ export class PaymentMethodRepository implements IPaymentMethodRepository {
     return prisma.paymentMethod.findFirst({ where: { methodCode, deletedAt: null } });
   }
 
+  // Phase 4 hardening: see TreatmentRepository.findByCodeForBranch's comment.
+  async findByCodeForBranch(methodCode: string, branchId: string): Promise<PaymentMethod | null> {
+    const branchSpecific = await prisma.paymentMethod.findFirst({ where: { methodCode, branchId, deletedAt: null } });
+    if (branchSpecific) return branchSpecific;
+    return prisma.paymentMethod.findFirst({ where: { methodCode, branchId: null, deletedAt: null } });
+  }
+
+  async existsForBranch(methodCode: string, branchId: string | null): Promise<boolean> {
+    const match = await prisma.paymentMethod.findFirst({ where: { methodCode, branchId, deletedAt: null } });
+    return match !== null;
+  }
+
   async update(id: string, input: UpdatePaymentMethodInput): Promise<PaymentMethod> {
     return prisma.paymentMethod.update({ where: { id }, data: input });
   }

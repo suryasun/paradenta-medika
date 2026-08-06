@@ -165,6 +165,7 @@ export class FakeMasterDataTemplateBranchLinkRepository implements IMasterDataTe
       pushedVersion: input.pushedVersion,
       snapshotPayload: input.snapshotPayload,
       currentPayload: input.currentPayload,
+      appliedEntityId: input.appliedEntityId ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
     } as unknown as MasterDataTemplateBranchLink;
@@ -172,12 +173,26 @@ export class FakeMasterDataTemplateBranchLinkRepository implements IMasterDataTe
     return link;
   }
 
-  async overwriteWithPush(id: string, pushedVersion: number, payload: Record<string, unknown>): Promise<MasterDataTemplateBranchLink> {
+  async overwriteWithPush(
+    id: string,
+    pushedVersion: number,
+    payload: Record<string, unknown>,
+    appliedEntityId?: string,
+  ): Promise<MasterDataTemplateBranchLink> {
     const link = this.links.get(id);
     if (!link) throw new Error('not found');
     link.pushedVersion = pushedVersion;
     link.snapshotPayload = payload as never;
     link.currentPayload = payload as never;
+    if (appliedEntityId !== undefined) link.appliedEntityId = appliedEntityId;
+    return link;
+  }
+
+  // Phase 4 hardening: refreshes currentPayload only, mirroring the real repository.
+  async updateCurrentPayload(id: string, currentPayload: Record<string, unknown>): Promise<MasterDataTemplateBranchLink> {
+    const link = this.links.get(id);
+    if (!link) throw new Error('not found');
+    link.currentPayload = currentPayload as never;
     return link;
   }
 
@@ -253,6 +268,7 @@ export class FakeToothConditionRepository implements IToothConditionRepository {
       category: input.category,
       colorCode: input.colorCode ?? null,
       isActive: true,
+      branchId: input.branchId ?? null,
       createdAt: new Date(),
       createdBy: null,
       updatedAt: new Date(),
@@ -274,6 +290,17 @@ export class FakeToothConditionRepository implements IToothConditionRepository {
 
   async findByCode(conditionCode: string): Promise<ToothCondition | null> {
     return [...this.conditions.values()].find((c) => c.conditionCode === conditionCode) ?? null;
+  }
+
+  // Phase 4 hardening: same branch-specific-first-else-global fallback as the real repository.
+  async findByCodeForBranch(conditionCode: string, branchId: string): Promise<ToothCondition | null> {
+    const branchSpecific = [...this.conditions.values()].find((c) => c.conditionCode === conditionCode && c.branchId === branchId);
+    if (branchSpecific) return branchSpecific;
+    return [...this.conditions.values()].find((c) => c.conditionCode === conditionCode && c.branchId === null) ?? null;
+  }
+
+  async existsForBranch(conditionCode: string, branchId: string | null): Promise<boolean> {
+    return [...this.conditions.values()].some((c) => c.conditionCode === conditionCode && c.branchId === branchId);
   }
 
   async update(id: string, input: UpdateToothConditionInput): Promise<ToothCondition> {

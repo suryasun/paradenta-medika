@@ -14,6 +14,8 @@ function toCreateData(input: CreateTreatmentInput): Prisma.TreatmentCreateInput 
     durationMinute: input.durationMinute,
     defaultPrice: input.defaultPrice,
     doctorFee: input.doctorFee,
+    // Phase 4 hardening: see the Treatment Prisma model's own comment.
+    branch: input.branchId ? { connect: { id: input.branchId } } : undefined,
   };
 }
 
@@ -63,6 +65,19 @@ export class TreatmentRepository implements ITreatmentRepository {
 
   async findByCode(treatmentCode: string): Promise<Treatment | null> {
     return prisma.treatment.findFirst({ where: { treatmentCode, deletedAt: null } });
+  }
+
+  // Phase 4 hardening: branch-specific override first, else the clinic-wide
+  // global row (branchId IS NULL) -- see the Treatment Prisma model's comment.
+  async findByCodeForBranch(treatmentCode: string, branchId: string): Promise<Treatment | null> {
+    const branchSpecific = await prisma.treatment.findFirst({ where: { treatmentCode, branchId, deletedAt: null } });
+    if (branchSpecific) return branchSpecific;
+    return prisma.treatment.findFirst({ where: { treatmentCode, branchId: null, deletedAt: null } });
+  }
+
+  async existsForBranch(treatmentCode: string, branchId: string | null): Promise<boolean> {
+    const match = await prisma.treatment.findFirst({ where: { treatmentCode, branchId, deletedAt: null } });
+    return match !== null;
   }
 
   async update(id: string, input: UpdateTreatmentInput): Promise<Treatment> {

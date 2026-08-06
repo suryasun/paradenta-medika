@@ -81,7 +81,15 @@ export type TemplatePushStatus = "CREATED" | "UPDATED" | "CONFLICT";
 export interface TemplatePushResult {
   branchId: string;
   status: TemplatePushStatus;
+  // Phase 4 hardening: true when entityType is one of the adapter-registered
+  // types (TREATMENT/PAYMENT_METHOD/TOOTH_CONDITION) and this push actually
+  // wrote to that real entity, not just the JSON snapshot.
+  appliedToEntity: boolean;
+  appliedEntityId?: string;
 }
+
+/** Phase 4 hardening: the only entityType values that write to a real entity when pushed -- see masterDataTemplateEntityAdapters.ts on the backend. */
+export const REAL_ENTITY_TEMPLATE_TYPES = ["TREATMENT", "PAYMENT_METHOD", "TOOTH_CONDITION"] as const;
 
 export interface TemplateFieldDrift {
   field: string;

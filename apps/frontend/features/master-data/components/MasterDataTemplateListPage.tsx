@@ -17,6 +17,9 @@ import { getApiErrorMessage } from "@/lib/api-client";
 import { clinicService } from "../services/clinic.service";
 import { useMasterDataTemplates } from "../hooks/useMasterDataTemplates";
 import { useCreateMasterDataTemplate } from "../hooks/useMasterDataTemplateMutations";
+import { REAL_ENTITY_TEMPLATE_TYPES } from "../types/masterData.types";
+
+const CUSTOM_ENTITY_TYPE_OPTION = "__custom__";
 
 // Phase 4, task-221 (docs/02-design/pages/master-data.md §10.3). Not built
 // on AdminEntityListPage -- Templates' Push/Drift actions don't fit that
@@ -25,11 +28,15 @@ export function MasterDataTemplateListPage() {
   const { data, isLoading, isError, error, refetch } = useMasterDataTemplates();
   const { data: clinicsData } = useQuery({ queryKey: ["master-data", "clinics", "options"], queryFn: () => clinicService.list() });
   const [showCreate, setShowCreate] = useState(false);
-  const [entityType, setEntityType] = useState("");
+  const [entityTypeSelection, setEntityTypeSelection] = useState<string>("");
+  const [customEntityType, setCustomEntityType] = useState("");
   const [payloadText, setPayloadText] = useState("{}");
   const [ownerClinicId, setOwnerClinicId] = useState("");
   const [payloadError, setPayloadError] = useState<string | null>(null);
   const createTemplate = useCreateMasterDataTemplate();
+
+  const isCustomEntityType = entityTypeSelection === CUSTOM_ENTITY_TYPE_OPTION;
+  const entityType = isCustomEntityType ? customEntityType : entityTypeSelection;
 
   function submitCreate() {
     let templatePayload: Record<string, unknown>;
@@ -90,7 +97,29 @@ export function MasterDataTemplateListPage() {
       {showCreate && (
         <Modal title="New Template" onClose={() => setShowCreate(false)}>
           <div className="flex flex-col gap-3">
-            <Input id="template-entity-type" label="Entity Type" value={entityType} onChange={(e) => setEntityType(e.target.value)} placeholder="e.g. TREATMENT" />
+            <Select
+              id="template-entity-type"
+              label="Entity Type"
+              value={entityTypeSelection}
+              onChange={(e) => setEntityTypeSelection(e.target.value)}
+            >
+              <option value="">Select an entity type...</option>
+              {REAL_ENTITY_TEMPLATE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type} (pushes to the real entity)
+                </option>
+              ))}
+              <option value={CUSTOM_ENTITY_TYPE_OPTION}>Custom label (metadata only, not applied to a real entity)</option>
+            </Select>
+            {isCustomEntityType && (
+              <Input
+                id="template-entity-type-custom"
+                label="Custom Entity Type Label"
+                value={customEntityType}
+                onChange={(e) => setCustomEntityType(e.target.value)}
+                placeholder="e.g. ROOM_TYPE"
+              />
+            )}
             <Select id="template-owner-clinic" label="Owner Clinic" value={ownerClinicId} onChange={(e) => setOwnerClinicId(e.target.value)}>
               <option value="">Select a clinic...</option>
               {clinicsData?.items.map((clinic) => (

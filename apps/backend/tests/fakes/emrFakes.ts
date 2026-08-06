@@ -290,6 +290,7 @@ export class FakeTreatmentRepository implements ITreatmentRepository {
       defaultPrice: input.defaultPrice as never,
       doctorFee: (input.doctorFee ?? null) as never,
       isActive: true,
+      branchId: input.branchId ?? null,
       createdAt: new Date(),
       createdBy: null,
       updatedAt: new Date(),
@@ -313,6 +314,17 @@ export class FakeTreatmentRepository implements ITreatmentRepository {
 
   async findByCode(treatmentCode: string): Promise<Treatment | null> {
     return [...this.treatments.values()].find((t) => t.treatmentCode === treatmentCode) ?? null;
+  }
+
+  // Phase 4 hardening: same branch-specific-first-else-global fallback as the real repository.
+  async findByCodeForBranch(treatmentCode: string, branchId: string): Promise<Treatment | null> {
+    const branchSpecific = [...this.treatments.values()].find((t) => t.treatmentCode === treatmentCode && t.branchId === branchId);
+    if (branchSpecific) return branchSpecific;
+    return [...this.treatments.values()].find((t) => t.treatmentCode === treatmentCode && t.branchId === null) ?? null;
+  }
+
+  async existsForBranch(treatmentCode: string, branchId: string | null): Promise<boolean> {
+    return [...this.treatments.values()].some((t) => t.treatmentCode === treatmentCode && t.branchId === branchId);
   }
 
   async update(id: string, input: UpdateTreatmentInput): Promise<Treatment> {

@@ -1,6 +1,7 @@
 import { IMasterDataTemplateRepository } from '../../domain/repositories/IMasterDataTemplateRepository';
 import { IMasterDataTemplateBranchLinkRepository } from '../../domain/repositories/IMasterDataTemplateBranchLinkRepository';
 import { MasterDataNotFoundException } from '../../domain/exceptions/MasterDataExceptions';
+import { IMasterDataTemplateEntityAdapter } from '../services/IMasterDataTemplateEntityAdapter';
 
 export interface FieldDrift {
   field: string;
@@ -38,6 +39,13 @@ export class GetMasterDataDriftReportUseCase {
   constructor(
     private readonly templateRepository: IMasterDataTemplateRepository,
     private readonly branchLinkRepository: IMasterDataTemplateBranchLinkRepository,
+    // Phase 4 hardening: same registry PushMasterDataTemplateUseCase uses.
+    // When a link has an appliedEntityId (entityType is adapter-registered),
+    // currentPayload is refreshed from the entity's *live* values before
+    // diffing, so drift reflects manual edits made through the entity's own
+    // CRUD endpoint (e.g. PATCH /masterdata/treatments/{id}), not just
+    // edits to the JSON snapshot itself.
+    private readonly entityAdapters?: Map<string, IMasterDataTemplateEntityAdapter>,
   ) {}
 
   async execute(templateId: string): Promise<BranchDriftEntry[]> {
@@ -46,13 +54,23 @@ export class GetMasterDataDriftReportUseCase {
       throw new MasterDataNotFoundException('MasterDataTemplate');
     }
 
+    const adapter = this.entityAdapters?.get(template.entityType);
     const links = await this.branchLinkRepository.listByTemplate(templateId);
 
-    return links.map((link) => ({
-      branchId: link.branchId,
-      pushedVersion: link.pushedVersion,
-      isStale: link.pushedVersion < template.version,
-      fieldDrifts: diffPayloads(link.snapshotPayload as Record<string, unknown>, link.currentPayload as Record<string, unknown>),
-    }));
+    return Promise.all(
+      links.map(async (link) => {
+        let currentPayload = link.currentPayload as Record<string, unknown>;
+        if (adapter && link.appliedEntityId) {
+          currentPayload = await adapter.readEntitySnapshot(link.branchId, link.appliedEntityId);
+          await this.branchLinkRepository.updateCurrentPayload(link.id, currentPayload);
+        }
+        return {
+          branchId: link.branchId,
+          pushedVersion: link.pushedVersion,
+          isStale: link.pushedVersion < template.version,
+          fieldDrifts: diffPayloads(link.snapshotPayload as Record<string, unknown>, currentPayload),
+        };
+      }),
+    );
   }
 }

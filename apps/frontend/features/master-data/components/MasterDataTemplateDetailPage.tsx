@@ -139,6 +139,7 @@ export function MasterDataTemplateDetailPage({ templateId }: { templateId: strin
               <TableRow>
                 <TableHeaderCell>Branch</TableHeaderCell>
                 <TableHeaderCell>Status</TableHeaderCell>
+                <TableHeaderCell>Applied to Entity</TableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -147,6 +148,13 @@ export function MasterDataTemplateDetailPage({ templateId }: { templateId: strin
                   <TableCell>{branchesData?.items.find((b) => b.id === result.branchId)?.branchName ?? result.branchId}</TableCell>
                   <TableCell>
                     <Badge tone={PUSH_STATUS_TONE[result.status]}>{result.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    {result.appliedToEntity ? (
+                      <Badge tone="success">Yes</Badge>
+                    ) : (
+                      <span className="text-xs text-muted">No (metadata only)</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

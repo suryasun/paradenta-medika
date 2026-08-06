@@ -46,6 +46,7 @@ import {
 } from '../../application/dtos/MasterDataTemplateRequestDto';
 import { PushMasterDataTemplateUseCase } from '../../application/use-cases/PushMasterDataTemplateUseCase';
 import { GetMasterDataDriftReportUseCase } from '../../application/use-cases/GetMasterDataDriftReportUseCase';
+import { buildMasterDataTemplateEntityAdapterRegistry } from '../../application/services/masterDataTemplateEntityAdapters';
 import { MasterDataTemplateController } from '../controllers/MasterDataTemplateController';
 
 import { ProvinceRepository } from '../../infrastructure/repositories/ProvinceRepository';
@@ -316,9 +317,23 @@ export function buildMasterDataModule(
   const masterDataTemplateBranchLinkRepository = new MasterDataTemplateBranchLinkRepository();
   const masterDataTemplateUseCases = buildCrudUseCases('MasterDataTemplate', masterDataTemplateRepository, auditService);
   const masterDataTemplateCrudController = buildCrudController(masterDataTemplateUseCases, 'MasterDataTemplate', 'templateId');
+  // Phase 4 hardening: real-entity wiring for TREATMENT/PAYMENT_METHOD/
+  // TOOTH_CONDITION templates -- reuses the same repositories already
+  // constructed above for their own CRUD endpoints, not new instances.
+  const masterDataTemplateEntityAdapters = buildMasterDataTemplateEntityAdapterRegistry(
+    treatmentRepository,
+    paymentMethodRepository,
+    toothConditionRepository,
+  );
   const masterDataTemplateController = new MasterDataTemplateController(
-    new PushMasterDataTemplateUseCase(masterDataTemplateRepository, masterDataTemplateBranchLinkRepository, branchRepository, auditService),
-    new GetMasterDataDriftReportUseCase(masterDataTemplateRepository, masterDataTemplateBranchLinkRepository),
+    new PushMasterDataTemplateUseCase(
+      masterDataTemplateRepository,
+      masterDataTemplateBranchLinkRepository,
+      branchRepository,
+      auditService,
+      masterDataTemplateEntityAdapters,
+    ),
+    new GetMasterDataDriftReportUseCase(masterDataTemplateRepository, masterDataTemplateBranchLinkRepository, masterDataTemplateEntityAdapters),
   );
   router.get(
     '/masterdata/templates',

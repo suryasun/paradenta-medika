@@ -261,6 +261,12 @@ model Branch {
   financeAccountMappings  FinanceAccountMapping[]
   userBranches            UserBranch[]
   masterDataTemplateLinks MasterDataTemplateBranchLink[]
+  // Phase 4 hardening: branch-specific overrides created by a Master Data
+  // Template push (see Treatment's own model comment for the nullable-
+  // branchId design).
+  treatments              Treatment[]
+  toothConditions         ToothCondition[]
+  paymentMethods          PaymentMethod[]
 
   @@map("branches")
 }
@@ -298,12 +304,18 @@ model MasterDataTemplate {
 /// (task-222's conflict detection, task-223's drift report) compares
 /// currentPayload against snapshotPayload/the template's latest payload.
 model MasterDataTemplateBranchLink {
-  id              String @id @default(uuid()) @db.Char(36)
-  templateId      String @map("template_id") @db.Char(36)
-  branchId        String @map("branch_id") @db.Char(36)
-  pushedVersion   Int    @map("pushed_version")
-  snapshotPayload Json   @map("snapshot_payload")
-  currentPayload  Json   @map("current_payload")
+  id              String  @id @default(uuid()) @db.Char(36)
+  templateId      String  @map("template_id") @db.Char(36)
+  branchId        String  @map("branch_id") @db.Char(36)
+  pushedVersion   Int     @map("pushed_version")
+  snapshotPayload Json    @map("snapshot_payload")
+  currentPayload  Json    @map("current_payload")
+  // Phase 4 hardening: set when `entityType` is a registered, real-entity-
+  // backed type (see masterDataTemplateEntityAdapters.ts) -- the id of the
+  // concrete Treatment/PaymentMethod/ToothCondition row this push created
+  // or updated. Null for any entityType outside the registry, which keeps
+  // behaving exactly as before (JSON-only, no real write).
+  appliedEntityId String? @map("applied_entity_id") @db.Char(36)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -333,15 +345,29 @@ model TreatmentCategory {
   @@map("treatment_categories")
 }
 
+// Phase 4 hardening (Centralized Master Data Template real-entity wiring,
+// docs/06-tasks/task-222.md/task-223.md): `branchId` is nullable and
+// additive -- a NULL-branchId row is the clinic-wide/global definition
+// every pre-Phase-4 consumer (Billing/EMR/Warehouse, existing CRUD
+// endpoints) already reads via findByCode/findById unchanged; a non-NULL
+// `branchId` row is a branch-specific override a Master Data Template push
+// can create without touching the global row, closing the gap where the
+// template mechanism only wrote to a JSON sandbox (MasterDataTemplateBranchLink)
+// disconnected from this table. MySQL's unique-index semantics treat
+// multiple NULLs as distinct, so "at most one global row per code" is
+// enforced at the application layer (TreatmentTemplateAdapter /
+// PushMasterDataTemplateUseCase's existing validateCreate path), not by
+// `@@unique([branchId, treatmentCode])` alone.
 model Treatment {
   id                  String   @id @default(uuid()) @db.Char(36)
-  treatmentCode       String   @unique @map("treatment_code") @db.VarChar(30)
+  treatmentCode       String   @map("treatment_code") @db.VarChar(30)
   treatmentName       String   @map("treatment_name") @db.VarChar(200)
   treatmentCategoryId String   @map("treatment_category_id") @db.Char(36)
   durationMinute      Int?     @map("duration_minute")
   defaultPrice        Decimal  @map("default_price") @db.Decimal(18, 2)
   doctorFee           Decimal? @map("doctor_fee") @db.Decimal(18, 2)
   isActive            Boolean  @default(true) @map("is_active")
+  branchId            String?  @map("branch_id") @db.Char(36)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
@@ -351,9 +377,11 @@ model Treatment {
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
   treatmentCategory  TreatmentCategory   @relation(fields: [treatmentCategoryId], references: [id])
+  branch             Branch?             @relation(fields: [branchId], references: [id])
   visitTreatments    VisitTreatment[]
   treatmentPlanItems TreatmentPlanItem[]
 
+  @@unique([branchId, treatmentCode])
   @@index([treatmentCategoryId])
   @@map("treatments")
 }
@@ -372,13 +400,18 @@ enum ToothConditionCategory {
   IMPLANTOLOGY
 }
 
+// Phase 4 hardening: nullable branchId, same additive/backward-compatible
+// design as Treatment above (see its comment) -- NULL branchId is the
+// existing global row, a Master Data Template push can create a
+// branch-specific override without disturbing it.
 model ToothCondition {
   id            String                 @id @default(uuid()) @db.Char(36)
-  conditionCode String                 @unique @map("condition_code") @db.VarChar(30)
+  conditionCode String                 @map("condition_code") @db.VarChar(30)
   conditionName String                 @map("condition_name") @db.VarChar(100)
   category      ToothConditionCategory
   colorCode     String?                @map("color_code") @db.VarChar(20)
   isActive      Boolean                @default(true) @map("is_active")
+  branchId      String?                @map("branch_id") @db.Char(36)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
@@ -387,8 +420,10 @@ model ToothCondition {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
+  branch            Branch?           @relation(fields: [branchId], references: [id])
   odontogramEntries OdontogramEntry[]
 
+  @@unique([branchId, conditionCode])
   @@map("tooth_conditions")
 }
 
@@ -527,12 +562,15 @@ model ReferralSource {
   @@map("referral_sources")
 }
 
+// Phase 4 hardening: nullable branchId, same additive/backward-compatible
+// design as Treatment above (see its comment).
 model PaymentMethod {
   id         String  @id @default(uuid()) @db.Char(36)
-  methodCode String  @unique @map("method_code") @db.VarChar(30)
+  methodCode String  @map("method_code") @db.VarChar(30)
   methodName String  @map("method_name") @db.VarChar(100)
   isCash     Boolean @default(false) @map("is_cash")
   isActive   Boolean @default(true) @map("is_active")
+  branchId   String? @map("branch_id") @db.Char(36)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
@@ -541,9 +579,11 @@ model PaymentMethod {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
+  branch                 Branch?                 @relation(fields: [branchId], references: [id])
   payments               Payment[]
   financeAccountMappings FinanceAccountMapping[]
 
+  @@unique([branchId, methodCode])
   @@map("payment_methods")
 }
 

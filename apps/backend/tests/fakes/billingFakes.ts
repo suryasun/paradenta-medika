@@ -169,6 +169,7 @@ export class FakePaymentMethodRepository implements IPaymentMethodRepository {
       methodName: input.methodName,
       isCash: input.isCash ?? false,
       isActive: true,
+      branchId: input.branchId ?? null,
       createdAt: new Date(),
       createdBy: null,
       updatedAt: new Date(),
@@ -192,6 +193,17 @@ export class FakePaymentMethodRepository implements IPaymentMethodRepository {
 
   async findByCode(methodCode: string): Promise<PaymentMethod | null> {
     return [...this.methods.values()].find((m) => m.methodCode === methodCode) ?? null;
+  }
+
+  // Phase 4 hardening: same branch-specific-first-else-global fallback as the real repository.
+  async findByCodeForBranch(methodCode: string, branchId: string): Promise<PaymentMethod | null> {
+    const branchSpecific = [...this.methods.values()].find((m) => m.methodCode === methodCode && m.branchId === branchId);
+    if (branchSpecific) return branchSpecific;
+    return [...this.methods.values()].find((m) => m.methodCode === methodCode && m.branchId === null) ?? null;
+  }
+
+  async existsForBranch(methodCode: string, branchId: string | null): Promise<boolean> {
+    return [...this.methods.values()].some((m) => m.methodCode === methodCode && m.branchId === branchId);
   }
 
   async update(id: string, input: UpdatePaymentMethodInput): Promise<PaymentMethod> {
