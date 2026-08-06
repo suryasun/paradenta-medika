@@ -31,6 +31,9 @@ export function BranchesAdminPage() {
     { name: "email", label: "Email", type: "text", required: true },
     { name: "address", label: "Address", type: "text", required: true },
     { name: "timezone", label: "Timezone", type: "text" },
+    // MRN scheme hardening: short, unique prefix MedicalRecordNumberGenerator
+    // uses to build this branch's patient MRNs (e.g. "KM" -> KM260802001).
+    { name: "mrnPrefix", label: "MRN Prefix", type: "text" },
   ];
 
   return (
@@ -42,6 +45,7 @@ export function BranchesAdminPage() {
         { key: "branchCode", label: "Code" },
         { key: "branchName", label: "Name" },
         { key: "phone", label: "Phone" },
+        { key: "mrnPrefix", label: "MRN Prefix" },
       ]}
       fields={fields}
       service={branchService}

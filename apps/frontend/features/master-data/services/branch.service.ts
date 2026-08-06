@@ -10,6 +10,9 @@ export interface Branch {
   address: string;
   timezone: string;
   isActive: boolean;
+  // MRN scheme hardening: short, unique prefix used by
+  // MedicalRecordNumberGenerator (e.g. "KM" -> KM260802001).
+  mrnPrefix: string | null;
 }
 
 // docs/06-tasks/task-022.md

@@ -2,6 +2,7 @@ import { IEventBus } from '../../../../shared/events/EventBus';
 import { ValidationException } from '../../../../shared/http/exceptions';
 import { AuditContext, IAuditService } from '../../../system/domain/services/IAuditService';
 import { IReferralSourceRepository } from '../../../master-data/domain/repositories/IReferralSourceRepository';
+import { ResolveDefaultBranchUseCase } from '../../../master-data/domain/services/ResolveDefaultBranchUseCase';
 import { PatientEntity, PatientGenderValue, PatientIdentityTypeValue } from '../../domain/entities/PatientEntity';
 import { DuplicateIdentityException, PatientReferralSourceInvalidException } from '../../domain/exceptions/PatientExceptions';
 import { PATIENT_REGISTERED_EVENT, PatientRegisteredPayload } from '../../domain/events/PatientEvents';
@@ -49,6 +50,10 @@ export class CreatePatientUseCase {
     private readonly auditService: IAuditService,
     private readonly eventBus: IEventBus,
     private readonly referralSourceRepository: IReferralSourceRepository,
+    // MRN scheme hardening: resolves which branch the front-desk user
+    // registering this patient belongs to, per explicit direction (the
+    // registration request itself carries no branchId field).
+    private readonly resolveDefaultBranchUseCase: ResolveDefaultBranchUseCase,
   ) {}
 
   async execute(input: CreatePatientInput): Promise<PatientResponseDto> {
@@ -72,6 +77,8 @@ export class CreatePatientUseCase {
       }
     }
 
+    const branchId = await this.resolveDefaultBranchUseCase.execute(input.actorUserId);
+
     const entity = PatientEntity.create({
       patientName: input.fullName,
       gender: input.gender,
@@ -89,9 +96,10 @@ export class CreatePatientUseCase {
       whatsappNumber: input.whatsappNumber,
       referralSourceId: input.referralSourceId,
       referredByUserId: input.referredByUserId,
+      registeredBranchId: branchId,
     });
 
-    const medicalRecordNo = await this.mrnGenerator.generate();
+    const medicalRecordNo = await this.mrnGenerator.generate(branchId);
     const patient = await this.patientRepository.create(medicalRecordNo, entity.props);
 
     const auditContext: AuditContext = { userId: input.actorUserId, ipAddress: input.ipAddress, correlationId: input.correlationId };

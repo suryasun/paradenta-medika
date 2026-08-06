@@ -1,4 +1,9 @@
-import { IsBoolean, IsEmail, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+
+// MRN scheme hardening: 2-5 uppercase letters/digits, matching the short
+// prefix MedicalRecordNumberGenerator prepends to every MRN it generates
+// for this branch (e.g. "KM" -> KM260802001).
+const MRN_PREFIX_PATTERN = /^[A-Z0-9]{2,5}$/;
 
 export class CreateBranchRequestDto {
   @IsUUID('4') clinicId!: string;
@@ -8,6 +13,7 @@ export class CreateBranchRequestDto {
   @IsEmail() @MaxLength(100) email!: string;
   @IsString() @MinLength(1) address!: string;
   @IsOptional() @IsString() @MaxLength(50) timezone?: string;
+  @IsOptional() @IsString() @Matches(MRN_PREFIX_PATTERN, { message: 'mrnPrefix must be 2-5 uppercase letters/digits' }) mrnPrefix?: string;
 }
 
 export class UpdateBranchRequestDto {
@@ -17,4 +23,5 @@ export class UpdateBranchRequestDto {
   @IsOptional() @IsString() @MinLength(1) address?: string;
   @IsOptional() @IsString() @MaxLength(50) timezone?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  @IsOptional() @IsString() @Matches(MRN_PREFIX_PATTERN, { message: 'mrnPrefix must be 2-5 uppercase letters/digits' }) mrnPrefix?: string;
 }

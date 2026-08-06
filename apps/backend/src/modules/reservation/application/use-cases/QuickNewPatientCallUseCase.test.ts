@@ -3,7 +3,7 @@ import { DoctorScheduleValidator } from '../services/DoctorScheduleValidator';
 import { MedicalRecordNumberGenerator } from '../../../patient/application/services/MedicalRecordNumberGenerator';
 import { ReservationNumberGenerator } from '../services/ReservationNumberGenerator';
 import { DuplicateIdentityException } from '../../../patient/domain/exceptions/PatientExceptions';
-import { FakeDoctorRepository, FakeReferralSourceRepository } from '../../../../../tests/fakes/masterDataFakes';
+import { FakeDoctorRepository, FakeReferralSourceRepository, FakeBranchRepository } from '../../../../../tests/fakes/masterDataFakes';
 import {
   FakeDoctorScheduleRepository,
   FakeQuickNewPatientCallRepository,
@@ -23,13 +23,25 @@ function nextMonday(): Date {
   return date;
 }
 
-function buildSut() {
+async function buildSut() {
   const patientRepository = new FakePatientRepository();
   const reservationRepository = new FakeReservationRepository();
   const doctorRepository = new FakeDoctorRepository();
   const scheduleRepository = new FakeDoctorScheduleRepository();
   const scheduleValidator = new DoctorScheduleValidator(doctorRepository, scheduleRepository, reservationRepository);
-  const mrnGenerator = new MedicalRecordNumberGenerator(patientRepository);
+  const branchRepository = new FakeBranchRepository();
+  // MRN scheme hardening: the doctor's branch needs an mrnPrefix for
+  // MedicalRecordNumberGenerator to succeed.
+  const branch = await branchRepository.create({
+    clinicId: 'clinic-1',
+    branchCode: 'BR-A',
+    branchName: 'Branch A',
+    phone: '021',
+    email: 'a@x.com',
+    address: 'Jl. A',
+    mrnPrefix: 'KM',
+  });
+  const mrnGenerator = new MedicalRecordNumberGenerator(patientRepository, branchRepository);
   const reservationNumberGenerator = new ReservationNumberGenerator(reservationRepository);
   const quickNewPatientCallRepository = new FakeQuickNewPatientCallRepository(patientRepository, reservationRepository);
   const referralSourceRepository = new FakeReferralSourceRepository();
@@ -55,6 +67,7 @@ function buildSut() {
     referralSourceRepository,
     auditService,
     eventBus,
+    branch,
     useCase,
   };
 }
@@ -62,8 +75,8 @@ function buildSut() {
 // docs/06-tasks/task-292.md Testing Required
 describe('QuickNewPatientCallUseCase', () => {
   it('creates exactly one patient and one reservation, tagged patient_type_at_booking = NEW', async () => {
-    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, auditService, eventBus, useCase } = buildSut();
-    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, auditService, eventBus, branch, useCase } = await buildSut();
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: branch.id, fullName: 'Dr. Test' });
     const monday = nextMonday();
     scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
 
@@ -90,8 +103,8 @@ describe('QuickNewPatientCallUseCase', () => {
 
   // docs/06-tasks/task-297.md (Reservation Module Addendum #2, R2)
   it('passes a valid referralSourceId/referredByUserId through to the created patient', async () => {
-    const { patientRepository, doctorRepository, scheduleRepository, referralSourceRepository, useCase } = buildSut();
-    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const { patientRepository, doctorRepository, scheduleRepository, referralSourceRepository, branch, useCase } = await buildSut();
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: branch.id, fullName: 'Dr. Test' });
     const monday = nextMonday();
     scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
     referralSourceRepository.items.push({
@@ -119,8 +132,8 @@ describe('QuickNewPatientCallUseCase', () => {
   });
 
   it('rejects an inactive/unknown referralSourceId, creating neither a patient nor a reservation', async () => {
-    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, useCase } = buildSut();
-    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, branch, useCase } = await buildSut();
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: branch.id, fullName: 'Dr. Test' });
     const monday = nextMonday();
     scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
 
@@ -143,8 +156,8 @@ describe('QuickNewPatientCallUseCase', () => {
   });
 
   it('rolls back the patient creation too when the reservation write fails mid-transaction', async () => {
-    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, quickNewPatientCallRepository, useCase } = buildSut();
-    const doctor = await doctorRepository.create({ doctorCode: 'DOC02', userId: 'u2', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, quickNewPatientCallRepository, branch, useCase } = await buildSut();
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC02', userId: 'u2', branchId: branch.id, fullName: 'Dr. Test' });
     const monday = nextMonday();
     scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
     quickNewPatientCallRepository.failNextWrite = true;
@@ -167,7 +180,7 @@ describe('QuickNewPatientCallUseCase', () => {
   });
 
   it('rejects an identityNumber that already belongs to an existing patient, creating neither a new patient nor a reservation', async () => {
-    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, useCase } = buildSut();
+    const { patientRepository, reservationRepository, doctorRepository, scheduleRepository, branch, useCase } = await buildSut();
     await patientRepository.create('MRN000001', {
       patientName: 'Existing Patient',
       gender: 'MALE',
@@ -177,7 +190,7 @@ describe('QuickNewPatientCallUseCase', () => {
       phone: '0811',
       address: 'Jl. Lama',
     });
-    const doctor = await doctorRepository.create({ doctorCode: 'DOC03', userId: 'u3', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC03', userId: 'u3', branchId: branch.id, fullName: 'Dr. Test' });
     const monday = nextMonday();
     scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
 

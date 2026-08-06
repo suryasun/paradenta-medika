@@ -31,6 +31,7 @@ describe("BranchConfigurationPage", () => {
       address: "",
       timezone: "Asia/Jakarta",
       isActive: true,
+      mrnPrefix: null,
     });
   });
 

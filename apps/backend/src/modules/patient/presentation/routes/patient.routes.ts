@@ -31,6 +31,10 @@ import { RegencyRepository } from '../../../master-data/infrastructure/repositor
 import { DistrictRepository } from '../../../master-data/infrastructure/repositories/DistrictRepository';
 import { VillageRepository } from '../../../master-data/infrastructure/repositories/VillageRepository';
 import { ReferralSourceRepository } from '../../../master-data/infrastructure/repositories/ReferralSourceRepository';
+import { BranchRepository } from '../../../master-data/infrastructure/repositories/BranchRepository';
+import { ResolveDefaultBranchUseCase } from '../../../master-data/domain/services/ResolveDefaultBranchUseCase';
+import { UserBranchRepository } from '../../../system/infrastructure/repositories/UserBranchRepository';
+import { SystemParameterRepository } from '../../../system/infrastructure/repositories/SystemParameterRepository';
 
 import {
   CreatePatientEmergencyContactRequestDto,
@@ -62,13 +66,17 @@ export function buildPatientModule(
   requirePermission: (code: string) => RequestHandler,
 ): Router {
   const patientRepository = new PatientRepository();
-  const mrnGenerator = new MedicalRecordNumberGenerator(patientRepository);
+  // MRN scheme hardening: branch-prefixed, monthly-reset MRN generation --
+  // see MedicalRecordNumberGenerator's own doc comment.
+  const branchRepository = new BranchRepository();
+  const mrnGenerator = new MedicalRecordNumberGenerator(patientRepository, branchRepository);
+  const resolveDefaultBranchUseCase = new ResolveDefaultBranchUseCase(new UserBranchRepository(), new SystemParameterRepository());
   // task-287 (Epic PE4): consumed by Create/UpdatePatientUseCase to
   // validate a submitted referralSourceId (module boundary honored).
   const referralSourceRepository = new ReferralSourceRepository();
 
   const controller = new PatientController(
-    new CreatePatientUseCase(patientRepository, mrnGenerator, auditService, eventBus, referralSourceRepository),
+    new CreatePatientUseCase(patientRepository, mrnGenerator, auditService, eventBus, referralSourceRepository, resolveDefaultBranchUseCase),
     new ListPatientsUseCase(patientRepository),
     new GetPatientUseCase(patientRepository),
     new UpdatePatientUseCase(patientRepository, auditService, eventBus, referralSourceRepository),

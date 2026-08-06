@@ -115,12 +115,23 @@ export function buildMasterDataModule(
       if (await branchRepository.findByCode(input.branchCode)) {
         throw new MasterDataCodeExistsException('Branch');
       }
+      // MRN scheme hardening: friendly, explicit conflict error instead of
+      // letting the DB's unique constraint surface as a raw 500.
+      if (input.mrnPrefix && (await branchRepository.findByMrnPrefix(input.mrnPrefix))) {
+        throw new MasterDataCodeExistsException('Branch mrnPrefix');
+      }
     },
     validateUpdate: async (id, input) => {
       if (input.isActive === false) {
         const check = await checkBranchHasOpenTransactionsUseCase.execute(id);
         if (check.hasOpenTransactions) {
           throw new BranchHasOpenTransactionsException(check.blockedByModules);
+        }
+      }
+      if (input.mrnPrefix) {
+        const existing = await branchRepository.findByMrnPrefix(input.mrnPrefix);
+        if (existing && existing.id !== id) {
+          throw new MasterDataCodeExistsException('Branch mrnPrefix');
         }
       }
     },

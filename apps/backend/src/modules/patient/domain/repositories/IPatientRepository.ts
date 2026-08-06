@@ -30,6 +30,8 @@ export interface IPatientRepository {
   restore(id: string): Promise<Patient>;
   exists(id: string): Promise<boolean>;
   count(): Promise<number>;
+  /** MRN scheme hardening: how many patients this branch has already registered within [from, to) -- feeds MedicalRecordNumberGenerator's per-branch monthly sequence. */
+  countRegisteredInBranchForPeriod(branchId: string, from: Date, to: Date): Promise<number>;
   /**
    * docs/06-tasks/task-290.md: flips `patient_type` NEW -> OLD and records
    * `first_reservation_at`, in response to the patient's second eligible

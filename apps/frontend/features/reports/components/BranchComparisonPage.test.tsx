@@ -24,8 +24,8 @@ describe("BranchComparisonPage", () => {
     jest.clearAllMocks();
     mockedBranchService.list.mockResolvedValue({
       items: [
-        { id: "b1", clinicId: "c1", branchCode: "B1", branchName: "Downtown Branch", phone: "", email: "", address: "", timezone: "Asia/Jakarta", isActive: true },
-        { id: "b2", clinicId: "c1", branchCode: "B2", branchName: "Uptown Branch", phone: "", email: "", address: "", timezone: "Asia/Jakarta", isActive: true },
+        { id: "b1", clinicId: "c1", branchCode: "B1", branchName: "Downtown Branch", phone: "", email: "", address: "", timezone: "Asia/Jakarta", isActive: true, mrnPrefix: null },
+        { id: "b2", clinicId: "c1", branchCode: "B2", branchName: "Uptown Branch", phone: "", email: "", address: "", timezone: "Asia/Jakarta", isActive: true, mrnPrefix: null },
       ],
       meta: { page: 1, limit: 100, total: 2, totalPages: 1 },
     });

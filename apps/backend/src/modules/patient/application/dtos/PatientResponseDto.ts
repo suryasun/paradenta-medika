@@ -19,6 +19,10 @@ export interface PatientResponseDto {
   // a RESERVATION_CREATED_EVENT subscriber.
   patientType: 'NEW' | 'OLD';
   firstReservationAt: string | null;
+  // MRN scheme hardening: the branch whose mrnPrefix generated
+  // medicalRecordNumber -- null for patients registered before this
+  // change existed.
+  registeredBranchId: string | null;
 }
 
 export interface PatientDetailResponseDto {
@@ -49,6 +53,8 @@ export interface PatientDetailResponseDto {
     // task-290 (Epic RE1)
     patientType: 'NEW' | 'OLD';
     firstReservationAt: string | null;
+    // MRN scheme hardening
+    registeredBranchId: string | null;
   };
   addresses: string[];
   emergencyContacts: unknown[];

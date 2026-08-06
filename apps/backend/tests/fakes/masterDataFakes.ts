@@ -77,6 +77,7 @@ export class FakeBranchRepository implements IBranchRepository {
       address: input.address,
       timezone: input.timezone ?? 'Asia/Jakarta',
       isActive: true,
+      mrnPrefix: input.mrnPrefix ?? null,
       createdAt: new Date(),
       createdBy: null,
       updatedAt: new Date(),
@@ -98,6 +99,11 @@ export class FakeBranchRepository implements IBranchRepository {
 
   async findByCode(branchCode: string): Promise<Branch | null> {
     return [...this.branches.values()].find((b) => b.branchCode === branchCode) ?? null;
+  }
+
+  // MRN scheme hardening
+  async findByMrnPrefix(mrnPrefix: string): Promise<Branch | null> {
+    return [...this.branches.values()].find((b) => b.mrnPrefix === mrnPrefix) ?? null;
   }
 
   async update(id: string, input: UpdateBranchInput): Promise<Branch> {

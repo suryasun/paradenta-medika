@@ -235,6 +235,13 @@ model Branch {
   address    String  @db.Text
   timezone   String  @default("Asia/Jakarta") @db.VarChar(50)
   isActive   Boolean @default(true) @map("is_active")
+  // MRN scheme hardening: short, admin-set, unique prefix used by
+  // MedicalRecordNumberGenerator to build this branch's patient MRNs
+  // ({prefix}{YY}{MM}{seq}, sequence resets monthly per branch). Nullable
+  // -- a branch with no prefix configured yet is a real, explicit error at
+  // patient-registration time (BranchMrnPrefixNotConfiguredException), not
+  // a silently guessed fallback.
+  mrnPrefix  String? @unique @map("mrn_prefix") @db.VarChar(5)
 
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
@@ -267,6 +274,9 @@ model Branch {
   treatments              Treatment[]
   toothConditions         ToothCondition[]
   paymentMethods          PaymentMethod[]
+  // MRN scheme hardening: patients whose MRN was generated using this
+  // branch's mrnPrefix (see Patient.registeredBranchId below).
+  registeredPatients      Patient[]
 
   @@map("branches")
 }
@@ -698,6 +708,15 @@ model Patient {
   patientType        PatientType @default(NEW) @map("patient_type")
   firstReservationAt DateTime?   @map("first_reservation_at")
 
+  // MRN scheme hardening: the branch whose mrnPrefix generated this
+  // patient's medicalRecordNo (immutable once set, mirroring MRN's own
+  // immutability -- recorded for traceability and to scope
+  // MedicalRecordNumberGenerator's per-branch monthly sequence, NOT a
+  // statement of which branch "owns" the patient -- a Patient remains a
+  // single global record any branch can treat, per this module's own
+  // "referensi utama seluruh proses klinik" design.
+  registeredBranchId String? @map("registered_branch_id") @db.Char(36)
+
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -724,11 +743,13 @@ model Patient {
   referralSource         ReferralSource?           @relation(fields: [referralSourceId], references: [id])
   referredByUser         User?                     @relation("PatientReferredByUser", fields: [referredByUserId], references: [id])
   emergencyContacts      PatientEmergencyContact[]
+  registeredBranch       Branch?                   @relation(fields: [registeredBranchId], references: [id])
 
   @@unique([identityType, identityNumber])
   @@index([patientName])
   @@index([phone])
   @@index([active])
+  @@index([registeredBranchId, registrationDate])
   @@map("patients")
 }
 

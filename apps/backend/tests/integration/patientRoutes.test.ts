@@ -19,17 +19,38 @@ import { requirePermission } from '../../src/modules/auth/presentation/middlewar
 import { AuthenticatedContext } from '../../src/modules/auth/presentation/middlewares/authenticate';
 import { FakeAuditService } from '../fakes/authFakes';
 import { FakeEventBus, FakePatientRepository } from '../fakes/patientFakes';
-import { FakeReferralSourceRepository } from '../fakes/masterDataFakes';
+import { FakeReferralSourceRepository, FakeBranchRepository } from '../fakes/masterDataFakes';
+import { FakeUserBranchRepository, FakeSystemParameterRepository } from '../fakes/systemFakes';
+import { ResolveDefaultBranchUseCase } from '../../src/modules/master-data/domain/services/ResolveDefaultBranchUseCase';
+
+// MRN scheme hardening: same YY/MM computation as MedicalRecordNumberGenerator.
+function expectedMrn(prefix: string, sequence: number): string {
+  const now = new Date();
+  const yy = String(now.getUTCFullYear()).slice(-2);
+  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+  return `${prefix}${yy}${mm}${String(sequence).padStart(3, '0')}`;
+}
 
 function buildApp(auth: AuthenticatedContext | undefined) {
   const patientRepository = new FakePatientRepository();
   const auditService = new FakeAuditService();
   const eventBus = new FakeEventBus();
-  const mrnGenerator = new MedicalRecordNumberGenerator(patientRepository);
+  const branchRepository = new FakeBranchRepository();
+  // MRN scheme hardening: registration requires the actor's default branch
+  // to have an mrnPrefix configured -- seeded synchronously (bypassing
+  // create()'s Promise) so buildApp can stay a synchronous helper.
+  const branch = { id: 'branch-1', mrnPrefix: 'KM', deletedAt: null } as Awaited<ReturnType<FakeBranchRepository['create']>>;
+  branchRepository.branches.set(branch.id, branch);
+  const userBranchRepository = new FakeUserBranchRepository();
+  if (auth) {
+    userBranchRepository.replaceAssignments(auth.userId, [{ branchId: branch.id, isDefault: true }], 'admin-1');
+  }
+  const resolveDefaultBranchUseCase = new ResolveDefaultBranchUseCase(userBranchRepository, new FakeSystemParameterRepository());
+  const mrnGenerator = new MedicalRecordNumberGenerator(patientRepository, branchRepository);
   const referralSourceRepository = new FakeReferralSourceRepository();
 
   const controller = new PatientController(
-    new CreatePatientUseCase(patientRepository, mrnGenerator, auditService, eventBus, referralSourceRepository),
+    new CreatePatientUseCase(patientRepository, mrnGenerator, auditService, eventBus, referralSourceRepository, resolveDefaultBranchUseCase),
     new ListPatientsUseCase(patientRepository),
     new GetPatientUseCase(patientRepository),
     new UpdatePatientUseCase(patientRepository, auditService, eventBus, referralSourceRepository),
@@ -58,7 +79,7 @@ function buildApp(auth: AuthenticatedContext | undefined) {
   app.use('/api/v1', router);
   app.use(errorHandlerMiddleware);
 
-  return { app, referralSourceRepository };
+  return { app, referralSourceRepository, branch };
 }
 
 const staffAuth: AuthenticatedContext = {
@@ -81,7 +102,7 @@ describe('Patient routes', () => {
       address: 'Jl. Contoh No. 10',
     });
     expect(createResponse.status).toBe(201);
-    expect(createResponse.body.data.medicalRecordNumber).toBe('MRN000001');
+    expect(createResponse.body.data.medicalRecordNumber).toBe(expectedMrn('KM', 1));
 
     const listResponse = await request(app).get('/api/v1/patients').query({ search: 'John' });
     expect(listResponse.status).toBe(200);

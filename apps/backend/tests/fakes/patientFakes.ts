@@ -35,6 +35,7 @@ function toPatientRow(medicalRecordNo: string, props: PatientProps): Patient {
     whatsappNumber: props.whatsappNumber ?? null,
     referralSourceId: props.referralSourceId ?? null,
     referredByUserId: props.referredByUserId ?? null,
+    registeredBranchId: props.registeredBranchId ?? null,
     patientType: 'NEW',
     firstReservationAt: null,
     registrationDate: new Date(),
@@ -57,6 +58,13 @@ export class FakePatientRepository implements IPatientRepository {
 
   async findByMRN(medicalRecordNo: string): Promise<Patient | null> {
     return [...this.patients.values()].find((p) => p.medicalRecordNo === medicalRecordNo) ?? null;
+  }
+
+  // MRN scheme hardening: same [from, to) semantics as the real repository.
+  async countRegisteredInBranchForPeriod(branchId: string, from: Date, to: Date): Promise<number> {
+    return [...this.patients.values()].filter(
+      (p) => p.registeredBranchId === branchId && p.registrationDate >= from && p.registrationDate < to,
+    ).length;
   }
 
   async findByIdentityNumber(identityType: string, identityNumber: string): Promise<Patient | null> {

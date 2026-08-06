@@ -27,6 +27,7 @@ export function toPatientResponse(patient: Patient): PatientResponseDto {
     referredByUserId: patient.referredByUserId,
     patientType: patient.patientType,
     firstReservationAt: patient.firstReservationAt ? patient.firstReservationAt.toISOString() : null,
+    registeredBranchId: patient.registeredBranchId,
   };
 }
 
@@ -59,6 +60,7 @@ export function toPatientDetailResponse(patient: Patient): PatientDetailResponse
       referredByUserId: patient.referredByUserId,
       patientType: patient.patientType,
       firstReservationAt: patient.firstReservationAt ? patient.firstReservationAt.toISOString() : null,
+      registeredBranchId: patient.registeredBranchId,
     },
     addresses: [patient.address],
     emergencyContacts: [],

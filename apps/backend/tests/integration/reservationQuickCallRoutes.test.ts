@@ -22,7 +22,7 @@ import { requirePermission } from '../../src/modules/auth/presentation/middlewar
 import { AuthenticatedContext } from '../../src/modules/auth/presentation/middlewares/authenticate';
 import { FakeAuditService } from '../fakes/authFakes';
 import { FakeEventBus, FakePatientRepository } from '../fakes/patientFakes';
-import { FakeDoctorRepository, FakeReferralSourceRepository } from '../fakes/masterDataFakes';
+import { FakeDoctorRepository, FakeReferralSourceRepository, FakeBranchRepository } from '../fakes/masterDataFakes';
 import {
   FakeDoctorScheduleRepository,
   FakeQuickNewPatientCallRepository,
@@ -39,6 +39,14 @@ function nextMonday(): Date {
   return date;
 }
 
+// MRN scheme hardening: same YY/MM computation as MedicalRecordNumberGenerator.
+function expectedMrn(prefix: string, sequence: number): string {
+  const now = new Date();
+  const yy = String(now.getUTCFullYear()).slice(-2);
+  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+  return `${prefix}${yy}${mm}${String(sequence).padStart(3, '0')}`;
+}
+
 function buildApp(auth: AuthenticatedContext | undefined) {
   const patientRepository = new FakePatientRepository();
   const reservationRepository = new FakeReservationRepository();
@@ -47,6 +55,10 @@ function buildApp(auth: AuthenticatedContext | undefined) {
   const timelineRepository = new FakeReservationTimelineRepository();
   const auditService = new FakeAuditService();
   const eventBus = new FakeEventBus();
+  // MRN scheme hardening: the doctor's branch needs an mrnPrefix.
+  const branchRepository = new FakeBranchRepository();
+  const branch = { id: 'branch-1', mrnPrefix: 'KM', deletedAt: null } as Awaited<ReturnType<FakeBranchRepository['create']>>;
+  branchRepository.branches.set(branch.id, branch);
 
   const scheduleValidator = new DoctorScheduleValidator(doctorRepository, scheduleRepository, reservationRepository);
   const reservationNumberGenerator = new ReservationNumberGenerator(reservationRepository);
@@ -67,7 +79,7 @@ function buildApp(auth: AuthenticatedContext | undefined) {
       patientRepository,
       doctorRepository,
       scheduleValidator,
-      new MedicalRecordNumberGenerator(patientRepository),
+      new MedicalRecordNumberGenerator(patientRepository, branchRepository),
       reservationNumberGenerator,
       quickNewPatientCallRepository,
       referralSourceRepository,
@@ -104,7 +116,7 @@ function buildApp(auth: AuthenticatedContext | undefined) {
   app.use('/api/v1', router);
   app.use(errorHandlerMiddleware);
 
-  return { app, doctorRepository, scheduleRepository };
+  return { app, doctorRepository, scheduleRepository, branch };
 }
 
 const staffAuth: AuthenticatedContext = {
@@ -121,8 +133,8 @@ const staffAuth: AuthenticatedContext = {
 // /patients/{id} and GET /reservations/{id}."
 describe('POST /reservations/quick-call', () => {
   it('creates a patient and reservation together, both immediately visible via their own GET endpoints', async () => {
-    const { app, doctorRepository, scheduleRepository } = buildApp(staffAuth);
-    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const { app, doctorRepository, scheduleRepository, branch } = buildApp(staffAuth);
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC01', userId: 'u1', branchId: branch.id, fullName: 'Dr. Test' });
     const monday = nextMonday();
     scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
 
@@ -149,15 +161,15 @@ describe('POST /reservations/quick-call', () => {
 
     const patientDetail = await request(app).get(`/api/v1/patients/${patientId}`);
     expect(patientDetail.status).toBe(200);
-    expect(patientDetail.body.data.medicalRecordNo).toBe('MRN000001');
+    expect(patientDetail.body.data.medicalRecordNo).toBe(expectedMrn('KM', 1));
   });
 
   it('rejects a request missing patient.create permission even when reservation.create is present', async () => {
-    const { app, doctorRepository, scheduleRepository } = buildApp({
+    const { app, doctorRepository, scheduleRepository, branch } = buildApp({
       ...staffAuth,
       permissionKeys: ['reservation.create', 'reservation.read'],
     });
-    const doctor = await doctorRepository.create({ doctorCode: 'DOC02', userId: 'u2', branchId: 'branch-1', fullName: 'Dr. Test' });
+    const doctor = await doctorRepository.create({ doctorCode: 'DOC02', userId: 'u2', branchId: branch.id, fullName: 'Dr. Test' });
     const monday = nextMonday();
     scheduleRepository.seed(buildDoctorSchedule({ doctorId: doctor.id, dayOfWeek: monday.getUTCDay() }));
 

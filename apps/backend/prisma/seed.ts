@@ -693,9 +693,14 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
     },
   });
 
+  // MRN scheme hardening: mrnPrefix backfilled via `update` too (not just
+  // `create`), same "pre-existing seeded databases upgrade correctly"
+  // pattern already used for ADMINISTRATOR's isCrossBranch above -- these
+  // two branches already existed in any dev database seeded before this
+  // change, so `update: {}` alone would never set their prefix.
   const branchKemang = await prisma.branch.upsert({
     where: { branchCode: 'PM01-KMG' },
-    update: {},
+    update: { mrnPrefix: 'KM' },
     create: {
       clinicId: clinic.id,
       branchCode: 'PM01-KMG',
@@ -703,12 +708,13 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
       phone: '021-5551234',
       email: 'kemang@parakitamedika.local',
       address: 'Jl. Kemang Raya No. 10, Jakarta Selatan',
+      mrnPrefix: 'KM',
     },
   });
 
   const branchBsd = await prisma.branch.upsert({
     where: { branchCode: 'PM01-BSD' },
-    update: {},
+    update: { mrnPrefix: 'BS' },
     create: {
       clinicId: clinic.id,
       branchCode: 'PM01-BSD',
@@ -716,6 +722,7 @@ async function seedMasterData(userIdByUsername: Map<string, string>) {
       phone: '021-5555678',
       email: 'bsd@parakitamedika.local',
       address: 'Jl. BSD Boulevard No. 5, Tangerang Selatan',
+      mrnPrefix: 'BS',
     },
   });
 
@@ -1993,7 +2000,7 @@ interface MenuSeedNode {
   children?: MenuSeedNode[];
 }
 
-const MENU_TREE: MenuSeedNode[] = [
+export const MENU_TREE: MenuSeedNode[] = [
   { key: 'dashboard', label: 'Dashboard', route: '/dashboard', permissionKey: 'report.dashboard.operations.read' },
   { key: 'patients', label: 'Patients', route: '/patients', permissionKey: 'patient.read' },
   {

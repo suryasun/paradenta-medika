@@ -85,21 +85,14 @@ export class QuickNewPatientCallUseCase {
       }
     }
 
-    const patientEntity = PatientEntity.create({
-      patientName: input.fullName,
-      gender: QUICK_ADD_PLACEHOLDER_GENDER,
-      birthDate: QUICK_ADD_PLACEHOLDER_BIRTH_DATE,
-      identityType: QUICK_ADD_IDENTITY_TYPE,
-      identityNumber: input.identityNumber,
-      phone: input.phoneNumber,
-      address: input.address,
-      referralSourceId: input.referralSourceId,
-      referredByUserId: input.referredByUserId,
-    });
-
     const reservationDate = new Date(`${input.reservationDate}T00:00:00.000Z`);
     const reservationTime = parseTimeToDate(input.startTime);
 
+    // Validation order unchanged from before MRN scheme hardening
+    // (assertDateNotInPast / doctor-active / schedule checks all happen
+    // inside validate(), exactly as before) -- only PatientEntity
+    // construction moved to after the doctor lookup below, so its
+    // registeredBranchId can be set without changing any error precedence.
     const schedule = await this.scheduleValidator.validate({
       doctorId: input.doctorId,
       patientId: randomUUID(),
@@ -114,7 +107,20 @@ export class QuickNewPatientCallUseCase {
       throw new DoctorScheduleUnavailableException();
     }
 
-    const medicalRecordNo = await this.mrnGenerator.generate();
+    const patientEntity = PatientEntity.create({
+      patientName: input.fullName,
+      gender: QUICK_ADD_PLACEHOLDER_GENDER,
+      birthDate: QUICK_ADD_PLACEHOLDER_BIRTH_DATE,
+      identityType: QUICK_ADD_IDENTITY_TYPE,
+      identityNumber: input.identityNumber,
+      phone: input.phoneNumber,
+      address: input.address,
+      referralSourceId: input.referralSourceId,
+      referredByUserId: input.referredByUserId,
+      registeredBranchId: doctor.branchId,
+    });
+
+    const medicalRecordNo = await this.mrnGenerator.generate(doctor.branchId);
     const reservationNo = await this.reservationNumberGenerator.generate(reservationDate);
 
     const { patient, reservation } = await this.quickNewPatientCallRepository.execute({

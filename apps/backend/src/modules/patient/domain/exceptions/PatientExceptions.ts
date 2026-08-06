@@ -63,3 +63,14 @@ export class PatientEmergencyContactNotFoundException extends NotFoundException 
     super('Patient emergency contact not found');
   }
 }
+
+// MRN scheme hardening: the branch generating this MRN has no mrnPrefix
+// configured (Branch.mrnPrefix is nullable) -- an explicit, auditable
+// error rather than silently falling back to the old global MRN000001
+// scheme, matching this codebase's established "explicit error, not a
+// silently guessed default" convention (e.g. NoDefaultBranchConfiguredException).
+export class BranchMrnPrefixNotConfiguredException extends BusinessException {
+  constructor(branchId: string) {
+    super('PAT_BRANCH_MRN_PREFIX_MISSING', `Branch ${branchId} has no mrnPrefix configured -- cannot generate a Medical Record Number`);
+  }
+}

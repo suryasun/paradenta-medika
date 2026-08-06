@@ -17,6 +17,7 @@ import { WalkInRegistrationUseCase } from '../../application/use-cases/WalkInReg
 import { QuickNewPatientCallUseCase } from '../../application/use-cases/QuickNewPatientCallUseCase';
 import { QuickNewPatientCallRequestDto } from '../../application/dtos/QuickNewPatientCallRequestDto';
 import { MedicalRecordNumberGenerator } from '../../../patient/application/services/MedicalRecordNumberGenerator';
+import { BranchRepository } from '../../../master-data/infrastructure/repositories/BranchRepository';
 import { QuickNewPatientCallRepository } from '../../infrastructure/repositories/QuickNewPatientCallRepository';
 import { ListReservationsUseCase } from '../../application/use-cases/ListReservationsUseCase';
 import { GetReservationUseCase } from '../../application/use-cases/GetReservationUseCase';
@@ -89,7 +90,7 @@ export function buildReservationModule(
       patientRepository,
       doctorRepository,
       scheduleValidator,
-      new MedicalRecordNumberGenerator(patientRepository),
+      new MedicalRecordNumberGenerator(patientRepository, new BranchRepository()),
       reservationNumberGenerator,
       new QuickNewPatientCallRepository(),
       new ReferralSourceRepository(),

@@ -24,6 +24,9 @@ export interface PatientProps {
   // the clinical `Referral` entity (EMR module) -- never conflated.
   referralSourceId?: string;
   referredByUserId?: string;
+  // MRN scheme hardening: the branch whose mrnPrefix generated this
+  // patient's medicalRecordNo -- see the Patient Prisma model's own comment.
+  registeredBranchId?: string;
 }
 
 /**

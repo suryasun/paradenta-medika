@@ -23,7 +23,7 @@ describe("BranchPerformancePage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedBranchService.list.mockResolvedValue({
-      items: [{ id: "b1", clinicId: "c1", branchCode: "B1", branchName: "Downtown Branch", phone: "", email: "", address: "", timezone: "Asia/Jakarta", isActive: true }],
+      items: [{ id: "b1", clinicId: "c1", branchCode: "B1", branchName: "Downtown Branch", phone: "", email: "", address: "", timezone: "Asia/Jakarta", isActive: true, mrnPrefix: null }],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
   });

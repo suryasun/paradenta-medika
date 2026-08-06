@@ -1,4 +1,14 @@
-import { PERMISSION_KEYS, ROLE_PERMISSIONS, CROSS_BRANCH_ROLE_CODES, USERS } from '../../prisma/seed';
+import { PERMISSION_KEYS, ROLE_PERMISSIONS, CROSS_BRANCH_ROLE_CODES, USERS, MENU_TREE } from '../../prisma/seed';
+
+interface MenuNode {
+  key: string;
+  permissionKey: string;
+  children?: MenuNode[];
+}
+
+function flattenMenuPermissionKeys(nodes: MenuNode[]): string[] {
+  return nodes.flatMap((node) => [node.permissionKey, ...(node.children ? flattenMenuPermissionKeys(node.children) : [])]);
+}
 
 /**
  * Phase 4 hardening (RBAC dashboard-access gap): guards the seed data's
@@ -54,5 +64,24 @@ describe('seed RBAC integrity', () => {
   it('at least one seeded user is provisioned for OWNER and one for CLINIC_MANAGER', () => {
     expect(USERS.some((user) => user.roleCode === 'OWNER')).toBe(true);
     expect(USERS.some((user) => user.roleCode === 'CLINIC_MANAGER')).toBe(true);
+  });
+
+  // Guards the "admin sees every menu" property: MENU_TREE (seeded into
+  // Menu/MenuPermission, mirroring apps/frontend/config/navigation.ts's
+  // NAV_ITEMS tree per that array's own header comment) links every node
+  // to a permissionKey. ADMINISTRATOR's blanket grant in
+  // seedPermissionsAndRoles gives it every single key in PERMISSION_KEYS --
+  // so as long as every menu node's permissionKey is drawn from that same
+  // list, admin structurally cannot be missing a menu. A menu node
+  // referencing a permission outside PERMISSION_KEYS would silently never
+  // link to a real Permission row (seedMenus's `if (permissionId)` guard
+  // skips it) and become invisible to every role, including admin -- this
+  // is the concrete failure mode this test catches.
+  it('every menu node (including nested children) links to a real permission -- admin therefore has access to every seeded menu', () => {
+    const menuPermissionKeys = flattenMenuPermissionKeys(MENU_TREE);
+    expect(menuPermissionKeys.length).toBeGreaterThan(0);
+    for (const key of menuPermissionKeys) {
+      expect(permissionKeySet.has(key)).toBe(true);
+    }
   });
 });

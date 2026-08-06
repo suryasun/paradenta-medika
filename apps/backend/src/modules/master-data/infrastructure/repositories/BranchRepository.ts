@@ -38,6 +38,10 @@ export class BranchRepository implements IBranchRepository {
     return prisma.branch.findFirst({ where: { branchCode, deletedAt: null } });
   }
 
+  async findByMrnPrefix(mrnPrefix: string): Promise<Branch | null> {
+    return prisma.branch.findFirst({ where: { mrnPrefix, deletedAt: null } });
+  }
+
   async update(id: string, input: UpdateBranchInput): Promise<Branch> {
     return prisma.branch.update({ where: { id }, data: input });
   }

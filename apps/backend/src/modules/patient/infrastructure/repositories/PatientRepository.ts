@@ -32,6 +32,7 @@ export function toPatientCreateData(medicalRecordNo: string, props: PatientProps
     whatsappNumber: props.whatsappNumber,
     referralSourceId: props.referralSourceId,
     referredByUserId: props.referredByUserId,
+    registeredBranchId: props.registeredBranchId,
   };
 }
 
@@ -129,6 +130,10 @@ export class PatientRepository implements IPatientRepository {
 
   async count(): Promise<number> {
     return prisma.patient.count();
+  }
+
+  async countRegisteredInBranchForPeriod(branchId: string, from: Date, to: Date): Promise<number> {
+    return prisma.patient.count({ where: { registeredBranchId: branchId, registrationDate: { gte: from, lt: to } } });
   }
 
   async markAsReturning(patientId: string, firstReservationAt: Date): Promise<void> {
