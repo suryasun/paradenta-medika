@@ -139,4 +139,16 @@ describe("ReservationHistoryPage", () => {
     expect(detailsLink).toHaveAttribute("href", "/reservations/r42");
     expect(fullLink).toHaveAttribute("href", "/reservations/r42");
   });
+
+  // docs/06-tasks/task-303.md (Reservation Module Addendum #3)
+  it("lets staff change the page size, resetting to page 1", async () => {
+    const user = userEvent.setup();
+    mockedReservationService.list.mockResolvedValue({ items: [buildReservation({})], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+
+    renderPage();
+    await screen.findByText("RSV-20260810-0001");
+    await user.selectOptions(screen.getByLabelText("Rows per page"), "10");
+
+    await waitFor(() => expect(mockedReservationService.list).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 10, page: 1 })));
+  });
 });

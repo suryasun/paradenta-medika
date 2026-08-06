@@ -62,6 +62,17 @@ function ReservationRow({ reservation, doctorName }: { reservation: Reservation;
           <Link href={`/reservations/${reservation.id}`} className="text-sm font-medium text-primary hover:underline">
             View
           </Link>
+          {/* task-302 (Reservation Module Addendum #3): mirrors canCheckIn's
+              own BOOKED/CONFIRMED gating -- the backend's UpdateReservationUseCase
+              rejects edits to any other status, so this link never leads to a
+              guaranteed-to-fail submit. */}
+          {canCheckIn && (
+            <PermissionGuard permission="reservation.update">
+              <Link href={`/reservations/${reservation.id}/edit`} className="text-sm font-medium text-primary hover:underline">
+                Edit
+              </Link>
+            </PermissionGuard>
+          )}
           {canCheckIn && (
             <PermissionGuard permission="reservation.check-in">
               <button
@@ -175,7 +186,14 @@ export function ReservationListView() {
           </TableBody>
         </Table>
       )}
-      {data && <Pagination meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />}
+      {data && (
+        <Pagination
+          meta={data.meta}
+          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          limit={filters.limit}
+          onLimitChange={(limit) => setFilters((f) => ({ ...f, limit, page: 1 }))}
+        />
+      )}
     </div>
   );
 }

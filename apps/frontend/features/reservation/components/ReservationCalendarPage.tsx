@@ -81,6 +81,14 @@ function ReservationEntry({
       className="flex w-full flex-col gap-0.5 rounded-md border border-border bg-white px-2 py-1.5 text-left text-xs hover:bg-slate-50"
     >
       <span className="font-tabular font-medium text-foreground">{reservation.startTime}</span>
+      {/* task-304 (Reservation Module Addendum #3): the data is already
+          present on every entry (Calendar fetches through the same
+          GET /reservations search() endpoint as List/History, task-295) --
+          this was simply not rendered here yet. */}
+      <span className="text-foreground">
+        {reservation.patientFullName ?? "—"}
+        {reservation.patientMrn && <span className="text-muted"> ({reservation.patientMrn})</span>}
+      </span>
       <span className="text-muted">
         {doctorName} &middot; {reservation.reservationType}
       </span>

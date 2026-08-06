@@ -71,6 +71,19 @@ describe("ReservationCalendarPage", () => {
     expect(screen.getByText("2026-08-11")).toBeInTheDocument();
   });
 
+  // docs/06-tasks/task-304.md (Reservation Module Addendum #3)
+  it("shows the patient's name and MRN on a calendar entry", async () => {
+    mockedReservationService.list.mockResolvedValue({
+      items: [buildReservation({ id: "r1", patientFullName: "Jane Doe", patientMrn: "MRN000001" })],
+      meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Jane Doe")).toBeInTheDocument();
+    expect(screen.getByText("(MRN000001)")).toBeInTheDocument();
+  });
+
   it("renders an empty state when the selected range has zero reservations", async () => {
     mockedReservationService.list.mockResolvedValue({ items: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } });
 

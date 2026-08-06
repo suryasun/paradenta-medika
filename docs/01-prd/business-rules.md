@@ -205,6 +205,14 @@ Apabila ditemukan data dengan tingkat kemiripan tinggi, sistem menampilkan perin
 - Daftar Reservasi (List) secara default hanya menampilkan reservasi hari ini dan seterusnya; Riwayat Reservasi (History) secara default hanya menampilkan reservasi sebelum hari ini. Pembatasan ini diterapkan di antarmuka (client-side default + batas input tanggal), bukan sebagai aturan wajib di server.
 - Laporan Reservasi Selesai (Completed Reservations Report) memfilter reservasi berdasarkan `status = COMPLETED` dan rentang tanggal `reservation_date`, ditampilkan sebagai tabel dan grafik tren harian.
 
+### 7.5.2 Reservation Module Addendum #3 (task-300–304)
+
+- Laporan Reservasi berdasarkan Tipe Pasien menampilkan SEMUA reservasi pada rentang tanggal (bukan hanya pasien baru), dengan perbandingan jumlah dan persentase New vs Old.
+- Laporan Reservasi berdasarkan Dokter membandingkan jumlah reservasi seluruh dokter pada rentang tanggal; filter dokter opsional hanya mempersempit tabel, tidak mempersempit grafik perbandingan.
+- Reservasi (status BOOKED/CONFIRMED) dapat diubah melalui aksi "Edit" pada Daftar Reservasi — memakai kapabilitas ubah reservasi yang sudah ada sebelumnya (`PUT /reservations/:id`), bukan kapabilitas baru. Data pasien tidak dapat diubah melalui form ini.
+- Daftar Reservasi dan Riwayat Reservasi menyediakan pilihan jumlah baris per halaman (10/20/50/100).
+- Kartu reservasi pada Kalender Reservasi menampilkan nama dan No. RM pasien.
+
 ---
 
 

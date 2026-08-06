@@ -2536,6 +2536,54 @@ No schema/migration changes. Every requirement in this addendum is a query-shape
 
 ---
 
+# 41. Reservation Module Addendum #3 (task-300–304)
+
+> Third post-roadmap addendum on top of §39 (Epic RE, task-290–294) and §40 (Addendum #2, task-295–299), both shipped. Five more requests from using the module in practice, documented and implemented in the same pass.
+
+## 41.1 Scope
+
+1. **Report Reservation by Patient Type** (task-300) — a new comparison report over ALL reservations in a date range (not filtered to NEW, unlike RSV-017), with a New-vs-Old count/percentage breakdown and chart.
+2. **Report Reservation by Doctor** (task-301) — a new comparison report across all doctors in a date range, with an optional doctor filter that narrows only the results table, never the comparison chart.
+3. **Edit Reservation** (task-302) — the backend (`PUT /reservations/:id`, `reservation.update`) and the frontend mutation hook already existed with zero UI consumer; this adds an Edit link to the Reservation List (shown only for BOOKED/CONFIRMED rows) and the edit page/form itself.
+4. **Configurable page size** (task-303) — the shared `Pagination` component gains an optional page-size selector (10/20/50/100), used by both Reservation List and History. Pagination itself was already correctly implemented (real un-paginated totals) — this was the one genuine gap.
+5. **Patient MRN/Name on Reservation Calendar** (task-304) — the Calendar's entries already had this data available (same `search()`-backed endpoint as List, per §40.2) but didn't render it.
+
+**Explicitly out of scope:** any change to `GET /reservations`'s existing filter/response contract beyond what task-300/301's own report endpoints need; adding Edit to the Reservation Detail page (scoped to List only, per explicit request); a server-enforced page-size cap beyond the existing `ListQueryDto` `@Max(100)` validation already in place.
+
+## 41.2 Data Model Changes
+
+None. Every requirement is a new read-only report endpoint, a UI surface over an already-existing write endpoint, or a frontend-only rendering/pagination change.
+
+## 41.3 New Use Cases
+
+| Code | Name | Notes |
+|---|---|---|
+| RSV-020 | Reservation by Patient Type Report | New. `search()` (unfiltered by patientType) for the paginated table + `findAllInDateRange` (unfiltered) grouped into `{newCount, oldCount, newPercentage, oldPercentage, breakdown}` for the comparison chart. Distinct from RSV-017 (New Patient Report), which filters to NEW only. |
+| RSV-021 | Reservation by Doctor Report | New. `search()` (optionally filtered by `doctorId`, reusing that existing filter) for the paginated table + `findAllInDateRange` (always unfiltered by doctor) grouped into `[{doctorId, count}]` for the comparison chart — the doctor filter narrows only the table, never the chart, so a single-doctor drill-down never distorts the cross-doctor comparison. |
+| RSV-002 | Update Reservation *(new UI, no use-case change)* | `UpdateReservationUseCase` (task-032) already existed and already enforces a BOOKED/CONFIRMED-only guard; this addendum gives it its first real UI (Edit link on the List + a new edit form), not a behavior change. |
+
+## 41.4 New/Extended API Endpoints
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET /api/v1/reports/reservations/by-patient-type` | New | Query: `dateFrom`, `dateTo` (required) + pagination/sort. Response: paginated `ReservationResponse[]` (both patient types) + `summary: { newCount, oldCount, newPercentage, oldPercentage, breakdown }`. New permission `report.reservation.patient-type.read`. |
+| `GET /api/v1/reports/reservations/by-doctor` | New | Query: `dateFrom`, `dateTo` (required), `doctorId` (optional) + pagination/sort. Response: paginated `ReservationResponse[]` + `summary: { totalDoctors, breakdown: [{doctorId, count}] }`. New permission `report.reservation.doctor.read`. |
+| `PUT /api/v1/reservations/:id` | *(unchanged, newly consumed)* | No API change — task-302 is purely a new frontend consumer of this already-shipped endpoint. |
+
+## 41.5 New/Proposed Screens
+
+- **Reservations by Patient Type** — `/reports/by-patient-type`. Same date-preset shell as the other Reservation-module reports (§39.6/§40.5), two summary cards (New count/%, Old count/%), a `TrendChart` used categorically (`type` on the x-axis, not a date) comparing the two bars, results table with the existing Patient Type Badge column.
+- **Reservations by Doctor** — `/reports/by-doctor`. Same shell + an optional Doctor filter, a `TrendChart` comparing all doctors (doctor names resolved client-side via the existing `useDoctors()` pattern), results table.
+- **Reservation Edit** — `/reservations/{id}/edit`. Adapted from the existing Create Reservation form's Doctor/Date/`TimeSlotPicker`/Type/Complaint/Notes fields (the exact editable-field set `UpdateReservationRequestDto` accepts) — Patient is not editable, since the backend contract has no field for it. Shows a plain "cannot be edited" message instead of the form when the reservation's status has moved past BOOKED/CONFIRMED.
+- **Reservation List / History** — both existing screens gain a page-size selector next to their existing Previous/Next pagination controls.
+- **Reservation Calendar** — existing screen, its entry cards gain a Patient Name/MRN line.
+
+## 41.6 Ambiguities and Gaps Reported
+
+None new. The one open question from §39.7/§40.6 that touched this addendum (§39.7 item 1) was already resolved by §40's Quick Add Patient retirement, unrelated to task-300–304.
+
+---
+
 # Final Summary
 
 Dokumen **13 - Module Reservation** mendefinisikan desain lengkap Reservation Module sebagai pusat pengelolaan appointment pada Parakita. Dokumen ini mencakup proses bisnis, kebutuhan fungsional, model data, API, validasi, workflow, integrasi lintas modul, keamanan, audit trail, pelaporan, KPI, skenario pengujian, hingga roadmap pengembangan di masa depan. Seluruh rancangan disusun mengikuti prinsip **Clean Architecture**, **Domain Driven Design (DDD)**, **Modular Monolith**, serta standar dokumentasi yang digunakan pada seluruh blueprint Parakita sehingga siap menjadi acuan implementasi backend maupun frontend.

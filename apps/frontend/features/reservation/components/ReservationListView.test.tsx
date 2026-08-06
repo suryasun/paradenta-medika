@@ -55,7 +55,7 @@ describe("ReservationListView", () => {
       user: { id: "u1", username: "staff", email: "staff@example.com" },
       role: "REGISTRATION",
       roles: ["REGISTRATION"],
-      permissions: ["reservation.create", "reservation.check-in"],
+      permissions: ["reservation.create", "reservation.check-in", "reservation.update"],
     });
   });
 
@@ -104,6 +104,40 @@ describe("ReservationListView", () => {
         expect.objectContaining({ dateFrom: new Date().toISOString().slice(0, 10) }),
       ),
     );
+  });
+
+  // docs/06-tasks/task-302.md (Reservation Module Addendum #3)
+  it("shows an Edit link for a BOOKED reservation, pointing at its edit page", async () => {
+    mockedReservationService.list.mockResolvedValue({ items: [RESERVATION], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+
+    renderView();
+    await screen.findByText("RSV-20260802-0001");
+
+    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute("href", "/reservations/r1/edit");
+  });
+
+  it("hides the Edit link for a COMPLETED reservation", async () => {
+    mockedReservationService.list.mockResolvedValue({
+      items: [{ ...RESERVATION, status: "COMPLETED" }],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
+
+    renderView();
+    await screen.findByText("RSV-20260802-0001");
+
+    expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  // docs/06-tasks/task-303.md (Reservation Module Addendum #3)
+  it("lets staff change the page size, resetting to page 1", async () => {
+    const user = userEvent.setup();
+    mockedReservationService.list.mockResolvedValue({ items: [RESERVATION], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } });
+
+    renderView();
+    await screen.findByText("RSV-20260802-0001");
+    await user.selectOptions(screen.getByLabelText("Rows per page"), "50");
+
+    await waitFor(() => expect(mockedReservationService.list).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 50, page: 1 })));
   });
 
   it("checking in a BOOKED reservation calls the check-in endpoint", async () => {

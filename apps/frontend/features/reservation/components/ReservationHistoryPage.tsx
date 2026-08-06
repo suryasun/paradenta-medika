@@ -152,7 +152,14 @@ export function ReservationHistoryPage() {
           ))}
         </div>
       )}
-      {data && <Pagination meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />}
+      {data && (
+        <Pagination
+          meta={data.meta}
+          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          limit={filters.limit}
+          onLimitChange={(limit) => setFilters((f) => ({ ...f, limit, page: 1 }))}
+        />
+      )}
     </div>
   );
 }

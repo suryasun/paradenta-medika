@@ -58,6 +58,8 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Branch Performance", href: "/reports/branch-performance", permission: "report.branch-performance.read" },
       { label: "New Patients", href: "/reports/new-patients", permission: "report.reservation.new-patient.read" },
       { label: "Completed Reservations", href: "/reports/completed-reservations", permission: "report.reservation.completed.read" },
+      { label: "By Patient Type", href: "/reports/by-patient-type", permission: "report.reservation.patient-type.read" },
+      { label: "By Doctor", href: "/reports/by-doctor", permission: "report.reservation.doctor.read" },
     ],
   },
   {

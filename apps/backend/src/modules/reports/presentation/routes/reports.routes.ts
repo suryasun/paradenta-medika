@@ -63,6 +63,12 @@ import { NewPatientReportController } from '../controllers/NewPatientReportContr
 import { CompletedReservationReportQueryDto } from '../../application/dtos/CompletedReservationReportQueryDto';
 import { GetCompletedReservationReportUseCase } from '../../application/use-cases/GetCompletedReservationReportUseCase';
 import { CompletedReservationReportController } from '../controllers/CompletedReservationReportController';
+import { ReservationByPatientTypeReportQueryDto } from '../../application/dtos/ReservationByPatientTypeReportQueryDto';
+import { GetReservationByPatientTypeReportUseCase } from '../../application/use-cases/GetReservationByPatientTypeReportUseCase';
+import { ReservationByPatientTypeReportController } from '../controllers/ReservationByPatientTypeReportController';
+import { ReservationByDoctorReportQueryDto } from '../../application/dtos/ReservationByDoctorReportQueryDto';
+import { GetReservationByDoctorReportUseCase } from '../../application/use-cases/GetReservationByDoctorReportUseCase';
+import { ReservationByDoctorReportController } from '../controllers/ReservationByDoctorReportController';
 import { ReservationRepository } from '../../../reservation/infrastructure/repositories/ReservationRepository';
 
 /**
@@ -139,6 +145,14 @@ export function buildReportsModule(
     new GetCompletedReservationReportUseCase(new ReservationRepository()),
   );
 
+  // docs/06-tasks/task-300.md/task-301.md (Reservation Module Addendum #3).
+  const reservationByPatientTypeReportController = new ReservationByPatientTypeReportController(
+    new GetReservationByPatientTypeReportUseCase(new ReservationRepository()),
+  );
+  const reservationByDoctorReportController = new ReservationByDoctorReportController(
+    new GetReservationByDoctorReportUseCase(new ReservationRepository()),
+  );
+
   // docs/06-tasks/task-187.md..task-191.md (Epic AH).
   const reportJobRepository = new ReportJobRepository();
   const reportSnapshotRepository = new ReportSnapshotRepository();
@@ -173,6 +187,24 @@ export function buildReportsModule(
     requirePermission('report.reservation.completed.read'),
     validateQuery(CompletedReservationReportQueryDto),
     completedReservationReportController.report,
+  );
+
+  // docs/06-tasks/task-300.md: same convention -- new permission, no
+  // existing report.* code covers a Patient-Type-comparison report.
+  router.get(
+    '/reports/reservations/by-patient-type',
+    requirePermission('report.reservation.patient-type.read'),
+    validateQuery(ReservationByPatientTypeReportQueryDto),
+    reservationByPatientTypeReportController.report,
+  );
+
+  // docs/06-tasks/task-301.md: same convention -- new permission, no
+  // existing report.* code covers a Doctor-comparison report.
+  router.get(
+    '/reports/reservations/by-doctor',
+    requirePermission('report.reservation.doctor.read'),
+    validateQuery(ReservationByDoctorReportQueryDto),
+    reservationByDoctorReportController.report,
   );
 
   // docs/03-sad/20-module-report.md Section 8.1: literal `report.job.*`/

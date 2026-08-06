@@ -161,6 +161,38 @@ export interface CompletedReservationReportParams {
   limit?: number;
 }
 
+// task-300 (Reservation Module Addendum #3). Mirrors apps/backend's
+// GetReservationByPatientTypeReportUseCase's ReservationByPatientTypeReportSummary.
+export interface ReservationByPatientTypeReportSummary {
+  newCount: number;
+  oldCount: number;
+  newPercentage: number;
+  oldPercentage: number;
+  breakdown: { type: "NEW" | "OLD"; count: number }[];
+}
+
+export interface ReservationByPatientTypeReportParams {
+  dateFrom: string;
+  dateTo: string;
+  page?: number;
+  limit?: number;
+}
+
+// task-301 (Reservation Module Addendum #3). Mirrors apps/backend's
+// GetReservationByDoctorReportUseCase's ReservationByDoctorReportSummary.
+export interface ReservationByDoctorReportSummary {
+  totalDoctors: number;
+  breakdown: { doctorId: string; count: number }[];
+}
+
+export interface ReservationByDoctorReportParams {
+  dateFrom: string;
+  dateTo: string;
+  doctorId?: string;
+  page?: number;
+  limit?: number;
+}
+
 export interface ReportJobFilters {
   branchIds?: string[];
   dateFrom?: string;
