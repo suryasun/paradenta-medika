@@ -4,7 +4,9 @@ import { MasterDataNotFoundException } from '../../../master-data/domain/excepti
 import { IItemRepository } from '../../../warehouse/domain/repositories/IItemRepository';
 import { ItemNotConsumableException, ItemNotFoundException } from '../../../warehouse/domain/exceptions/WarehouseExceptions';
 import { IInvoiceRepository } from '../../../billing/domain/repositories/IInvoiceRepository';
+import { IEventBus } from '../../../../shared/events/EventBus';
 import { TreatmentNotActiveException, VisitNotFoundException } from '../../domain/exceptions/EmrExceptions';
+import { TREATMENT_RECORDED_EVENT, TreatmentRecordedPayload } from '../../domain/events/EmrEvents';
 import { IVisitRepository } from '../../domain/repositories/IVisitRepository';
 import { IVisitTreatmentRepository } from '../../domain/repositories/IVisitTreatmentRepository';
 import { assertVisitOpen } from '../services/assertVisitOpen';
@@ -47,6 +49,12 @@ export interface RecordTreatmentInput {
  * `itemRepository` is -- a direct cross-module repository-interface read,
  * not an event-derived flag, since Billing's Invoice.status is a cheap,
  * live, single-row lookup with no need for eventual-consistency tolerance.
+ *
+ * docs/06-tasks/task-320.md: publishes `emr.treatment-recorded.v1` after
+ * every successful entry (not only ones recorded post-Invoice) so Billing
+ * can keep an already-generated Invoice in sync -- unlike the Invoice
+ * *read* above, this is a *write* into Billing's own data, so it goes
+ * through an event (Billing's own subscriber/use-case), not a direct call.
  */
 export class RecordTreatmentUseCase {
   constructor(
@@ -56,6 +64,7 @@ export class RecordTreatmentUseCase {
     private readonly itemRepository: IItemRepository,
     private readonly invoiceRepository: IInvoiceRepository,
     private readonly auditService: IAuditService,
+    private readonly eventBus: IEventBus,
   ) {}
 
   async execute(input: RecordTreatmentInput): Promise<TreatmentEntryResponseDto> {
@@ -110,6 +119,19 @@ export class RecordTreatmentUseCase {
       { visitId: input.visitId, treatmentId: input.treatmentId, unitPrice, quantity },
       auditContext,
     );
+
+    const eventPayload: TreatmentRecordedPayload = {
+      event: TREATMENT_RECORDED_EVENT,
+      visitId: input.visitId,
+      visitTreatmentId: entry.id,
+      treatmentId: input.treatmentId,
+      treatmentName: treatment.treatmentName,
+      quantity: Number(entry.quantity),
+      unitPrice: Number(entry.unitPrice),
+      subtotal: Number(entry.subtotal),
+      occurredAt: new Date().toISOString(),
+    };
+    await this.eventBus.publish(TREATMENT_RECORDED_EVENT, eventPayload);
 
     return {
       id: entry.id,

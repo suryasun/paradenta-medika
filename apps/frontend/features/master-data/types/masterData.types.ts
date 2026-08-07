@@ -31,6 +31,13 @@ export interface PaymentMethod {
   isActive: boolean;
 }
 
+// docs/06-tasks/task-332.md, docs/adr/ADR-001-insurance-coverage-model.md
+export interface InsuranceProvider {
+  id: string;
+  providerName: string;
+  isActive: boolean;
+}
+
 // Mirrors apps/backend's ToothCondition (docs/06-tasks/task-067.md).
 export type ToothConditionCategory =
   | "HEALTHY"

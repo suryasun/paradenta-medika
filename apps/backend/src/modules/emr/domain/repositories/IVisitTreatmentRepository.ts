@@ -22,6 +22,19 @@ export interface VisitTreatmentWithMaterials extends VisitTreatment {
   materials: VisitTreatmentMaterial[];
 }
 
+/** docs/06-tasks/task-321.md: Quantity/Tooth Reference/Unit Price/Notes are
+ * all editable (unlike task-053's original create-time "price snapshot,
+ * never recalculated" rule -- editing is an explicit, audited user action,
+ * not an automatic catalog-price recalculation). */
+export interface UpdateVisitTreatmentInput {
+  toothReference?: string;
+  quantity?: number;
+  unitPrice?: number;
+  subtotal?: number;
+  notes?: string;
+  updatedBy: string;
+}
+
 export interface DoctorFeeSourceLine {
   visitTreatmentId: string;
   visitId: string;
@@ -34,10 +47,16 @@ export interface DoctorFeeSourceLine {
 
 export interface IVisitTreatmentRepository {
   create(input: CreateVisitTreatmentInput): Promise<VisitTreatment>;
+  /** docs/06-tasks/task-321.md: a single (non-deleted) entry, for Update/Remove to load before acting. */
+  findById(id: string): Promise<VisitTreatment | null>;
   findByVisitId(visitId: string): Promise<VisitTreatment[]>;
   /** docs/06-tasks/task-136.md: used by CloseVisitUseCase to publish per-treatment material-consumption events. */
   findByVisitIdWithMaterials(visitId: string): Promise<VisitTreatmentWithMaterials[]>;
   countByVisitId(visitId: string): Promise<number>;
+  /** docs/06-tasks/task-321.md: Quantity/Tooth Reference/Unit Price/Notes edit, before Invoice PAID. */
+  update(id: string, input: UpdateVisitTreatmentInput): Promise<VisitTreatment>;
+  /** docs/06-tasks/task-321.md: soft delete only (EMR-wide policy) -- never a physical DELETE. */
+  softDelete(id: string, deletedBy: string): Promise<void>;
   /**
    * docs/06-tasks/task-166.md (Finance, Epic AE): unsettled doctor-fee
    * source lines for one doctor/branch/period -- treatments on

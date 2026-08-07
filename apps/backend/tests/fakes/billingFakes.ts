@@ -1,8 +1,23 @@
-import { Invoice, InvoiceItem, Payment, PaymentMethod } from '@prisma/client';
-import { CreateInvoiceInput, IInvoiceRepository, ListInvoiceFilter, UpdateInvoicePaymentInput } from '../../src/modules/billing/domain/repositories/IInvoiceRepository';
-import { CreateInvoiceItemInput, IInvoiceItemRepository } from '../../src/modules/billing/domain/repositories/IInvoiceItemRepository';
+import { Invoice, InvoiceItem, InsuranceProvider, Payment, PaymentMethod, Refund } from '@prisma/client';
+import {
+  ApplyDiscountInput,
+  CancelInvoiceInput,
+  CreateInvoiceInput,
+  IInvoiceRepository,
+  ListInvoiceFilter,
+  UpdateInvoicePaymentInput,
+  UpdateInvoiceTotalsInput,
+  VoidInvoiceInput,
+} from '../../src/modules/billing/domain/repositories/IInvoiceRepository';
+import { CreateInvoiceItemInput, IInvoiceItemRepository, UpdateInvoiceItemInput } from '../../src/modules/billing/domain/repositories/IInvoiceItemRepository';
 import { CreatePaymentInput, IPaymentRepository } from '../../src/modules/billing/domain/repositories/IPaymentRepository';
+import { CreateRefundInput, IRefundRepository } from '../../src/modules/billing/domain/repositories/IRefundRepository';
 import { IPaymentMethodRepository, CreatePaymentMethodInput, UpdatePaymentMethodInput } from '../../src/modules/master-data/domain/repositories/IPaymentMethodRepository';
+import {
+  IInsuranceProviderRepository,
+  CreateInsuranceProviderInput,
+  UpdateInsuranceProviderInput,
+} from '../../src/modules/master-data/domain/repositories/IInsuranceProviderRepository';
 import { ListQueryDto } from '../../src/shared/http/ListQueryDto';
 import { PagedResult } from '../../src/shared/http/pagination';
 import { nextFakeUuid } from './uuid';
@@ -24,6 +39,15 @@ export class FakeInvoiceRepository implements IInvoiceRepository {
       grandTotal: input.grandTotal as never,
       paidAmount: 0 as never,
       status: 'UNPAID',
+      discountReason: null,
+      discountSource: null,
+      discountApprovedBy: null,
+      cancelReason: null,
+      cancelledBy: null,
+      cancelledAt: null,
+      voidReason: null,
+      voidedBy: null,
+      voidedAt: null,
       createdAt: new Date(),
       createdBy: input.createdBy,
       updatedAt: new Date(),
@@ -78,10 +102,65 @@ export class FakeInvoiceRepository implements IInvoiceRepository {
     return invoice;
   }
 
+  async updateTotals(id: string, input: UpdateInvoiceTotalsInput): Promise<Invoice> {
+    const invoice = this.invoices.get(id);
+    if (!invoice) throw new Error('not found');
+    invoice.subtotal = input.subtotal as never;
+    invoice.grandTotal = input.grandTotal as never;
+    invoice.updatedBy = input.updatedBy;
+    return invoice;
+  }
+
   async sumOutstandingByBranch(branchId: string): Promise<number> {
     return [...this.invoices.values()]
       .filter((i) => i.branchId === branchId && (i.status === 'UNPAID' || i.status === 'PARTIALLY_PAID'))
       .reduce((sum, i) => sum + (Number(i.grandTotal) - Number(i.paidAmount)), 0);
+  }
+
+  async applyDiscount(id: string, input: ApplyDiscountInput): Promise<Invoice> {
+    const invoice = this.invoices.get(id);
+    if (!invoice) throw new Error('not found');
+    invoice.discount = input.discount as never;
+    invoice.grandTotal = input.grandTotal as never;
+    invoice.discountReason = input.discountReason;
+    invoice.discountSource = input.discountSource;
+    invoice.discountApprovedBy = input.discountApprovedBy;
+    invoice.updatedBy = input.discountApprovedBy;
+    return invoice;
+  }
+
+  async removeDiscount(id: string, input: { grandTotal: number; updatedBy: string }): Promise<Invoice> {
+    const invoice = this.invoices.get(id);
+    if (!invoice) throw new Error('not found');
+    invoice.discount = 0 as never;
+    invoice.grandTotal = input.grandTotal as never;
+    invoice.discountReason = null;
+    invoice.discountSource = null;
+    invoice.discountApprovedBy = null;
+    invoice.updatedBy = input.updatedBy;
+    return invoice;
+  }
+
+  async cancel(id: string, input: CancelInvoiceInput): Promise<Invoice> {
+    const invoice = this.invoices.get(id);
+    if (!invoice) throw new Error('not found');
+    invoice.status = 'CANCELLED' as never;
+    invoice.cancelReason = input.reason;
+    invoice.cancelledBy = input.cancelledBy;
+    invoice.cancelledAt = new Date();
+    invoice.updatedBy = input.cancelledBy;
+    return invoice;
+  }
+
+  async void(id: string, input: VoidInvoiceInput): Promise<Invoice> {
+    const invoice = this.invoices.get(id);
+    if (!invoice) throw new Error('not found');
+    invoice.status = 'VOID' as never;
+    invoice.voidReason = input.reason;
+    invoice.voidedBy = input.voidedBy;
+    invoice.voidedAt = new Date();
+    invoice.updatedBy = input.voidedBy;
+    return invoice;
   }
 }
 
@@ -94,7 +173,9 @@ export class FakeInvoiceItemRepository implements IInvoiceItemRepository {
         id: nextFakeUuid(),
         invoiceId: input.invoiceId,
         referenceType: input.referenceType,
-        referenceId: input.referenceId,
+        referenceId: input.referenceId ?? null,
+        visitTreatmentId: input.visitTreatmentId ?? null,
+        reason: input.reason ?? null,
         itemName: input.itemName,
         quantity: input.quantity as never,
         unitPrice: input.unitPrice as never,
@@ -102,6 +183,8 @@ export class FakeInvoiceItemRepository implements IInvoiceItemRepository {
         tax: input.tax as never,
         total: input.total as never,
         createdAt: new Date(),
+        updatedAt: null,
+        updatedBy: null,
       } as InvoiceItem;
       this.items.set(item.id, item);
     }
@@ -110,6 +193,26 @@ export class FakeInvoiceItemRepository implements IInvoiceItemRepository {
 
   async findByInvoiceId(invoiceId: string): Promise<InvoiceItem[]> {
     return [...this.items.values()].filter((i) => i.invoiceId === invoiceId);
+  }
+
+  async findByVisitTreatmentId(visitTreatmentId: string): Promise<InvoiceItem | null> {
+    return [...this.items.values()].find((i) => i.visitTreatmentId === visitTreatmentId) ?? null;
+  }
+
+  async update(id: string, input: UpdateInvoiceItemInput): Promise<InvoiceItem> {
+    const item = this.items.get(id);
+    if (!item) throw new Error('not found');
+    item.itemName = input.itemName;
+    item.quantity = input.quantity as never;
+    item.unitPrice = input.unitPrice as never;
+    item.total = input.total as never;
+    item.updatedBy = input.updatedBy;
+    item.updatedAt = new Date();
+    return item;
+  }
+
+  async deleteById(id: string): Promise<void> {
+    this.items.delete(id);
   }
 }
 
@@ -132,6 +235,9 @@ export class FakePaymentRepository implements IPaymentRepository {
       updatedBy: null,
       deletedAt: null,
       deletedBy: null,
+      payerType: input.payerType ?? 'PATIENT',
+      insuranceProviderId: input.insuranceProviderId ?? null,
+      policyNumber: input.policyNumber ?? null,
     } as Payment;
     this.payments.set(payment.id, payment);
     return payment;
@@ -156,6 +262,37 @@ export class FakePaymentRepository implements IPaymentRepository {
     return [...this.payments.values()]
       .filter((p) => p.paymentDate >= startOfDay && p.paymentDate < endOfDay)
       .reduce((sum, p) => sum + Number(p.amount), 0);
+  }
+}
+
+export class FakeRefundRepository implements IRefundRepository {
+  refunds = new Map<string, Refund>();
+
+  async create(input: CreateRefundInput): Promise<Refund> {
+    const refund: Refund = {
+      id: nextFakeUuid(),
+      paymentId: input.paymentId,
+      invoiceId: input.invoiceId,
+      amount: input.amount as never,
+      reason: input.reason,
+      approvedBy: input.approvedBy ?? null,
+      createdAt: new Date(),
+      createdBy: input.createdBy,
+    } as Refund;
+    this.refunds.set(refund.id, refund);
+    return refund;
+  }
+
+  async findByPaymentId(paymentId: string): Promise<Refund[]> {
+    return [...this.refunds.values()].filter((r) => r.paymentId === paymentId);
+  }
+
+  async findByInvoiceId(invoiceId: string): Promise<Refund[]> {
+    return [...this.refunds.values()].filter((r) => r.invoiceId === invoiceId);
+  }
+
+  async sumByPaymentId(paymentId: string): Promise<number> {
+    return (await this.findByPaymentId(paymentId)).reduce((sum, r) => sum + Number(r.amount), 0);
   }
 }
 
@@ -211,5 +348,44 @@ export class FakePaymentMethodRepository implements IPaymentMethodRepository {
     if (!method) throw new Error('not found');
     Object.assign(method, input);
     return method;
+  }
+}
+
+// docs/06-tasks/task-332.md: mirrors FakePaymentMethodRepository's shape for
+// CreatePaymentUseCase's new payerType='INSURANCE' validation branch.
+export class FakeInsuranceProviderRepository implements IInsuranceProviderRepository {
+  providers = new Map<string, InsuranceProvider>();
+
+  async create(input: CreateInsuranceProviderInput): Promise<InsuranceProvider> {
+    const provider: InsuranceProvider = {
+      id: nextFakeUuid(),
+      providerName: input.providerName,
+      isActive: true,
+      createdAt: new Date(),
+      createdBy: null,
+      updatedAt: new Date(),
+      updatedBy: null,
+      deletedAt: null,
+      deletedBy: null,
+    } as InsuranceProvider;
+    this.providers.set(provider.id, provider);
+    return provider;
+  }
+
+  async list(query: ListQueryDto): Promise<PagedResult<InsuranceProvider>> {
+    const all = [...this.providers.values()];
+    const start = (query.page - 1) * query.limit;
+    return { items: all.slice(start, start + query.limit), total: all.length };
+  }
+
+  async findById(id: string): Promise<InsuranceProvider | null> {
+    return this.providers.get(id) ?? null;
+  }
+
+  async update(id: string, input: UpdateInsuranceProviderInput): Promise<InsuranceProvider> {
+    const provider = this.providers.get(id);
+    if (!provider) throw new Error('not found');
+    Object.assign(provider, input);
+    return provider;
   }
 }

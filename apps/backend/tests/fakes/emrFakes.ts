@@ -67,6 +67,7 @@ import { ISoapNoteRepository, UpsertSoapNoteInput } from '../../src/modules/emr/
 import { CreateVisitDiagnosisInput, IVisitDiagnosisRepository } from '../../src/modules/emr/domain/repositories/IVisitDiagnosisRepository';
 import {
   CreateVisitTreatmentInput,
+  UpdateVisitTreatmentInput,
   DoctorFeeSourceLine,
   IVisitTreatmentRepository,
   VisitTreatmentWithMaterials,
@@ -233,6 +234,10 @@ export class FakeVisitTreatmentRepository implements IVisitTreatmentRepository {
       notes: input.notes ?? null,
       createdAt: new Date(),
       createdBy: input.createdBy,
+      updatedAt: null,
+      updatedBy: null,
+      deletedAt: null,
+      deletedBy: null,
     } as VisitTreatment;
     this.entries.set(entry.id, entry);
     if (input.materials && input.materials.length > 0) {
@@ -251,8 +256,13 @@ export class FakeVisitTreatmentRepository implements IVisitTreatmentRepository {
     return entry;
   }
 
+  async findById(id: string): Promise<VisitTreatment | null> {
+    const entry = this.entries.get(id);
+    return entry && !entry.deletedAt ? entry : null;
+  }
+
   async findByVisitId(visitId: string): Promise<VisitTreatment[]> {
-    return [...this.entries.values()].filter((e) => e.visitId === visitId);
+    return [...this.entries.values()].filter((e) => e.visitId === visitId && !e.deletedAt);
   }
 
   async findByVisitIdWithMaterials(visitId: string): Promise<VisitTreatmentWithMaterials[]> {
@@ -261,6 +271,26 @@ export class FakeVisitTreatmentRepository implements IVisitTreatmentRepository {
 
   async countByVisitId(visitId: string): Promise<number> {
     return (await this.findByVisitId(visitId)).length;
+  }
+
+  async update(id: string, input: UpdateVisitTreatmentInput): Promise<VisitTreatment> {
+    const entry = this.entries.get(id);
+    if (!entry) throw new Error('not found');
+    if (input.toothReference !== undefined) entry.toothReference = input.toothReference;
+    if (input.quantity !== undefined) entry.quantity = input.quantity;
+    if (input.unitPrice !== undefined) entry.unitPrice = input.unitPrice as never;
+    if (input.subtotal !== undefined) entry.subtotal = input.subtotal as never;
+    if (input.notes !== undefined) entry.notes = input.notes;
+    entry.updatedBy = input.updatedBy;
+    entry.updatedAt = new Date();
+    return entry;
+  }
+
+  async softDelete(id: string, deletedBy: string): Promise<void> {
+    const entry = this.entries.get(id);
+    if (!entry) throw new Error('not found');
+    entry.deletedAt = new Date();
+    entry.deletedBy = deletedBy;
   }
 
   /** Test-seeded source lines (no Visit/Treatment join modeled in this fake) -- Finance's Doctor Fee Settlement tests push directly into `manualDoctorFeeSources`. */

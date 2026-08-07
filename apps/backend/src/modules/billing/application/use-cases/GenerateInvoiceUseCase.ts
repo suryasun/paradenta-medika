@@ -81,6 +81,9 @@ export class GenerateInvoiceUseCase {
         invoiceId: invoice.id,
         referenceType: 'Treatment',
         referenceId: entry.treatmentId,
+        // docs/06-tasks/task-321.md: precise correlation, so a later Edit/Remove
+        // of this specific entry can find and sync the matching InvoiceItem.
+        visitTreatmentId: entry.id,
         itemName: treatments[index]?.treatmentName ?? 'Treatment',
         quantity: Number(entry.quantity),
         unitPrice: Number(entry.unitPrice),

@@ -9,13 +9,147 @@ import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } fro
 import { useTreatments } from "@/features/master-data/hooks/useTreatments";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { formatCurrency } from "@/utils/currency";
-import { useRecordTreatment } from "../hooks/useVisitMutations";
+import { useRecordTreatment, useRemoveTreatment, useUpdateTreatment } from "../hooks/useVisitMutations";
 import { TreatmentEntry } from "../types/emr.types";
+
+// docs/06-tasks/task-321.md: per-row Edit (Tooth/Qty/Unit Price/Notes) and
+// Remove, both gated the same way "Add Treatment" already is (!readOnly,
+// which folds in the payment lock -- see TreatmentSection's own gating
+// below) and enforced identically server-side (assertTreatmentEditable,
+// task-317 -- blocked once the linked Invoice is PAID).
+function TreatmentRow({
+  visitId,
+  entry,
+  treatmentName,
+  readOnly,
+}: {
+  visitId: string;
+  entry: TreatmentEntry;
+  treatmentName: string;
+  readOnly: boolean;
+}) {
+  const [mode, setMode] = useState<"view" | "edit" | "confirmRemove">("view");
+  const [toothReference, setToothReference] = useState(entry.toothReference ?? "");
+  const [quantity, setQuantity] = useState(String(entry.quantity));
+  const [unitPrice, setUnitPrice] = useState(String(entry.unitPrice));
+  const [notes, setNotes] = useState(entry.notes ?? "");
+  const updateTreatment = useUpdateTreatment(visitId);
+  const removeTreatment = useRemoveTreatment(visitId);
+
+  function handleSave() {
+    updateTreatment.mutate(
+      {
+        treatmentEntryId: entry.id,
+        payload: {
+          toothReference: toothReference || undefined,
+          quantity: Number(quantity) || 1,
+          unitPrice: Number(unitPrice) || 0,
+          notes: notes || undefined,
+        },
+      },
+      { onSuccess: () => setMode("view") },
+    );
+  }
+
+  function handleCancelEdit() {
+    setToothReference(entry.toothReference ?? "");
+    setQuantity(String(entry.quantity));
+    setUnitPrice(String(entry.unitPrice));
+    setNotes(entry.notes ?? "");
+    setMode("view");
+  }
+
+  if (mode === "edit") {
+    return (
+      <TableRow>
+        <TableCell colSpan={6}>
+          <div className="flex flex-wrap items-end gap-3 py-1">
+            <span className="min-w-32 text-sm font-medium text-foreground">{treatmentName}</span>
+            <Input id={`tooth-${entry.id}`} label="Tooth" value={toothReference} onChange={(e) => setToothReference(e.target.value)} className="w-24" />
+            <Input
+              id={`qty-${entry.id}`}
+              label="Qty"
+              type="number"
+              min={1}
+              max={100}
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-20"
+            />
+            <Input
+              id={`price-${entry.id}`}
+              label="Unit Price"
+              type="number"
+              min={0}
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
+              className="w-32"
+            />
+            <Input id={`notes-${entry.id}`} label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="w-48" />
+            <Button isLoading={updateTreatment.isPending} onClick={handleSave}>
+              Save
+            </Button>
+            <Button type="button" variant="secondary" onClick={handleCancelEdit}>
+              Cancel
+            </Button>
+          </div>
+          {updateTreatment.isError && (
+            <p role="alert" className="mt-1 text-sm text-error">
+              {getApiErrorMessage(updateTreatment.error)}
+            </p>
+          )}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return (
+    <TableRow>
+      <TableCell>{treatmentName}</TableCell>
+      <TableCell>{entry.toothReference ?? "-"}</TableCell>
+      <TableCell>{entry.quantity}</TableCell>
+      <TableCell>{formatCurrency(entry.unitPrice)}</TableCell>
+      <TableCell>{formatCurrency(entry.subtotal)}</TableCell>
+      <TableCell>
+        {!readOnly && (
+          <div className="flex flex-wrap gap-1.5">
+            {mode === "confirmRemove" ? (
+              <>
+                <Button variant="danger" isLoading={removeTreatment.isPending} onClick={() => removeTreatment.mutate(entry.id)}>
+                  Confirm Remove
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setMode("view")}>
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="tertiary" onClick={() => setMode("edit")}>
+                  Edit
+                </Button>
+                <Button variant="danger" onClick={() => setMode("confirmRemove")}>
+                  Remove
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+        {removeTreatment.isError && (
+          <p role="alert" className="mt-1 text-xs text-error">
+            {getApiErrorMessage(removeTreatment.error)}
+          </p>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
 
 // docs/06-tasks/task-053.md: price is snapshotted server-side at entry
 // time from the Treatment catalog, so unitPrice/subtotal shown in the
 // table below reflect what was actually billed, not the current catalog
-// price if it has since changed.
+// price if it has since changed. docs/06-tasks/task-321.md: Edit does let
+// staff subsequently correct Unit Price (an explicit, audited action) --
+// this doesn't reintroduce automatic catalog-price recalculation.
 //
 // docs/06-tasks/task-318.md: `readOnly` here already folds in the
 // payment-driven lock (VisitWorkspace passes `treatmentReadOnly`, not the
@@ -65,17 +199,12 @@ export function TreatmentSection({
               <TableHeaderCell>Qty</TableHeaderCell>
               <TableHeaderCell>Unit Price</TableHeaderCell>
               <TableHeaderCell>Subtotal</TableHeaderCell>
+              <TableHeaderCell>Actions</TableHeaderCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {treatmentEntries.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell>{treatmentName(entry.treatmentId)}</TableCell>
-                <TableCell>{entry.toothReference ?? "-"}</TableCell>
-                <TableCell>{entry.quantity}</TableCell>
-                <TableCell>{formatCurrency(entry.unitPrice)}</TableCell>
-                <TableCell>{formatCurrency(entry.subtotal)}</TableCell>
-              </TableRow>
+              <TreatmentRow key={entry.id} visitId={visitId} entry={entry} treatmentName={treatmentName(entry.treatmentId)} readOnly={readOnly} />
             ))}
           </TableBody>
         </Table>

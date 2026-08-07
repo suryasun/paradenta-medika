@@ -12,6 +12,7 @@ import { RecordVitalSignRequestDto } from '../../application/dtos/RecordVitalSig
 import { RecordSoapNoteRequestDto } from '../../application/dtos/RecordSoapNoteRequestDto';
 import { RecordDiagnosisRequestDto } from '../../application/dtos/RecordDiagnosisRequestDto';
 import { RecordTreatmentRequestDto } from '../../application/dtos/RecordTreatmentRequestDto';
+import { UpdateTreatmentRequestDto } from '../../application/dtos/UpdateTreatmentRequestDto';
 import { VisitNumberGenerator } from '../../application/services/VisitNumberGenerator';
 import { OpenVisitUseCase } from '../../application/use-cases/OpenVisitUseCase';
 import { GetVisitDetailUseCase } from '../../application/use-cases/GetVisitDetailUseCase';
@@ -19,6 +20,8 @@ import { RecordVitalSignUseCase } from '../../application/use-cases/RecordVitalS
 import { RecordSoapNoteUseCase } from '../../application/use-cases/RecordSoapNoteUseCase';
 import { RecordDiagnosisUseCase } from '../../application/use-cases/RecordDiagnosisUseCase';
 import { RecordTreatmentUseCase } from '../../application/use-cases/RecordTreatmentUseCase';
+import { UpdateTreatmentUseCase } from '../../application/use-cases/UpdateTreatmentUseCase';
+import { RemoveTreatmentUseCase } from '../../application/use-cases/RemoveTreatmentUseCase';
 import { CloseVisitUseCase } from '../../application/use-cases/CloseVisitUseCase';
 import { RecordMedicalHistoryRequestDto } from '../../application/dtos/RecordMedicalHistoryRequestDto';
 import { RecordAllergyRequestDto } from '../../application/dtos/RecordAllergyRequestDto';
@@ -206,7 +209,9 @@ export function buildEmrModule(
     new RecordVitalSignUseCase(visitRepository, vitalSignRepository, auditService),
     new RecordSoapNoteUseCase(visitRepository, soapNoteRepository, auditService),
     new RecordDiagnosisUseCase(visitRepository, diagnosisRepository, auditService),
-    new RecordTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, invoiceRepository, auditService),
+    new RecordTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, invoiceRepository, auditService, eventBus),
+    new UpdateTreatmentUseCase(visitRepository, visitTreatmentRepository, treatmentRepository, invoiceRepository, auditService, eventBus),
+    new RemoveTreatmentUseCase(visitRepository, visitTreatmentRepository, invoiceRepository, auditService, eventBus),
     new CloseVisitUseCase(visitRepository, soapNoteRepository, visitTreatmentRepository, warehouseLocationRepository, auditService, eventBus),
   );
 
@@ -362,6 +367,18 @@ export function buildEmrModule(
     requirePermission('emr.treatment.record'),
     validateBody(RecordTreatmentRequestDto),
     controller.recordTreatment,
+  );
+  // docs/06-tasks/task-321.md: Edit/Remove an existing Treatment entry, before its Invoice is PAID.
+  router.patch(
+    '/emr/visits/:id/treatments/:treatmentEntryId',
+    requirePermission('emr.treatment.update'),
+    validateBody(UpdateTreatmentRequestDto),
+    controller.updateTreatment,
+  );
+  router.delete(
+    '/emr/visits/:id/treatments/:treatmentEntryId',
+    requirePermission('emr.treatment.delete'),
+    controller.removeTreatment,
   );
   router.post('/emr/visits/:id/close', requirePermission('emr.visit.close'), controller.close);
 

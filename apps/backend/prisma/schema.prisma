@@ -1155,16 +1155,24 @@ model VisitDiagnosis {
 /// entry time so later catalog price changes don't retroactively alter
 /// historical visits.
 model VisitTreatment {
-  id             String   @id @default(uuid()) @db.Char(36)
-  visitId        String   @map("visit_id") @db.Char(36)
-  treatmentId    String   @map("treatment_id") @db.Char(36)
-  toothReference String?  @map("tooth_reference") @db.VarChar(50)
-  quantity       Int      @default(1)
-  unitPrice      Decimal  @map("unit_price") @db.Decimal(18, 2)
-  subtotal       Decimal  @db.Decimal(18, 2)
-  notes          String?  @db.Text
-  createdAt      DateTime @default(now()) @map("created_at")
-  createdBy      String?  @map("created_by") @db.Char(36)
+  id             String    @id @default(uuid()) @db.Char(36)
+  visitId        String    @map("visit_id") @db.Char(36)
+  treatmentId    String    @map("treatment_id") @db.Char(36)
+  toothReference String?   @map("tooth_reference") @db.VarChar(50)
+  quantity       Int       @default(1)
+  unitPrice      Decimal   @map("unit_price") @db.Decimal(18, 2)
+  subtotal       Decimal   @db.Decimal(18, 2)
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdBy      String?   @map("created_by") @db.Char(36)
+  /// docs/06-tasks/task-321.md: Edit/Remove (before Invoice PAID) audit trail.
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+  updatedBy      String?   @map("updated_by") @db.Char(36)
+  /// docs/06-tasks/task-321.md: soft delete only, per the EMR-wide policy
+  /// (docs/03-sad/15-module-emr.md: "operasi DELETE disarankan sebagai
+  /// Soft Delete") -- Remove Treatment never hard-deletes a clinical record.
+  deletedAt      DateTime? @map("deleted_at")
+  deletedBy      String?   @map("deleted_by") @db.Char(36)
 
   visit     Visit                    @relation(fields: [visitId], references: [id])
   treatment Treatment                @relation(fields: [treatmentId], references: [id])
@@ -1830,6 +1838,10 @@ enum InvoiceStatus {
   PARTIALLY_PAID
   PAID
   CLOSED
+  /// docs/06-tasks/task-324.md: reachable only from UNPAID with paidAmount=0. Terminal.
+  CANCELLED
+  /// docs/06-tasks/task-325.md: reachable from UNPAID/PARTIALLY_PAID/PAID (not CLOSED/CANCELLED/VOID). Terminal.
+  VOID
 }
 
 model Invoice {
@@ -1846,6 +1858,24 @@ model Invoice {
   paidAmount  Decimal       @default(0) @map("paid_amount") @db.Decimal(18, 2)
   status      InvoiceStatus @default(UNPAID)
 
+  /// docs/06-tasks/task-322.md: UC-BIL-005 Apply Discount. `discountSource` is a
+  /// String (not a Prisma enum), same convention as InvoiceItem.referenceType.
+  discountReason     String?   @map("discount_reason") @db.Text
+  discountSource     String?   @map("discount_source") @db.VarChar(20)
+  discountApprovedBy String?   @map("discount_approved_by") @db.Char(36)
+  /// docs/06-tasks/task-324.md: UC-BIL-014 Cancel Invoice.
+  cancelReason       String?   @map("cancel_reason") @db.Text
+  cancelledBy        String?   @map("cancelled_by") @db.Char(36)
+  cancelledAt        DateTime? @map("cancelled_at")
+  /// docs/06-tasks/task-325.md: UC-BIL-015 Void Invoice. Single-step (mandatory
+  /// reason + audit trail), no separate approval step -- matches the codebase's
+  /// own precedent for correcting a finalized financial record (Finance's
+  /// VoidJournalUseCase/ReverseJournalUseCase, neither of which has a two-step
+  /// approval gate either).
+  voidReason         String?   @map("void_reason") @db.Text
+  voidedBy           String?   @map("voided_by") @db.Char(36)
+  voidedAt           DateTime? @map("voided_at")
+
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1858,6 +1888,7 @@ model Invoice {
   branch   Branch        @relation(fields: [branchId], references: [id])
   items    InvoiceItem[]
   payments Payment[]
+  refunds  Refund[]
 
   @@index([patientId])
   @@index([branchId])
@@ -1872,21 +1903,36 @@ model Invoice {
 // reference types (Medicine/Consumable/Laboratory/Radiology/Manual Charge)
 // that belong to later phases.
 model InvoiceItem {
-  id            String   @id @default(uuid()) @db.Char(36)
-  invoiceId     String   @map("invoice_id") @db.Char(36)
-  referenceType String   @map("reference_type") @db.VarChar(30)
-  referenceId   String   @map("reference_id") @db.Char(36)
-  itemName      String   @map("item_name") @db.VarChar(255)
-  quantity      Decimal  @db.Decimal(10, 2)
-  unitPrice     Decimal  @map("unit_price") @db.Decimal(18, 2)
-  discount      Decimal  @default(0) @db.Decimal(18, 2)
-  tax           Decimal  @default(0) @db.Decimal(18, 2)
-  total         Decimal  @db.Decimal(18, 2)
-  createdAt     DateTime @default(now()) @map("created_at")
+  id               String    @id @default(uuid()) @db.Char(36)
+  invoiceId        String    @map("invoice_id") @db.Char(36)
+  referenceType    String    @map("reference_type") @db.VarChar(30)
+  /// docs/06-tasks/task-323.md: nullable -- a ManualCharge item has no catalog
+  /// entity to reference (unlike Treatment-sourced items, which always set this).
+  referenceId      String?   @map("reference_id") @db.Char(36)
+  /// docs/06-tasks/task-323.md: mandatory for ManualCharge items (validated in
+  /// the use case, not a DB constraint, since Treatment-sourced items never set it).
+  reason           String?   @db.Text
+  /// docs/06-tasks/task-321.md: precise correlation back to the originating
+  /// VisitTreatment row -- `referenceId` alone (the catalog Treatment id)
+  /// is ambiguous when the same catalog Treatment is recorded more than
+  /// once on a Visit. Nullable: only Treatment-sourced items populate it;
+  /// future reference types (Medicine/Consumable/Manual Charge, per the
+  /// SAD) have no VisitTreatment to point to.
+  visitTreatmentId String?   @map("visit_treatment_id") @db.Char(36)
+  itemName         String    @map("item_name") @db.VarChar(255)
+  quantity         Decimal   @db.Decimal(10, 2)
+  unitPrice        Decimal   @map("unit_price") @db.Decimal(18, 2)
+  discount         Decimal   @default(0) @db.Decimal(18, 2)
+  tax              Decimal   @default(0) @db.Decimal(18, 2)
+  total            Decimal   @db.Decimal(18, 2)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+  updatedBy        String?   @map("updated_by") @db.Char(36)
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 
   @@index([invoiceId])
+  @@index([visitTreatmentId])
   @@map("invoice_items")
 }
 
@@ -1900,6 +1946,17 @@ model Payment {
   receivedBy      String?  @map("received_by") @db.Char(36)
   note            String?  @db.Text
 
+  /// docs/06-tasks/task-332.md, docs/adr/ADR-001-insurance-coverage-model.md:
+  /// UC-BIL-006 Apply Insurance, modeled as a payment allocation rather than a
+  /// new Coverage/Allocation subsystem -- every existing Payment row is
+  /// implicitly 'PATIENT' (default), no backfill needed. `insuranceProviderId`/
+  /// `policyNumber` are only set when payerType = 'INSURANCE'; the coverage
+  /// `amount` itself is Cashier-entered (this field, same as any other
+  /// payment line), not system-computed -- no coverage formula is documented.
+  payerType          String  @default("PATIENT") @map("payer_type") @db.VarChar(20)
+  insuranceProviderId String? @map("insurance_provider_id") @db.Char(36)
+  policyNumber        String? @map("policy_number") @db.VarChar(100)
+
   createdAt DateTime  @default(now()) @map("created_at")
   createdBy String?   @map("created_by") @db.Char(36)
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -1907,11 +1964,58 @@ model Payment {
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?   @map("deleted_by") @db.Char(36)
 
-  invoice       Invoice       @relation(fields: [invoiceId], references: [id])
-  paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+  invoice          Invoice           @relation(fields: [invoiceId], references: [id])
+  paymentMethod    PaymentMethod     @relation(fields: [paymentMethodId], references: [id])
+  insuranceProvider InsuranceProvider? @relation(fields: [insuranceProviderId], references: [id])
+  refunds          Refund[]
 
   @@index([invoiceId])
+  @@index([insuranceProviderId])
   @@map("payments")
+}
+
+/// docs/06-tasks/task-332.md, docs/adr/ADR-001-insurance-coverage-model.md:
+/// minimal flat list (mirrors PaymentMethod's pattern), selected on a
+/// Payment line when payerType = 'INSURANCE'. No InsurancePlan/coverage-rule
+/// sub-entity -- deferred until a real coverage-rule requirement exists.
+model InsuranceProvider {
+  id           String  @id @default(uuid()) @db.Char(36)
+  providerName String  @map("provider_name") @db.VarChar(150)
+  isActive     Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String?   @map("created_by") @db.Char(36)
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Char(36)
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Char(36)
+
+  payments Payment[]
+
+  @@map("insurance_providers")
+}
+
+/// docs/06-tasks/task-326.md: UC-BIL-016 Refund Payment, mirrors the SAD's
+/// documented `billing_refunds` table. A Payment can have multiple partial
+/// Refund rows -- "not already fully refunded" is validated as
+/// sum(existing refunds) + newAmount <= payment.amount, not a cached total.
+model Refund {
+  id         String   @id @default(uuid()) @db.Char(36)
+  paymentId  String   @map("payment_id") @db.Char(36)
+  /// Denormalized for query convenience (list refunds by invoice without a join through Payment).
+  invoiceId  String   @map("invoice_id") @db.Char(36)
+  amount     Decimal  @db.Decimal(18, 2)
+  reason     String   @db.Text
+  approvedBy String?  @map("approved_by") @db.Char(36)
+  createdAt  DateTime @default(now()) @map("created_at")
+  createdBy  String?  @map("created_by") @db.Char(36)
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@map("refunds")
 }
 
 // ---------------------------------------------------------------------------

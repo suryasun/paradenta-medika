@@ -92,6 +92,14 @@ export interface RecordTreatmentInput {
   notes?: string;
 }
 
+// docs/06-tasks/task-321.md: Edit an existing Treatment entry (Qty / Tooth / Unit Price / Notes), before Invoice PAID.
+export interface UpdateTreatmentInput {
+  toothReference?: string;
+  quantity?: number;
+  unitPrice?: number;
+  notes?: string;
+}
+
 export const OPEN_VISIT_STATUSES: Visit["status"][] = ["DRAFT", "WAITING_EXAMINATION", "IN_PROGRESS"];
 
 // Mirrors apps/backend/prisma/schema.prisma MedicalHistoryCategory

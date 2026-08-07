@@ -23,3 +23,23 @@ export interface PaymentCompletedPayload {
   paymentIds: string[];
   occurredAt: string;
 }
+
+/**
+ * docs/06-tasks/task-326.md: UC-BIL-016 Refund Payment. Mirrors
+ * PaymentCompletedPayload's shape so Finance's eventual
+ * `RecordBillingRefundUseCase` (a Finance-side follow-up, out of this
+ * task's scope) can post the reversing journal entry the same way
+ * `RecordBillingPaymentUseCase` already does for `PaymentCompleted`.
+ */
+export const PAYMENT_REFUNDED_EVENT = 'PaymentRefunded';
+
+export interface PaymentRefundedPayload {
+  event: typeof PAYMENT_REFUNDED_EVENT;
+  invoiceId: string;
+  invoiceNo: string;
+  paymentId: string;
+  refundId: string;
+  refundAmount: number;
+  invoiceStatus: string;
+  occurredAt: string;
+}

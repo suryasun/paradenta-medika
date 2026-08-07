@@ -1333,6 +1333,10 @@ Subscriber:
 | StockConsumed | Warehouse | Reporting |
 | CashierClosed | Finance | Reporting |
 
+`TreatmentSaved` is implemented as `emr.treatment-recorded.v1` (docs/06-tasks/task-320.md): published by `RecordTreatmentUseCase` for every Treatment entry recorded, so an already-generated Invoice (from `EMRFinished`) stays in sync when a Treatment is recorded afterward, while it's still UNPAID/PARTIALLY_PAID — closing a gap where this documented event existed in the catalog but was never actually built, letting a post-Invoice Treatment entry go silently unbilled.
+
+docs/06-tasks/task-321.md extends the same pattern with two further EMR → Billing events, not originally in this catalog: `emr.treatment-updated.v1` and `emr.treatment-removed.v1`, published when an existing Treatment entry is edited or removed (before its Invoice is PAID), keeping the matching Invoice line item and totals in sync the same way `emr.treatment-recorded.v1` does for a newly-added one.
+
 ---
 
 ## 24.2 Event Lifecycle

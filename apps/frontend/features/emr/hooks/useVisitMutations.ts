@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { emrService } from "../services/emr.service";
-import { DiagnosisEntryInput, RecordTreatmentInput, RecordVitalSignInput, SoapNoteInput } from "../types/emr.types";
+import { DiagnosisEntryInput, RecordTreatmentInput, RecordVitalSignInput, SoapNoteInput, UpdateTreatmentInput } from "../types/emr.types";
 
 function invalidateVisit(queryClient: ReturnType<typeof useQueryClient>, visitId: string) {
   queryClient.invalidateQueries({ queryKey: ["emr", "visit", visitId] });
@@ -34,6 +34,24 @@ export function useRecordTreatment(visitId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: RecordTreatmentInput) => emrService.recordTreatment(visitId, payload),
+    onSuccess: () => invalidateVisit(queryClient, visitId),
+  });
+}
+
+// docs/06-tasks/task-321.md
+export function useUpdateTreatment(visitId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ treatmentEntryId, payload }: { treatmentEntryId: string; payload: UpdateTreatmentInput }) =>
+      emrService.updateTreatment(visitId, treatmentEntryId, payload),
+    onSuccess: () => invalidateVisit(queryClient, visitId),
+  });
+}
+
+export function useRemoveTreatment(visitId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (treatmentEntryId: string) => emrService.removeTreatment(visitId, treatmentEntryId),
     onSuccess: () => invalidateVisit(queryClient, visitId),
   });
 }

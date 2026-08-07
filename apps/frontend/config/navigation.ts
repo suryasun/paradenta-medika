@@ -73,6 +73,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Treatment Categories", href: "/master-data/treatment-categories", permission: "masterdata.treatment-category.read" },
       { label: "Treatments", href: "/master-data/treatments", permission: "masterdata.treatment.read" },
       { label: "Payment Methods", href: "/master-data/payment-methods", permission: "masterdata.payment-method.read" },
+      { label: "Insurance Providers", href: "/master-data/insurance-providers", permission: "masterdata.insurance-provider.read" },
       { label: "Tooth Conditions", href: "/master-data/tooth-conditions", permission: "masterdata.tooth-condition.read" },
       { label: "Consent Templates", href: "/master-data/consent-templates", permission: "emr.consent-template.read" },
       { label: "Templates", href: "/master-data/templates", permission: "masterdata.template.read" },

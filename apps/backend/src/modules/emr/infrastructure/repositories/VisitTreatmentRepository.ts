@@ -4,6 +4,7 @@ import {
   CreateVisitTreatmentInput,
   DoctorFeeSourceLine,
   IVisitTreatmentRepository,
+  UpdateVisitTreatmentInput,
   VisitTreatmentWithMaterials,
 } from '../../domain/repositories/IVisitTreatmentRepository';
 
@@ -29,20 +30,42 @@ export class VisitTreatmentRepository implements IVisitTreatmentRepository {
     });
   }
 
+  async findById(id: string): Promise<VisitTreatment | null> {
+    return prisma.visitTreatment.findFirst({ where: { id, deletedAt: null } });
+  }
+
   async findByVisitId(visitId: string): Promise<VisitTreatment[]> {
-    return prisma.visitTreatment.findMany({ where: { visitId }, orderBy: { createdAt: 'asc' } });
+    return prisma.visitTreatment.findMany({ where: { visitId, deletedAt: null }, orderBy: { createdAt: 'asc' } });
   }
 
   async findByVisitIdWithMaterials(visitId: string): Promise<VisitTreatmentWithMaterials[]> {
     return prisma.visitTreatment.findMany({
-      where: { visitId },
+      where: { visitId, deletedAt: null },
       include: { materials: true },
       orderBy: { createdAt: 'asc' },
     });
   }
 
   async countByVisitId(visitId: string): Promise<number> {
-    return prisma.visitTreatment.count({ where: { visitId } });
+    return prisma.visitTreatment.count({ where: { visitId, deletedAt: null } });
+  }
+
+  async update(id: string, input: UpdateVisitTreatmentInput): Promise<VisitTreatment> {
+    return prisma.visitTreatment.update({
+      where: { id },
+      data: {
+        toothReference: input.toothReference,
+        quantity: input.quantity,
+        unitPrice: input.unitPrice,
+        subtotal: input.subtotal,
+        notes: input.notes,
+        updatedBy: input.updatedBy,
+      },
+    });
+  }
+
+  async softDelete(id: string, deletedBy: string): Promise<void> {
+    await prisma.visitTreatment.update({ where: { id }, data: { deletedAt: new Date(), deletedBy } });
   }
 
   async findUnsettledDoctorFeeSources(
@@ -54,6 +77,7 @@ export class VisitTreatmentRepository implements IVisitTreatmentRepository {
   ): Promise<DoctorFeeSourceLine[]> {
     const rows = await prisma.visitTreatment.findMany({
       where: {
+        deletedAt: null,
         id: excludeVisitTreatmentIds.length ? { notIn: excludeVisitTreatmentIds } : undefined,
         treatment: { doctorFee: { gt: 0 } },
         visit: {

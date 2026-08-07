@@ -2,10 +2,14 @@ import { Invoice, InvoiceStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/infrastructure/prisma';
 import { PagedResult, sanitizeSortField } from '../../../../shared/http/pagination';
 import {
+  ApplyDiscountInput,
+  CancelInvoiceInput,
   CreateInvoiceInput,
   IInvoiceRepository,
   ListInvoiceFilter,
   UpdateInvoicePaymentInput,
+  UpdateInvoiceTotalsInput,
+  VoidInvoiceInput,
 } from '../../domain/repositories/IInvoiceRepository';
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'invoiceDate', 'grandTotal'] as const;
@@ -81,8 +85,73 @@ export class InvoiceRepository implements IInvoiceRepository {
     });
   }
 
+  async updateTotals(id: string, input: UpdateInvoiceTotalsInput): Promise<Invoice> {
+    return prisma.invoice.update({
+      where: { id },
+      data: {
+        subtotal: input.subtotal,
+        grandTotal: input.grandTotal,
+        updatedBy: input.updatedBy,
+      },
+    });
+  }
+
   async close(id: string, updatedBy: string): Promise<Invoice> {
     return prisma.invoice.update({ where: { id }, data: { status: 'CLOSED', updatedBy } });
+  }
+
+  async applyDiscount(id: string, input: ApplyDiscountInput): Promise<Invoice> {
+    return prisma.invoice.update({
+      where: { id },
+      data: {
+        discount: input.discount,
+        grandTotal: input.grandTotal,
+        discountReason: input.discountReason,
+        discountSource: input.discountSource,
+        discountApprovedBy: input.discountApprovedBy,
+        updatedBy: input.discountApprovedBy,
+      },
+    });
+  }
+
+  async removeDiscount(id: string, input: { grandTotal: number; updatedBy: string }): Promise<Invoice> {
+    return prisma.invoice.update({
+      where: { id },
+      data: {
+        discount: 0,
+        grandTotal: input.grandTotal,
+        discountReason: null,
+        discountSource: null,
+        discountApprovedBy: null,
+        updatedBy: input.updatedBy,
+      },
+    });
+  }
+
+  async cancel(id: string, input: CancelInvoiceInput): Promise<Invoice> {
+    return prisma.invoice.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        cancelReason: input.reason,
+        cancelledBy: input.cancelledBy,
+        cancelledAt: new Date(),
+        updatedBy: input.cancelledBy,
+      },
+    });
+  }
+
+  async void(id: string, input: VoidInvoiceInput): Promise<Invoice> {
+    return prisma.invoice.update({
+      where: { id },
+      data: {
+        status: 'VOID',
+        voidReason: input.reason,
+        voidedBy: input.voidedBy,
+        voidedAt: new Date(),
+        updatedBy: input.voidedBy,
+      },
+    });
   }
 
   async sumOutstandingByBranch(branchId: string): Promise<number> {

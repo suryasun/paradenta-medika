@@ -19,6 +19,14 @@ export interface PaymentLineDto {
   amount: number;
   referenceNo?: string;
   note?: string;
+  /** docs/06-tasks/task-332.md: UC-BIL-006 Apply Insurance, modeled as a payment
+   * allocation. Defaults to 'PATIENT' when omitted. Structural/per-entry
+   * validation (payerType enum, insuranceProviderId required+active when
+   * payerType='INSURANCE') is done in CreatePaymentUseCase, same discipline
+   * as the rest of this DTO's fields. */
+  payerType?: 'PATIENT' | 'INSURANCE';
+  insuranceProviderId?: string;
+  policyNumber?: string;
 }
 
 export class CreatePaymentRequestDto {

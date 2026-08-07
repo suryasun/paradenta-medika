@@ -2,8 +2,10 @@ import { IEventBus } from '../../../../shared/events/EventBus';
 import { ValidationException } from '../../../../shared/http/exceptions';
 import { AuditContext, IAuditService } from '../../../system/domain/services/IAuditService';
 import { IPaymentMethodRepository } from '../../../master-data/domain/repositories/IPaymentMethodRepository';
+import { IInsuranceProviderRepository } from '../../../master-data/domain/repositories/IInsuranceProviderRepository';
 import { PAYMENT_COMPLETED_EVENT, PaymentCompletedPayload } from '../../domain/events/BillingEvents';
 import {
+  InsuranceProviderNotActiveException,
   InvoiceAlreadyClosedException,
   InvoiceNotFoundException,
   PaymentExceedsOutstandingException,
@@ -37,6 +39,7 @@ export class CreatePaymentUseCase {
     private readonly paymentMethodRepository: IPaymentMethodRepository,
     private readonly auditService: IAuditService,
     private readonly eventBus: IEventBus,
+    private readonly insuranceProviderRepository: IInsuranceProviderRepository,
   ) {}
 
   async execute(input: CreatePaymentInput): Promise<InvoiceSummaryResponseDto> {
@@ -56,6 +59,12 @@ export class CreatePaymentUseCase {
       if (!line.paymentMethodId) {
         errors.push({ field: `payments[${index}].paymentMethodId`, message: 'paymentMethodId is required' });
       }
+      if (line.payerType && line.payerType !== 'PATIENT' && line.payerType !== 'INSURANCE') {
+        errors.push({ field: `payments[${index}].payerType`, message: 'payerType must be PATIENT or INSURANCE' });
+      }
+      if (line.payerType === 'INSURANCE' && !line.insuranceProviderId) {
+        errors.push({ field: `payments[${index}].insuranceProviderId`, message: 'insuranceProviderId is required when payerType is INSURANCE' });
+      }
     });
     if (errors.length > 0) {
       throw new ValidationException(errors);
@@ -72,6 +81,16 @@ export class CreatePaymentUseCase {
       if (!paymentMethod || !paymentMethod.isActive) {
         throw new PaymentMethodNotActiveException();
       }
+      // docs/06-tasks/task-332.md, docs/adr/ADR-001-insurance-coverage-model.md:
+      // UC-BIL-006 Apply Insurance -- payerType='INSURANCE' must reference an
+      // existing, active InsuranceProvider. Coverage amount is Cashier-entered
+      // (this payment line's `amount`), not system-computed.
+      if (line.payerType === 'INSURANCE') {
+        const provider = await this.insuranceProviderRepository.findById(line.insuranceProviderId!);
+        if (!provider || !provider.isActive) {
+          throw new InsuranceProviderNotActiveException();
+        }
+      }
     }
 
     const createdPaymentIds: string[] = [];
@@ -84,6 +103,9 @@ export class CreatePaymentUseCase {
         receivedBy: input.actorUserId,
         note: line.note,
         createdBy: input.actorUserId,
+        payerType: line.payerType ?? 'PATIENT',
+        insuranceProviderId: line.payerType === 'INSURANCE' ? line.insuranceProviderId : undefined,
+        policyNumber: line.payerType === 'INSURANCE' ? line.policyNumber : undefined,
       });
       createdPaymentIds.push(payment.id);
     }

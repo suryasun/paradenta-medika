@@ -242,4 +242,54 @@ describe("VisitWorkspace", () => {
     expect(screen.getByText(/Locked — invoice paid/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Treatment")).not.toBeInTheDocument();
   });
+
+  // docs/06-tasks/task-321.md
+  it("edits a Treatment entry's quantity via the row's Edit action", async () => {
+    const user = userEvent.setup();
+    mockedEmrService.detail.mockResolvedValue(
+      buildVisit({
+        status: "IN_PROGRESS",
+        treatmentEntries: [{ id: "vt1", treatmentId: "t1", toothReference: "16", quantity: 1, unitPrice: 100000, subtotal: 100000, notes: null }],
+      }),
+    );
+    mockedEmrService.updateTreatment.mockResolvedValue({
+      id: "vt1", treatmentId: "t1", toothReference: "16", quantity: 2, unitPrice: 100000, subtotal: 200000, notes: null,
+    });
+
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Visit VIS000001" });
+    await user.click(screen.getByRole("tab", { name: "Treatment" }));
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const qtyInput = screen.getByLabelText("Qty");
+    await user.clear(qtyInput);
+    await user.type(qtyInput, "2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(mockedEmrService.updateTreatment).toHaveBeenCalledWith(
+      "v1",
+      "vt1",
+      expect.objectContaining({ quantity: 2 }),
+    );
+  });
+
+  it("removes a Treatment entry after confirming via the row's Remove action", async () => {
+    const user = userEvent.setup();
+    mockedEmrService.detail.mockResolvedValue(
+      buildVisit({
+        status: "IN_PROGRESS",
+        treatmentEntries: [{ id: "vt1", treatmentId: "t1", toothReference: null, quantity: 1, unitPrice: 100000, subtotal: 100000, notes: null }],
+      }),
+    );
+    mockedEmrService.removeTreatment.mockResolvedValue(undefined);
+
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Visit VIS000001" });
+    await user.click(screen.getByRole("tab", { name: "Treatment" }));
+
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(screen.getByRole("button", { name: "Confirm Remove" }));
+
+    expect(mockedEmrService.removeTreatment).toHaveBeenCalledWith("v1", "vt1");
+  });
 });

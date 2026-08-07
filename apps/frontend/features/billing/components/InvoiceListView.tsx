@@ -20,6 +20,9 @@ export const INVOICE_STATUS_TONE: Record<InvoiceSummary["status"], "neutral" | "
   PARTIALLY_PAID: "warning",
   PAID: "success",
   CLOSED: "neutral",
+  // docs/06-tasks/task-324.md/task-325.md
+  CANCELLED: "neutral",
+  VOID: "error",
 };
 
 // docs/06-tasks/task-054.md: "Invoice auto-appears in the Cashier's Billing

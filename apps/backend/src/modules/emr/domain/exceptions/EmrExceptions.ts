@@ -53,6 +53,13 @@ export class TreatmentLockedException extends BusinessException {
   }
 }
 
+/** docs/06-tasks/task-321.md: Update/Remove Treatment target a specific, existing (non-deleted) entry. */
+export class VisitTreatmentNotFoundException extends NotFoundException {
+  constructor() {
+    super('Treatment entry not found');
+  }
+}
+
 /**
  * docs/06-tasks/task-052.md: minimum documentation (SOAP note + at least
  * one Treatment entry) is required before a Visit can be closed.

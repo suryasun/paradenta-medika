@@ -3,7 +3,9 @@ import { FakeTreatmentRepository, FakeVisitRepository, FakeVisitTreatmentReposit
 import { FakeItemRepository } from '../../../../../tests/fakes/warehouseFakes';
 import { FakeInvoiceRepository } from '../../../../../tests/fakes/billingFakes';
 import { FakeAuditService } from '../../../../../tests/fakes/authFakes';
+import { FakeEventBus } from '../../../../../tests/fakes/patientFakes';
 import { TreatmentLockedException, TreatmentNotActiveException } from '../../domain/exceptions/EmrExceptions';
+import { TREATMENT_RECORDED_EVENT } from '../../domain/events/EmrEvents';
 import { ItemNotConsumableException, ItemNotFoundException } from '../../../warehouse/domain/exceptions/WarehouseExceptions';
 
 async function seedVisit(repo: FakeVisitRepository) {
@@ -17,6 +19,7 @@ function buildSut() {
   const itemRepository = new FakeItemRepository();
   const invoiceRepository = new FakeInvoiceRepository();
   const auditService = new FakeAuditService();
+  const eventBus = new FakeEventBus();
   const useCase = new RecordTreatmentUseCase(
     visitRepository,
     visitTreatmentRepository,
@@ -24,8 +27,9 @@ function buildSut() {
     itemRepository,
     invoiceRepository,
     auditService,
+    eventBus,
   );
-  return { visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, invoiceRepository, auditService, useCase };
+  return { visitRepository, visitTreatmentRepository, treatmentRepository, itemRepository, invoiceRepository, auditService, eventBus, useCase };
 }
 
 describe('RecordTreatmentUseCase (task-053)', () => {
@@ -38,6 +42,27 @@ describe('RecordTreatmentUseCase (task-053)', () => {
     await expect(
       useCase.execute({ visitId: visit.id, treatmentId: treatment.id, actorUserId: 'doc-1' }),
     ).rejects.toBeInstanceOf(TreatmentNotActiveException);
+  });
+
+  // docs/06-tasks/task-320.md
+  it('publishes emr.treatment-recorded.v1 with the entry data after a successful create', async () => {
+    const { visitRepository, treatmentRepository, eventBus, useCase } = buildSut();
+    const visit = await seedVisit(visitRepository);
+    const treatment = await treatmentRepository.create({ treatmentCode: 'T08', treatmentName: 'Scaling', treatmentCategoryId: 'c1', defaultPrice: 100000 });
+
+    const entry = await useCase.execute({ visitId: visit.id, treatmentId: treatment.id, quantity: 2, actorUserId: 'doc-1' });
+
+    const published = eventBus.published.find((p) => p.eventName === TREATMENT_RECORDED_EVENT);
+    expect(published).toBeDefined();
+    expect(published?.payload).toMatchObject({
+      visitId: visit.id,
+      visitTreatmentId: entry.id,
+      treatmentId: treatment.id,
+      treatmentName: 'Scaling',
+      quantity: 2,
+      unitPrice: 100000,
+      subtotal: 200000,
+    });
   });
 
   it('snapshots the price at entry time rather than recalculating it later', async () => {

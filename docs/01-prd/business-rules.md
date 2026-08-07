@@ -316,6 +316,9 @@ Billing mengikuti aturan bisnis berikut.
 - Invoice tidak boleh dihapus secara fisik.
 - Invoice yang sudah dibayar tidak dapat diubah.
 - Perubahan dilakukan melalui Void atau Refund.
+- Treatment yang dicatat setelah Invoice terbentuk, selama Invoice belum berstatus PAID/CLOSED, otomatis ditambahkan sebagai item baru pada Invoice tersebut (subtotal/grandTotal dihitung ulang) — bukan diabaikan begitu saja (task-320, memperbaiki gap di mana Treatment yang ditambahkan setelah Close Visit tidak pernah muncul di Invoice).
+- Entri Treatment (Qty/Unit Price/Tooth Reference/Catatan) dapat diedit atau dihapus dari sisi EMR selama Invoice terkait belum berstatus PAID/CLOSED — aturan kelayakan editnya sama persis dengan aturan Tambah Item di atas (task-321). Perubahan/penghapusan tersebut otomatis disinkronkan ke item Invoice yang sesuai (subtotal/grandTotal dihitung ulang); penghapusan entri Treatment menggunakan soft delete, bukan hapus fisik.
+- Cashier dapat menambahkan Manual Charge (biaya administrasi, surat keterangan, fotokopi, dll.) langsung pada Invoice yang belum PAID/CLOSED, di luar Treatment dari EMR — wajib disertai alasan dan tercatat di Audit Trail (task-323, `docs/06-tasks/epic-billing-completion.md` Stage 1).
 
 ---
 
@@ -324,6 +327,25 @@ Billing mengikuti aturan bisnis berikut.
 - Satu Invoice dapat memiliki banyak Payment.
 - Payment tidak dapat diubah setelah berhasil.
 - Payment gagal tidak mengubah saldo Invoice.
+
+---
+
+## Insurance (task-332 — `docs/adr/ADR-001-insurance-coverage-model.md`, `docs/06-tasks/epic-billing-completion.md` Stage 3)
+
+- Insurance dimodelkan sebagai alokasi payer pada satu baris Payment (`payerType = 'PATIENT' | 'INSURANCE'`), bukan sub-sistem Coverage/Claim baru — sesuai kalimat SAD UC-BIL-006 sendiri: "mengalokasikan pembayaran ke pihak asuransi".
+- Setiap baris Payment default `payerType = 'PATIENT'`; seluruh Payment yang dibuat sebelum task-332 tetap `PATIENT` tanpa perlu backfill.
+- Baris Payment dengan `payerType = 'INSURANCE'` wajib menyertakan `insuranceProviderId` yang merujuk ke Insurance Provider yang ada dan aktif; Insurance Provider tidak aktif/tidak ditemukan ditolak.
+- Nilai coverage (`amount` pada baris Payment) diinput manual oleh Cashier, bukan dihitung sistem — tidak ada formula coverage yang terdokumentasi di SAD/PRD manapun.
+- Insurance Provider adalah entitas Master Data minimal (`providerName`, `isActive`) — belum ada `InsurancePlan`/aturan coverage per-provider (ditunda sampai ada kebutuhan nyata).
+
+---
+
+## Cancel & Void (task-324, task-325 — `docs/06-tasks/epic-billing-completion.md` Stage 1)
+
+- Invoice hanya dapat di-Cancel selama berstatus UNPAID dan belum memiliki Payment apa pun; Cancel wajib disertai alasan dan tercatat di Audit Trail.
+- Invoice yang sudah memiliki Payment (PARTIALLY_PAID/PAID) tidak dapat di-Cancel — gunakan Void sebagai jalur eskalasi.
+- Void memerlukan alasan wajib dan Audit Trail, sama seperti Cancel, namun berlaku untuk Invoice yang sudah memiliki riwayat transaksi; urutan antara Void dan Refund (apakah Payment harus di-refund penuh terlebih dahulu sebelum Invoice dapat di-Void) adalah keputusan implementasi yang wajib diselesaikan secara eksplisit saat task-325 dikerjakan, bukan diasumsikan.
+- CANCELLED dan VOID adalah status akhir (terminal) — tidak ada transisi keluar dari keduanya.
 
 ---
 
@@ -336,6 +358,7 @@ Billing mengikuti aturan bisnis berikut.
   - Manual
 
 - Total discount tidak boleh melebihi total invoice tanpa hak otorisasi khusus.
+- Discount hanya dapat diterapkan/dihapus selama Invoice belum PAID/CLOSED/CANCELLED/VOID; nilai discount tidak boleh melebihi subtotal Invoice (task-322).
 
 ---
 
@@ -344,6 +367,7 @@ Billing mengikuti aturan bisnis berikut.
 - Refund harus memiliki alasan.
 - Refund memerlukan approval sesuai nominal.
 - Refund menghasilkan Audit Trail.
+- Refund dapat dilakukan penuh atau sebagian terhadap satu Payment, tidak boleh melebihi (jumlah Payment dikurangi Refund yang sudah ada sebelumnya); Refund yang berhasil menurunkan `paidAmount` dan dapat mengembalikan status Invoice dari PAID/PARTIALLY_PAID ke status sebelumnya; tidak dapat dilakukan setelah Invoice berstatus CLOSED (task-326).
 
 ---
 

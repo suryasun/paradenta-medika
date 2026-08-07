@@ -16,6 +16,7 @@ import { DoctorRepository } from '../../infrastructure/repositories/DoctorReposi
 import { TreatmentCategoryRepository } from '../../infrastructure/repositories/TreatmentCategoryRepository';
 import { TreatmentRepository } from '../../infrastructure/repositories/TreatmentRepository';
 import { PaymentMethodRepository } from '../../infrastructure/repositories/PaymentMethodRepository';
+import { InsuranceProviderRepository } from '../../infrastructure/repositories/InsuranceProviderRepository';
 import { ToothConditionRepository } from '../../infrastructure/repositories/ToothConditionRepository';
 import { MasterDataTemplateRepository } from '../../infrastructure/repositories/MasterDataTemplateRepository';
 import { MasterDataTemplateBranchLinkRepository } from '../../infrastructure/repositories/MasterDataTemplateBranchLinkRepository';
@@ -38,6 +39,7 @@ import { CreateDoctorRequestDto, UpdateDoctorRequestDto } from '../../applicatio
 import { CreateTreatmentCategoryRequestDto, UpdateTreatmentCategoryRequestDto } from '../../application/dtos/TreatmentCategoryRequestDto';
 import { CreateTreatmentRequestDto, UpdateTreatmentRequestDto } from '../../application/dtos/TreatmentRequestDto';
 import { CreatePaymentMethodRequestDto, UpdatePaymentMethodRequestDto } from '../../application/dtos/PaymentMethodRequestDto';
+import { CreateInsuranceProviderRequestDto, UpdateInsuranceProviderRequestDto } from '../../application/dtos/InsuranceProviderRequestDto';
 import { CreateToothConditionRequestDto, UpdateToothConditionRequestDto } from '../../application/dtos/ToothConditionRequestDto';
 import {
   CreateMasterDataTemplateRequestDto,
@@ -291,6 +293,30 @@ export function buildMasterDataModule(
     requirePermission('masterdata.payment-method.manage'),
     validateBody(UpdatePaymentMethodRequestDto),
     paymentMethodController.update,
+  );
+
+  // --- Insurance Provider (task-332, docs/adr/ADR-001-insurance-coverage-model.md) ---
+  const insuranceProviderRepository = new InsuranceProviderRepository();
+  const insuranceProviderUseCases = buildCrudUseCases('InsuranceProvider', insuranceProviderRepository, auditService);
+  const insuranceProviderController = buildCrudController(insuranceProviderUseCases, 'InsuranceProvider');
+  router.get(
+    '/insurance-providers',
+    requirePermission('masterdata.insurance-provider.read'),
+    validateQuery(ListQueryDto),
+    insuranceProviderController.list,
+  );
+  router.post(
+    '/insurance-providers',
+    requirePermission('masterdata.insurance-provider.manage'),
+    validateBody(CreateInsuranceProviderRequestDto),
+    insuranceProviderController.create,
+  );
+  router.get('/insurance-providers/:id', requirePermission('masterdata.insurance-provider.read'), insuranceProviderController.detail);
+  router.put(
+    '/insurance-providers/:id',
+    requirePermission('masterdata.insurance-provider.manage'),
+    validateBody(UpdateInsuranceProviderRequestDto),
+    insuranceProviderController.update,
   );
 
   // --- Tooth Condition (task-067) ---

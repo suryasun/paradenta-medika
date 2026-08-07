@@ -140,6 +140,7 @@ Billing Module mencakup proses berikut.
 - E-Wallet
 - Deposit
 - Mixed Payment
+- partial Payment
 
 ### Discount
 
@@ -147,6 +148,7 @@ Billing Module mencakup proses berikut.
 - Manual Discount
 - Promotion
 - Membership Discount
+- Voucher Discount
 
 ### Insurance
 
@@ -1622,6 +1624,8 @@ Cashier
 
 Invoice berhasil dibuat.
 
+**Catatan implementasi (`docs/06-tasks/epic-billing-completion.md`):** Sistem yang berjalan saat ini hanya pernah membuat Invoice secara otomatis dari Visit yang sudah Completed (lihat UC-BIL-002, task-054) — jalur manual "Cashier memilih Visit lalu membuat Invoice" di atas **belum diimplementasikan dan sengaja tidak dibangun** tanpa kebutuhan bisnis nyata yang teridentifikasi (mis. tagihan untuk sesuatu tanpa Visit sama sekali, seperti penjualan retail walk-in). Ini adalah pertanyaan produk terbuka, bukan diasumsikan.
+
 ---
 
 # UC-BIL-002 Generate Invoice from EMR
@@ -1677,10 +1681,12 @@ Mengubah invoice sebelum dibayar.
 
 ## Allowed
 
-- Tambah Item
-- Hapus Item
-- Edit Qty
-- Edit Catatan
+- Tambah Item — **diimplementasikan** (docs/06-tasks/task-320.md) sebagai sinkronisasi otomatis berbasis event (`emr.treatment-recorded.v1`), bukan aksi edit manual di UI: begitu Treatment baru dicatat pada Visit yang Invoice-nya sudah dibuat (dan belum Paid/Closed), item baru otomatis ditambahkan ke Invoice tersebut beserta `subtotal`/`grandTotal` yang dihitung ulang.
+- Edit Qty (dan Unit Price/Tooth Reference/Catatan) — **diimplementasikan** (docs/06-tasks/task-321.md): staff dapat mengedit entri Treatment langsung di EMR (bukan di layar Invoice), disinkronkan otomatis via `emr.treatment-updated.v1` ke item Invoice yang sesuai (dicocokkan lewat `InvoiceItem.visitTreatmentId`).
+- Hapus Item — **diimplementasikan** (docs/06-tasks/task-321.md): menghapus entri Treatment di EMR (soft delete) memicu `emr.treatment-removed.v1`, yang menghapus item Invoice terkait dan menghitung ulang total.
+- Edit Catatan — **diimplementasikan** sebagai bagian dari Edit Qty di atas (task-321.md) — bukan aksi terpisah.
+
+Ketiganya tetap merupakan aksi yang dilakukan dari sisi EMR (halaman Visit), bukan tombol edit-langsung pada layar Invoice itu sendiri — layar Invoice tetap read-only dan hanya merefleksikan hasil sinkronisasi.
 
 ## Not Allowed
 
@@ -1825,6 +1831,8 @@ Mencetak invoice.
 - A4 Invoice
 - PDF
 
+**Catatan implementasi (`docs/06-tasks/epic-billing-completion.md`):** **Ditunda sepenuhnya** — belum ada infrastruktur cetak/PDF apa pun di codebase ini. Membutuhkan keputusan terpisah (thermal vs. A4 vs. PDF-only) sebelum dapat menjadi task yang actionable.
+
 ---
 
 # UC-BIL-012 Reprint Invoice
@@ -1839,6 +1847,8 @@ Audit Trail mencatat:
 - Time
 - Printer
 - Reason
+
+**Catatan implementasi:** Ditunda bersama UC-BIL-011 — bergantung pada keputusan infrastruktur cetak yang sama.
 
 ---
 
@@ -1936,6 +1946,8 @@ Dilakukan oleh Finance/Cashier.
 3. Rekap deposit.
 4. Generate Closing Report.
 5. Lock transaksi hari tersebut.
+
+**Catatan implementasi (`docs/06-tasks/epic-billing-completion.md`):** **Digugurkan dari epic Billing** — use case ini tumpang tindih dengan UC-FIN-005 "Daily Cash Closing" milik Module Finance (`docs/03-sad/17-module-finance.md` §4.6), yang sudah diimplementasikan penuh (opening/closing balance, hitung denominasi, alasan varian wajib + persetujuan Finance Manager — Finance Epic AE, task-162–171) dan mencakup mekanisme rekonsiliasi yang jauh lebih lengkap daripada versi tipis di atas. Kedua use case Daily Closing ini tidak pernah direkonsiliasi satu sama lain di dokumentasi manapun sebelum catatan ini; keputusannya adalah memakai implementasi Finance sebagai satu-satunya Daily Closing, bukan membangun versi kedua di Billing.
 
 ---
 

@@ -6,12 +6,15 @@ import { RecordVitalSignRequestDto } from '../../application/dtos/RecordVitalSig
 import { RecordSoapNoteRequestDto } from '../../application/dtos/RecordSoapNoteRequestDto';
 import { RecordDiagnosisRequestDto } from '../../application/dtos/RecordDiagnosisRequestDto';
 import { RecordTreatmentRequestDto } from '../../application/dtos/RecordTreatmentRequestDto';
+import { UpdateTreatmentRequestDto } from '../../application/dtos/UpdateTreatmentRequestDto';
 import { OpenVisitUseCase } from '../../application/use-cases/OpenVisitUseCase';
 import { GetVisitDetailUseCase } from '../../application/use-cases/GetVisitDetailUseCase';
 import { RecordVitalSignUseCase } from '../../application/use-cases/RecordVitalSignUseCase';
 import { RecordSoapNoteUseCase } from '../../application/use-cases/RecordSoapNoteUseCase';
 import { RecordDiagnosisUseCase } from '../../application/use-cases/RecordDiagnosisUseCase';
 import { RecordTreatmentUseCase } from '../../application/use-cases/RecordTreatmentUseCase';
+import { UpdateTreatmentUseCase } from '../../application/use-cases/UpdateTreatmentUseCase';
+import { RemoveTreatmentUseCase } from '../../application/use-cases/RemoveTreatmentUseCase';
 import { CloseVisitUseCase } from '../../application/use-cases/CloseVisitUseCase';
 
 export class VisitController {
@@ -22,6 +25,8 @@ export class VisitController {
     private readonly recordSoapNoteUseCase: RecordSoapNoteUseCase,
     private readonly recordDiagnosisUseCase: RecordDiagnosisUseCase,
     private readonly recordTreatmentUseCase: RecordTreatmentUseCase,
+    private readonly updateTreatmentUseCase: UpdateTreatmentUseCase,
+    private readonly removeTreatmentUseCase: RemoveTreatmentUseCase,
     private readonly closeVisitUseCase: CloseVisitUseCase,
   ) {}
 
@@ -113,6 +118,40 @@ export class VisitController {
         correlationId: req.correlationId,
       });
       sendSuccess(res, entry, 'Treatment recorded', 201);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateTreatment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.auth) throw new AuthenticationException();
+      const body = req.body as UpdateTreatmentRequestDto;
+      const entry = await this.updateTreatmentUseCase.execute({
+        visitId: req.params.id,
+        visitTreatmentId: req.params.treatmentEntryId,
+        ...body,
+        actorUserId: req.auth.userId,
+        ipAddress: req.ip,
+        correlationId: req.correlationId,
+      });
+      sendSuccess(res, entry, 'Treatment updated');
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  removeTreatment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.auth) throw new AuthenticationException();
+      await this.removeTreatmentUseCase.execute({
+        visitId: req.params.id,
+        visitTreatmentId: req.params.treatmentEntryId,
+        actorUserId: req.auth.userId,
+        ipAddress: req.ip,
+        correlationId: req.correlationId,
+      });
+      sendSuccess(res, null, 'Treatment removed');
     } catch (error) {
       next(error);
     }

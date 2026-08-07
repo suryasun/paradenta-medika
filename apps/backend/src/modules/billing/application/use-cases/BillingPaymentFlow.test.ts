@@ -2,14 +2,17 @@ import { CreatePaymentUseCase } from './CreatePaymentUseCase';
 import { CloseInvoiceUseCase } from './CloseInvoiceUseCase';
 import { GetInvoiceDetailUseCase } from './GetInvoiceDetailUseCase';
 import {
+  FakeInsuranceProviderRepository,
   FakeInvoiceItemRepository,
   FakeInvoiceRepository,
   FakePaymentMethodRepository,
   FakePaymentRepository,
+  FakeRefundRepository,
 } from '../../../../../tests/fakes/billingFakes';
 import { FakeAuditService } from '../../../../../tests/fakes/authFakes';
 import { FakeEventBus } from '../../../../../tests/fakes/patientFakes';
 import {
+  InsuranceProviderNotActiveException,
   InvoiceAlreadyClosedException,
   InvoiceNotFullyPaidException,
   PaymentExceedsOutstandingException,
@@ -36,10 +39,18 @@ describe('CreatePaymentUseCase (task-057)', () => {
     const invoiceRepository = new FakeInvoiceRepository();
     const paymentRepository = new FakePaymentRepository();
     const paymentMethodRepository = new FakePaymentMethodRepository();
+    const insuranceProviderRepository = new FakeInsuranceProviderRepository();
     const auditService = new FakeAuditService();
     const eventBus = new FakeEventBus();
-    const useCase = new CreatePaymentUseCase(invoiceRepository, paymentRepository, paymentMethodRepository, auditService, eventBus);
-    return { invoiceRepository, paymentRepository, paymentMethodRepository, eventBus, useCase };
+    const useCase = new CreatePaymentUseCase(
+      invoiceRepository,
+      paymentRepository,
+      paymentMethodRepository,
+      auditService,
+      eventBus,
+      insuranceProviderRepository,
+    );
+    return { invoiceRepository, paymentRepository, paymentMethodRepository, insuranceProviderRepository, eventBus, useCase };
   }
 
   it('a full payment marks the Invoice Paid and publishes PaymentCompleted', async () => {
@@ -124,6 +135,73 @@ describe('CreatePaymentUseCase (task-057)', () => {
       useCase.execute({ invoiceId: invoice.id, payments: [{ paymentMethodId: cash.id, amount: 100000 }], actorUserId: 'cashier-1' }),
     ).rejects.toBeInstanceOf(InvoiceAlreadyClosedException);
   });
+
+  // docs/06-tasks/task-332.md, docs/adr/ADR-001-insurance-coverage-model.md
+  it('accepts an Insurance-payer line and records payerType/insuranceProviderId/policyNumber on the Payment', async () => {
+    const { invoiceRepository, paymentRepository, paymentMethodRepository, insuranceProviderRepository, useCase } = buildSut();
+    const invoice = await seedInvoice(invoiceRepository, 400000);
+    const cash = await paymentMethodRepository.create({ methodCode: 'CASH', methodName: 'Cash' });
+    const bpjs = await insuranceProviderRepository.create({ providerName: 'BPJS Kesehatan' });
+
+    const result = await useCase.execute({
+      invoiceId: invoice.id,
+      payments: [
+        { paymentMethodId: cash.id, amount: 250000, payerType: 'INSURANCE', insuranceProviderId: bpjs.id, policyNumber: 'POL-001' },
+      ],
+      actorUserId: 'cashier-1',
+    });
+
+    expect(result.status).toBe('PARTIALLY_PAID');
+    const [payment] = [...paymentRepository.payments.values()];
+    expect(payment.payerType).toBe('INSURANCE');
+    expect(payment.insuranceProviderId).toBe(bpjs.id);
+    expect(payment.policyNumber).toBe('POL-001');
+  });
+
+  it('defaults payerType to PATIENT when omitted', async () => {
+    const { invoiceRepository, paymentRepository, paymentMethodRepository, useCase } = buildSut();
+    const invoice = await seedInvoice(invoiceRepository, 400000);
+    const cash = await paymentMethodRepository.create({ methodCode: 'CASH', methodName: 'Cash' });
+
+    await useCase.execute({
+      invoiceId: invoice.id,
+      payments: [{ paymentMethodId: cash.id, amount: 100000 }],
+      actorUserId: 'cashier-1',
+    });
+
+    const [payment] = [...paymentRepository.payments.values()];
+    expect(payment.payerType).toBe('PATIENT');
+  });
+
+  it('rejects an Insurance-payer line missing insuranceProviderId', async () => {
+    const { invoiceRepository, paymentMethodRepository, useCase } = buildSut();
+    const invoice = await seedInvoice(invoiceRepository, 400000);
+    const cash = await paymentMethodRepository.create({ methodCode: 'CASH', methodName: 'Cash' });
+
+    await expect(
+      useCase.execute({
+        invoiceId: invoice.id,
+        payments: [{ paymentMethodId: cash.id, amount: 100000, payerType: 'INSURANCE' }],
+        actorUserId: 'cashier-1',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('rejects an Insurance-payer line referencing an inactive Insurance Provider', async () => {
+    const { invoiceRepository, paymentMethodRepository, insuranceProviderRepository, useCase } = buildSut();
+    const invoice = await seedInvoice(invoiceRepository, 400000);
+    const cash = await paymentMethodRepository.create({ methodCode: 'CASH', methodName: 'Cash' });
+    const bpjs = await insuranceProviderRepository.create({ providerName: 'BPJS Kesehatan' });
+    insuranceProviderRepository.providers.get(bpjs.id)!.isActive = false;
+
+    await expect(
+      useCase.execute({
+        invoiceId: invoice.id,
+        payments: [{ paymentMethodId: cash.id, amount: 100000, payerType: 'INSURANCE', insuranceProviderId: bpjs.id }],
+        actorUserId: 'cashier-1',
+      }),
+    ).rejects.toBeInstanceOf(InsuranceProviderNotActiveException);
+  });
 });
 
 describe('CloseInvoiceUseCase (task-058)', () => {
@@ -164,7 +242,7 @@ describe('CloseInvoiceUseCase (task-058)', () => {
 describe('GetInvoiceDetailUseCase (task-056)', () => {
   it('returns 404 for a non-existent Invoice', async () => {
     const invoiceRepository = new FakeInvoiceRepository();
-    const useCase = new GetInvoiceDetailUseCase(invoiceRepository, new FakeInvoiceItemRepository(), new FakePaymentRepository());
+    const useCase = new GetInvoiceDetailUseCase(invoiceRepository, new FakeInvoiceItemRepository(), new FakePaymentRepository(), new FakeRefundRepository());
 
     await expect(useCase.execute('nonexistent-id')).rejects.toThrow();
   });
@@ -177,7 +255,7 @@ describe('GetInvoiceDetailUseCase (task-056)', () => {
     await invoiceItemRepository.createMany([
       { invoiceId: invoice.id, referenceType: 'Treatment', referenceId: 't1', itemName: 'Scaling', quantity: 1, unitPrice: 250000, discount: 0, tax: 0, total: 250000 },
     ]);
-    const useCase = new GetInvoiceDetailUseCase(invoiceRepository, invoiceItemRepository, paymentRepository);
+    const useCase = new GetInvoiceDetailUseCase(invoiceRepository, invoiceItemRepository, paymentRepository, new FakeRefundRepository());
 
     const result = await useCase.execute(invoice.id);
 

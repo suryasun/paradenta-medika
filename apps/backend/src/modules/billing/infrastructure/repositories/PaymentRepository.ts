@@ -13,6 +13,9 @@ export class PaymentRepository implements IPaymentRepository {
         receivedBy: input.receivedBy,
         note: input.note,
         createdBy: input.createdBy,
+        payerType: input.payerType ?? 'PATIENT',
+        insuranceProviderId: input.insuranceProviderId,
+        policyNumber: input.policyNumber,
       },
     });
   }

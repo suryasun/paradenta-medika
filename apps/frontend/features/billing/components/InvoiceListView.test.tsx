@@ -36,6 +36,15 @@ const INVOICE: InvoiceSummary = {
   paidAmount: 0,
   outstanding: 400000,
   status: "UNPAID",
+  discountReason: null,
+  discountSource: null,
+  discountApprovedBy: null,
+  cancelReason: null,
+  cancelledBy: null,
+  cancelledAt: null,
+  voidReason: null,
+  voidedBy: null,
+  voidedAt: null,
 };
 
 describe("InvoiceListView", () => {

@@ -31,6 +31,7 @@ import {
   RecordMedicalHistoryInput,
   RecordToothConditionInput,
   RecordTreatmentInput,
+  UpdateTreatmentInput,
   RecordVitalSignInput,
   Referral,
   SaveMeasurementInput,
@@ -80,6 +81,16 @@ export const emrService = {
   async recordTreatment(visitId: string, payload: RecordTreatmentInput): Promise<TreatmentEntry> {
     const response = await apiClient.post<ApiSuccessBody<TreatmentEntry>>(`/emr/visits/${visitId}/treatments`, payload);
     return response.data.data;
+  },
+
+  // docs/06-tasks/task-321.md
+  async updateTreatment(visitId: string, treatmentEntryId: string, payload: UpdateTreatmentInput): Promise<TreatmentEntry> {
+    const response = await apiClient.patch<ApiSuccessBody<TreatmentEntry>>(`/emr/visits/${visitId}/treatments/${treatmentEntryId}`, payload);
+    return response.data.data;
+  },
+
+  async removeTreatment(visitId: string, treatmentEntryId: string): Promise<void> {
+    await apiClient.delete(`/emr/visits/${visitId}/treatments/${treatmentEntryId}`);
   },
 
   async closeVisit(visitId: string): Promise<Visit> {
